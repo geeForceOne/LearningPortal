@@ -1,0 +1,95 @@
+@page "/"
+@inherits AppPage
+@inject TopicService Topics
+@inject SettingsService Settings
+
+<PageTitle>Topics - LearningPortal</PageTitle>
+
+<div class="page-head">
+    <div>
+        <h1>Your topics</h1>
+        <p class="page-sub">Each topic holds your study material and the practice exams made from it.</p>
+    </div>
+    <div class="actions">
+        <button type="button" class="btn btn-primary" @onclick="CreateAsync"><Icon Name="plus" /> New topic</button>
+    </div>
+</div>
+
+@if (_aiMissing)
+{
+    <div class="notice notice-warn" style="margin-bottom:24px">
+        AI isn't set up yet, so exams can't be generated. <a href="settings">Add your API key in Settings</a>.
+    </div>
+}
+
+@if (_topics is null)
+{
+    <p class="page-loading">Loading your topics...</p>
+}
+else if (_topics.Count == 0)
+{
+    <div class="empty">
+        <h2>Start with a topic</h2>
+        <p>
+            A topic is one subject you're studying. Add your notes or course material to it,
+            then create practice exams from them.
+        </p>
+        <button type="button" class="btn btn-primary" @onclick="CreateAsync"><Icon Name="plus" /> Create your first topic</button>
+    </div>
+}
+else
+{
+    <ul class="rows">
+        @foreach (var t in _topics)
+        {
+            <li class="row" @key="t.Id">
+                <div class="row-main">
+                    <a class="row-title" href="topics/@t.Id">@t.Name</a>
+                    <div class="row-meta">
+                        <span>@t.Language</span>
+                        <span>@Format.Plural(t.MaterialCount, "material", "materials"), @Format.Tokens(t.TokenTotal)</span>
+                        <span>@Format.Plural(t.ExamCount, "exam", "exams")</span>
+                        <span>@Format.Plural(t.QuestionCount, "question", "questions") in the bank</span>
+                    </div>
+                </div>
+                <div class="row-aside">
+                    @if (t.AverageScore is { } avg)
+                    {
+                        <div class="topic-score">@Format.Percent(avg) <small>avg</small></div>
+                        <div>@Format.Plural(t.AttemptCount, "attempt", "attempts"), last @Format.Ago(t.LastPracticed!.Value)</div>
+                    }
+                    else
+                    {
+                        <div>Not practised yet</div>
+                    }
+                </div>
+            </li>
+        }
+    </ul>
+}
+
+<TopicDialog @ref="_dialog" />
+
+@code {
+    [CascadingParameter] private AppUi Ui { get; set; } = default!;
+
+    private IReadOnlyList<TopicSummary>? _topics;
+    private TopicDialog _dialog = default!;
+    private bool _aiMissing;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var userId = await UserIdAsync();
+        _topics = await Topics.ListAsync(userId, PageToken);
+        _aiMissing = !(await Settings.GetAsync(userId, PageToken)).IsConfigured;
+    }
+
+    private async Task CreateAsync()
+    {
+        var input = await _dialog.AskAsync("New topic", "Create topic");
+        if (input is null) return;
+
+        var id = await Topics.CreateAsync(await UserIdAsync(), input.Name, input.Description, input.Language, PageToken);
+        Nav.NavigateTo($"topics/{id}");
+    }
+}

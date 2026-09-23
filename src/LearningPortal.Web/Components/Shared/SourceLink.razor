@@ -1,0 +1,23 @@
+@* Where a question came from: the material and section it was written about. *@
+@if (Question.IsUserAuthored)
+{
+    <span class="source-link"><Icon Name="edit" Size="14" /> Written by you</span>
+}
+else if (Question.SourceMaterialId is not null)
+{
+    <a class="source-link" href="@Href">
+        <Icon Name="file" Size="14" /> From @(Question.SourceLabel ?? "your material")
+    </a>
+}
+else if (Question.SourceLabel is not null)
+{
+    <span class="source-link"><Icon Name="file" Size="14" /> From @Question.SourceLabel (material since deleted)</span>
+}
+
+@code {
+    [Parameter, EditorRequired] public Question Question { get; set; } = default!;
+
+    private string Href => Question.SourceSectionId is { } section
+        ? $"materials/{Question.SourceMaterialId}#section-{section}"
+        : $"materials/{Question.SourceMaterialId}";
+}

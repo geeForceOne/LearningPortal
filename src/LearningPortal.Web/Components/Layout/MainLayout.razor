@@ -1,0 +1,89 @@
+@inherits LayoutComponentBase
+@inject NavigationManager Nav
+@implements IDisposable
+
+<div class="shell">
+    <header class="topbar">
+        <div class="topbar-inner">
+            <a class="brand" href="">
+                <BrandMark />
+                <span>LearningPortal</span>
+            </a>
+
+            <nav class="nav" aria-label="Main">
+                <NavLink href="" Match="NavLinkMatch.All" ActiveClass="active">Topics</NavLink>
+                <NavLink href="statistics" ActiveClass="active">Statistics</NavLink>
+                <NavLink href="settings" ActiveClass="active">Settings</NavLink>
+                <AuthorizeView Roles="@Roles.Admin">
+                    <NavLink href="admin/users" ActiveClass="active">Users</NavLink>
+                </AuthorizeView>
+            </nav>
+
+            <AuthorizeView>
+                <div class="usermenu">
+                    <button type="button" class="usermenu-button" aria-expanded="@_menuOpen" @onclick="() => _menuOpen = !_menuOpen">
+                        <span class="avatar">@Initial(context.User.Identity?.Name)</span>
+                        <span class="username">@context.User.Identity?.Name</span>
+                    </button>
+                    @if (_menuOpen)
+                    {
+                        <div class="usermenu-list" @onclick="() => _menuOpen = false">
+                            <div class="usermenu-name">Signed in as @context.User.Identity?.Name</div>
+                            <a href="account/password" data-enhance-nav="false"><Icon Name="key" /> Change password</a>
+                            @if (context.User.IsInRole(Roles.Admin))
+                            {
+                                <a href="admin/users"><Icon Name="users" /> Users</a>
+                            }
+                            <hr />
+                            <form action="account/logout" method="post">
+                                <AntiforgeryToken />
+                                <button type="submit"><Icon Name="logout" /> Sign out</button>
+                            </form>
+                        </div>
+                    }
+                </div>
+            </AuthorizeView>
+        </div>
+    </header>
+
+    <main class="main" @onclick="() => _menuOpen = false">
+        <CascadingValue Value="_ui" IsFixed="true">
+            @Body
+        </CascadingValue>
+    </main>
+
+    <nav class="tabbar" aria-label="Main">
+        <NavLink href="" Match="NavLinkMatch.All" ActiveClass="active"><Icon Name="book" Size="22" />Topics</NavLink>
+        <NavLink href="statistics" ActiveClass="active"><Icon Name="chart" Size="22" />Statistics</NavLink>
+        <NavLink href="settings" ActiveClass="active"><Icon Name="settings" Size="22" />Settings</NavLink>
+    </nav>
+</div>
+
+<ConfirmDialog @ref="_ui.Confirm" />
+<PromptDialog @ref="_ui.Prompt" />
+<Toast @ref="_ui.Toast" />
+
+<div id="blazor-error-ui" data-nosnippet>
+    Something went wrong and the page stopped responding.
+    <a href="." class="reload">Reload</a>
+    <span class="dismiss">×</span>
+</div>
+
+@code {
+    private readonly AppUi _ui = new();
+    private bool _menuOpen;
+
+    protected override void OnInitialized() => Nav.LocationChanged += OnLocationChanged;
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        if (!_menuOpen) return;
+        _menuOpen = false;
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private static string Initial(string? name) =>
+        string.IsNullOrEmpty(name) ? "?" : name[..1].ToUpperInvariant();
+
+    public void Dispose() => Nav.LocationChanged -= OnLocationChanged;
+}

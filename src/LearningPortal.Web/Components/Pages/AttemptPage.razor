@@ -1,0 +1,406 @@
+@page "/attempts/{AttemptId:int}"
+@inherits AppPage
+@inject AttemptService Attempts
+@inject IJSRuntime JS
+
+<PageTitle>@(_view?.Exam.Name ?? "Exam") - LearningPortal</PageTitle>
+
+@if (_view is null)
+{
+    <p class="page-loading">Loading...</p>
+}
+else if (_view.IsFinished)
+{
+    @Results()
+}
+else
+{
+    @Taking()
+}
+
+@code {
+    [Parameter] public int AttemptId { get; set; }
+    [CascadingParameter] private AppUi Ui { get; set; } = default!;
+
+    private AttemptView? _view;
+    private int _index;
+    private readonly HashSet<int> _selected = [];
+    private string _written = "";
+    private DateTime _shownAt = DateTime.UtcNow;
+    private bool _revealImmediately;
+    private string? _error;
+
+    private AttemptAnswer Current => _view!.Answers[_index];
+    private Question CurrentQuestion => Current.Question!;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadAsync(jumpToFirstOpen: true);
+        try
+        {
+            _revealImmediately = await JS.InvokeAsync<string?>("learningPortal.getPref", "revealImmediately") == "1";
+        }
+        catch (JSException)
+        {
+        }
+    }
+
+    private async Task LoadAsync(bool jumpToFirstOpen = false)
+    {
+        try
+        {
+            _view = await Attempts.GetAsync(await UserIdAsync(), AttemptId, PageToken);
+        }
+        catch (NotFoundException)
+        {
+            Nav.NavigateTo("not-found");
+            return;
+        }
+
+        if (jumpToFirstOpen && !_view.IsFinished)
+        {
+            var open = _view.Answers.ToList().FindIndex(a => !a.IsAnswered);
+            GoTo(open >= 0 ? open : _view.Answers.Count - 1);
+        }
+    }
+
+    private void GoTo(int index)
+    {
+        _index = Math.Clamp(index, 0, _view!.Answers.Count - 1);
+        _selected.Clear();
+        _written = "";
+        _error = null;
+        _shownAt = DateTime.UtcNow;
+    }
+
+    private int ElapsedSeconds() => (int)(DateTime.UtcNow - _shownAt).TotalSeconds;
+
+    private string RailClass(AttemptAnswer a, int i)
+    {
+        var cls = i == _index ? "is-current " : "";
+        if (!a.IsAnswered) return cls;
+        if (!a.Revealed || a.Score is null) return cls + "is-answered";
+        return cls + "is-" + VerdictRules.FromScore(a.Score.Value).ToString().ToLowerInvariant();
+    }
+
+    private string RailLabel(AttemptAnswer a, int i)
+    {
+        var state = !a.IsAnswered ? "not answered" : a.Revealed && a.Score is { } s ? $"{VerdictRules.FromScore(s)}".ToLowerInvariant() : "answered";
+        return $"Question {i + 1}, {state}";
+    }
+
+    private void Toggle(int optionId)
+    {
+        if (CurrentQuestion.AllowsMultiple)
+        {
+            if (!_selected.Remove(optionId)) _selected.Add(optionId);
+        }
+        else
+        {
+            _selected.Clear();
+            _selected.Add(optionId);
+        }
+    }
+
+    private async Task SubmitAsync()
+    {
+        _error = null;
+        var userId = await UserIdAsync();
+        var answerId = Current.Id;
+        var elapsed = ElapsedSeconds();
+
+        if (CurrentQuestion.Type == QuestionType.MultipleChoice)
+        {
+            try
+            {
+                await Attempts.AnswerChoiceAsync(userId, AttemptId, answerId, _selected.ToList(), elapsed, PageToken);
+            }
+            catch (ArgumentException ex)
+            {
+                _error = ex.Message;
+                return;
+            }
+        }
+        else
+        {
+            var text = _written;
+            string? failure = null;
+            await RunBusyAsync("Saving and grading your answer...", async (_, ct) =>
+                await Attempts.AnswerWrittenAsync(userId, AttemptId, answerId, text, elapsed, ct), m => failure = m);
+
+            if (failure is not null)
+            {
+                await LoadAsync();
+                // The answer is saved before grading starts, so a grading failure loses nothing.
+                _error = Current.IsAnswered
+                    ? $"Your answer is saved, but grading failed: {failure} It's graded again when you finish"
+                      + (_revealImmediately ? ", or use Grade now below." : ".")
+                    : failure;
+                if (!Current.IsAnswered)
+                    return;
+            }
+        }
+
+        if (_revealImmediately)
+        {
+            await Attempts.RevealAsync(userId, AttemptId, answerId, PageToken);
+            await LoadAsync();
+            return;
+        }
+
+        // Answers are revealed at the end, so move straight on. A grading error stays on screen instead.
+        await LoadAsync();
+        if (_error is null && _view!.AnsweredCount < _view.Answers.Count)
+            await NextAsync();
+    }
+
+    private async Task RetryGradeAsync(int answerId)
+    {
+        _error = null;
+        await RunBusyAsync("Grading your answer...", async (_, ct) =>
+            await Attempts.GradeAsync(await UserIdAsync(), AttemptId, answerId, ct), m => _error = m);
+        await LoadAsync();
+    }
+
+    private async Task NextAsync()
+    {
+        var next = _view!.Answers.ToList().FindIndex(_index + 1, a => !a.IsAnswered);
+        if (next < 0) next = _view.Answers.ToList().FindIndex(a => !a.IsAnswered);
+        GoTo(next >= 0 ? next : Math.Min(_index + 1, _view.Answers.Count - 1));
+        await ScrollTopAsync();
+    }
+
+    private async Task SetRevealPreference(bool value)
+    {
+        _revealImmediately = value;
+        try { await JS.InvokeVoidAsync("learningPortal.setPref", "revealImmediately", value ? "1" : "0"); }
+        catch (JSException) { }
+    }
+
+    private async Task FinishAsync()
+    {
+        var open = _view!.Answers.Count(a => !a.IsAnswered);
+        if (open > 0 && !await Ui.Confirm.AskAsync("Finish the exam?",
+                $"{Format.Plural(open, "question is", "questions are")} still unanswered and will count as incorrect.",
+                "Finish exam"))
+            return;
+
+        _error = null;
+        var userId = await UserIdAsync();
+        var elapsed = Current.IsAnswered ? 0 : ElapsedSeconds();
+        var ok = await RunBusyAsync("Finishing...", async (progress, ct) =>
+            await Attempts.FinishAsync(userId, AttemptId, elapsed, progress, ct), m => _error = m);
+        if (ok)
+        {
+            await LoadAsync();
+            await ScrollTopAsync();
+        }
+    }
+
+    private async Task TakeAgainAsync()
+    {
+        var id = await Attempts.StartNewAsync(await UserIdAsync(), _view!.Exam.Id, PageToken);
+        Nav.NavigateTo($"attempts/{id}");
+    }
+
+    private async Task ScrollTopAsync()
+    {
+        try { await JS.InvokeVoidAsync("learningPortal.scrollToTop"); } catch (JSException) { }
+    }
+
+    private static int CountSentences(string text) =>
+        System.Text.RegularExpressions.Regex.Matches(text.Trim(), @"[^.!?]+[.!?]*").Count(m => m.Value.Trim().Length > 1);
+
+    // Time spent on a question the user leaves without answering still counts toward the attempt.
+    public override void Dispose()
+    {
+        if (_view is { IsFinished: false } && !Current.IsAnswered)
+        {
+            var seconds = ElapsedSeconds();
+            var attemptId = AttemptId;
+            _ = Task.Run(async () =>
+            {
+                try { await Attempts.AddActiveTimeAsync(await UserIdAsync(), attemptId, seconds); }
+                catch { /* best effort */ }
+            });
+        }
+        base.Dispose();
+    }
+
+    private RenderFragment Taking() => __builder =>
+    {
+        var q = CurrentQuestion;
+        var a = Current;
+        <div class="exam">
+            <div class="exam-top">
+                <a href="exams/@_view!.Exam.Id" class="muted" style="text-decoration:none">&larr; @_view.Exam.Name</a>
+                <span>@_view.AnsweredCount of @_view.Answers.Count answered</span>
+            </div>
+
+            <nav class="rail" aria-label="Questions">
+                @for (var i = 0; i < _view.Answers.Count; i++)
+                {
+                    var index = i;
+                    var item = _view.Answers[i];
+                    <button type="button" class="@RailClass(item, index)" aria-label="@RailLabel(item, index)"
+                            aria-current="@(index == _index ? "step" : null)" @onclick="() => GoTo(index)"></button>
+                }
+            </nav>
+
+            <div class="question-meta">
+                <span class="question-number">Question @(_index + 1) of @_view.Answers.Count</span>
+                <span class="tag">@Format.Label(q.Difficulty)</span>
+            </div>
+
+            <h1 class="prompt">@q.Prompt</h1>
+
+            @if (a.IsAnswered && a.Revealed)
+            {
+                <AnswerReview Answer="a" OnRetryGrade="() => RetryGradeAsync(a.Id)" />
+            }
+            else if (a.IsAnswered)
+            {
+                <div class="notice" style="margin-top:12px">
+                    Your answer is saved. You'll see the answer and explanation at the end.
+                </div>
+            }
+            else if (q.Type == QuestionType.MultipleChoice)
+            {
+                <div class="kind-hint">
+                    @if (q.AllowsMultiple)
+                    {
+                        <Icon Name="check" Size="16" /><span>Choose all that apply</span>
+                    }
+                    else
+                    {
+                        <span>Choose one</span>
+                    }
+                </div>
+                <fieldset class="options @(q.AllowsMultiple ? "multi" : "")">
+                    <legend class="visually-hidden">@(q.AllowsMultiple ? "Choose all that apply" : "Choose one")</legend>
+                    @foreach (var optionId in a.OptionOrderIds)
+                    {
+                        var option = q.Options.FirstOrDefault(o => o.Id == optionId);
+                        if (option is null) continue;
+                        var id = option.Id;
+                        <label class="option" @key="id">
+                            <input type="@(q.AllowsMultiple ? "checkbox" : "radio")" name="answer-@a.Id" checked="@_selected.Contains(id)"
+                                   @onchange="() => Toggle(id)" disabled="@IsBusy" />
+                            <span class="option-box" aria-hidden="true"></span>
+                            <span class="option-text">@option.Text</span>
+                        </label>
+                    }
+                </fieldset>
+            }
+            else
+            {
+                var sentences = CountSentences(_written);
+                <div class="answer-box">
+                    <label for="written-answer" class="kind-hint" style="margin-bottom:4px">Your answer, in a few sentences</label>
+                    <textarea id="written-answer" class="textarea" maxlength="@AttemptService.MaxWrittenAnswerLength"
+                              @bind="_written" @bind:event="oninput" disabled="@IsBusy"
+                              placeholder="Write it in your own words. Short is fine: the grader looks for the key ideas, not length."></textarea>
+                    <div class="answer-foot">
+                        <span>Keep it short: at most about 20 sentences.</span>
+                        <span class="@(sentences > 20 ? "over" : "")">
+                            @Format.Plural(sentences, "sentence", "sentences"), @_written.Length / @AttemptService.MaxWrittenAnswerLength characters
+                        </span>
+                    </div>
+                </div>
+            }
+
+            @if (_error is not null)
+            {
+                <div class="notice notice-error" style="margin-top:16px">@_error</div>
+            }
+            @if (IsBusy)
+            {
+                <div style="margin-top:16px"><BusyBar Message="@BusyMessage" /></div>
+            }
+
+            <div class="exam-actions">
+                @if (!a.IsAnswered)
+                {
+                    var canSubmit = q.Type == QuestionType.MultipleChoice ? _selected.Count > 0 : !string.IsNullOrWhiteSpace(_written);
+                    <button type="button" class="btn btn-primary btn-lg" disabled="@(IsBusy || !canSubmit)" @onclick="SubmitAsync">
+                        @(_revealImmediately ? "Check answer" : "Save answer")
+                    </button>
+                }
+
+                @if (a.IsAnswered && _view.AnsweredCount < _view.Answers.Count)
+                {
+                    <button type="button" class="btn btn-primary btn-lg" @onclick="NextAsync">Next question <Icon Name="right" /></button>
+                }
+
+                <span class="spacer"></span>
+
+                @if (_view.AnsweredCount == _view.Answers.Count)
+                {
+                    <button type="button" class="btn btn-primary btn-lg" disabled="@IsBusy" @onclick="FinishAsync"><Icon Name="flag" /> See results</button>
+                }
+                else
+                {
+                    <button type="button" class="btn btn-ghost" disabled="@IsBusy" @onclick="FinishAsync">Finish early</button>
+                }
+            </div>
+
+            <div style="margin-top:36px;padding-top:16px;border-top:1px solid var(--rule)">
+                <label class="check muted">
+                    <input type="checkbox" checked="@_revealImmediately" @onchange="e => SetRevealPreference((bool)e.Value!)" />
+                    Reveal each answer right after I answer
+                </label>
+                <p class="muted small" style="margin-top:6px">Answers save as you go. You can leave and continue this attempt later.</p>
+            </div>
+        </div>
+    };
+
+    private RenderFragment Results() => __builder =>
+    {
+        var attempt = _view!.Attempt;
+        var answers = _view.Answers;
+        var correct = answers.Count(x => x.Score is { } s && VerdictRules.FromScore(s) == Verdict.Correct);
+        var partial = answers.Count(x => x.Score is { } s && VerdictRules.FromScore(s) == Verdict.Partial);
+        var wrong = answers.Count - correct - partial;
+
+        <nav class="crumbs" aria-label="Breadcrumb">
+            <a href="">Topics</a><span class="sep">/</span>
+            <a href="topics/@_view.Topic.Id">@_view.Topic.Name</a><span class="sep">/</span>
+            <a href="exams/@_view.Exam.Id">@_view.Exam.Name</a>
+        </nav>
+
+        <div class="exam" style="max-width:760px">
+            <h1 style="margin-bottom:22px">Results</h1>
+            <div class="score-hero">
+                <div class="score-big"><span class="marker">@Format.Percent(attempt.ScorePercent)</span></div>
+                <div class="score-facts">
+                    <span><strong>@correct</strong> correct, <strong>@partial</strong> partially correct, <strong>@wrong</strong> incorrect</span>
+                    <span>Time spent <strong>@Format.Duration(attempt.ActiveSeconds)</strong></span>
+                    <span>Finished @Format.Date(attempt.CompletedAt!.Value)</span>
+                </div>
+            </div>
+
+            <div class="actions" style="margin:20px 0 10px">
+                <button type="button" class="btn btn-primary" @onclick="TakeAgainAsync"><Icon Name="redo" /> Take again</button>
+                <a class="btn btn-secondary" href="exams/@_view.Exam.Id">Back to exam</a>
+                <a class="btn btn-ghost" href="statistics?topic=@_view.Topic.Id">Statistics</a>
+            </div>
+            <p class="muted small">Taking it again shuffles the questions and the answer options.</p>
+
+            @for (var i = 0; i < answers.Count; i++)
+            {
+                var item = answers[i];
+                <article class="review-item" @key="item.Id">
+                    <div class="question-meta">
+                        <span class="question-number">Question @(i + 1)</span>
+                        @if (item.Question!.Type == QuestionType.MultipleChoice)
+                        {
+                            <span class="tag">@(item.Question.AllowsMultiple ? "Choose all that apply" : "Choose one")</span>
+                        }
+                    </div>
+                    <h2 class="prompt">@item.Question.Prompt</h2>
+                    <AnswerReview Answer="item" />
+                </article>
+            }
+        </div>
+    };
+}

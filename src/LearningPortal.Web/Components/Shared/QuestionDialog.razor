@@ -1,0 +1,162 @@
+@* Edit a question, or write your own. Resolves to a draft, or null when cancelled. *@
+@if (_visible)
+{
+    <div class="modal-backdrop">
+        <div class="modal modal-wide" role="dialog" aria-modal="true" aria-labelledby="question-dialog-title">
+            <h2 id="question-dialog-title">@_title</h2>
+            @if (_sharedNote)
+            {
+                <p class="small">This question is in your question bank. Changes apply everywhere it's used.</p>
+            }
+
+            <div class="form">
+                @if (_typeEditable)
+                {
+                    <div class="field">
+                        <span class="field-label" id="q-type-label">Type</span>
+                        <div class="segmented" role="radiogroup" aria-labelledby="q-type-label">
+                            <label><input type="radio" name="q-type" checked="@(_type == QuestionType.MultipleChoice)" @onchange="() => _type = QuestionType.MultipleChoice" /> Multiple choice</label>
+                            <label><input type="radio" name="q-type" checked="@(_type == QuestionType.Written)" @onchange="() => _type = QuestionType.Written" /> Written</label>
+                        </div>
+                    </div>
+                }
+
+                <label class="field">
+                    <span>Question</span>
+                    <textarea class="textarea reading" rows="3" @bind="_prompt" @bind:event="oninput"></textarea>
+                </label>
+
+                @if (_type == QuestionType.MultipleChoice)
+                {
+                    <div class="field">
+                        <span class="field-label">Options</span>
+                        <span class="field-hint">Tick every correct option. With more than one ticked, the question becomes "choose all that apply".</span>
+                        <div class="option-editor">
+                            @for (var i = 0; i < _options.Count; i++)
+                            {
+                                var index = i;
+                                <div class="option-editor-row" @key="_options[index]">
+                                    <label class="check" title="Correct">
+                                        <input type="checkbox" checked="@_options[index].IsCorrect" @onchange="e => _options[index].IsCorrect = (bool)e.Value!" aria-label="Option @(index + 1) is correct" />
+                                    </label>
+                                    <input class="input" @bind="_options[index].Text" @bind:event="oninput" placeholder="Option @(index + 1)" />
+                                    <button type="button" class="btn btn-ghost btn-icon btn-sm" aria-label="Remove option @(index + 1)" disabled="@(_options.Count <= 2)" @onclick="() => _options.RemoveAt(index)"><Icon Name="x" Size="16" /></button>
+                                </div>
+                            }
+                        </div>
+                        @if (_options.Count < 8)
+                        {
+                            <div><button type="button" class="btn btn-ghost btn-sm" @onclick="() => _options.Add(new())"><Icon Name="plus" Size="14" /> Add option</button></div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <label class="field">
+                        <span>Reference answer</span>
+                        <textarea class="textarea reading" rows="4" @bind="_reference" @bind:event="oninput"></textarea>
+                        <span class="field-hint">What a full-credit answer needs to cover. Written answers are graded against this.</span>
+                    </label>
+                }
+
+                <label class="field">
+                    <span>Explanation</span>
+                    <textarea class="textarea reading" rows="5" @bind="_explanation" @bind:event="oninput"></textarea>
+                    <span class="field-hint">Shown after answering. Explain why the answer is right so it's worth reading.</span>
+                </label>
+
+                @if (_error is not null)
+                {
+                    <div class="notice notice-error">@_error</div>
+                }
+            </div>
+
+            <div class="modal-actions">
+                <button type="button" class="btn btn-ghost" @onclick="() => Resolve(null)">Cancel</button>
+                <button type="button" class="btn btn-primary" @onclick="Submit">@_okLabel</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private sealed class OptionRow
+    {
+        public string Text { get; set; } = "";
+        public bool IsCorrect { get; set; }
+    }
+
+    private bool _visible;
+    private string _title = "";
+    private string _okLabel = "";
+    private bool _typeEditable;
+    private bool _sharedNote;
+    private QuestionType _type;
+    private string _prompt = "";
+    private string _reference = "";
+    private string _explanation = "";
+    private List<OptionRow> _options = [];
+    private string? _error;
+    private TaskCompletionSource<QuestionDraft?>? _tcs;
+
+    public Task<QuestionDraft?> EditAsync(Question q) => Show("Edit question", "Save changes", q.Type, typeEditable: false, sharedNote: true,
+        q.Prompt, q.ReferenceAnswer, q.Explanation, q.Options.OrderBy(o => o.Order).Select(o => new OptionRow { Text = o.Text, IsCorrect = o.IsCorrect }));
+
+    public Task<QuestionDraft?> CreateAsync(QuestionType defaultType) => Show("Add your own question", "Add question", defaultType, typeEditable: true, sharedNote: false,
+        "", "", "", Enumerable.Range(0, 4).Select(_ => new OptionRow()));
+
+    private Task<QuestionDraft?> Show(string title, string okLabel, QuestionType type, bool typeEditable, bool sharedNote,
+        string prompt, string? reference, string explanation, IEnumerable<OptionRow> options)
+    {
+        _title = title;
+        _okLabel = okLabel;
+        _type = type;
+        _typeEditable = typeEditable;
+        _sharedNote = sharedNote;
+        _prompt = prompt;
+        _reference = reference ?? "";
+        _explanation = explanation;
+        _options = options.ToList();
+        while (_options.Count < 2) _options.Add(new());
+        _error = null;
+        _visible = true;
+        _tcs = new TaskCompletionSource<QuestionDraft?>();
+        StateHasChanged();
+        return _tcs.Task;
+    }
+
+    // Validation lives in ExamService; the page catches its ArgumentException and calls ShowError.
+    public void ShowError(string message)
+    {
+        _error = message;
+        _visible = true;
+        StateHasChanged();
+    }
+
+    private void Submit()
+    {
+        var draft = new QuestionDraft(_type, _prompt, _options.Select(o => (o.Text, o.IsCorrect)).ToList(), _reference, _explanation);
+        var tcs = _tcs;
+        _tcs = null;
+        tcs?.TrySetResult(draft);
+    }
+
+    // Called by the page after a successful save, or on cancel.
+    public void Close() => Resolve(null);
+
+    // Lets the page re-await the same dialog after a validation error.
+    public Task<QuestionDraft?> WaitAgainAsync()
+    {
+        _tcs = new TaskCompletionSource<QuestionDraft?>();
+        return _tcs.Task;
+    }
+
+    private void Resolve(QuestionDraft? result)
+    {
+        _visible = false;
+        var tcs = _tcs;
+        _tcs = null;
+        StateHasChanged();
+        tcs?.TrySetResult(result);
+    }
+}

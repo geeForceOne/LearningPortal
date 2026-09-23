@@ -1,0 +1,71 @@
+@page "/materials/{MaterialId:int}"
+@inherits AppPage
+@inject MaterialService Materials
+
+<PageTitle>@(_detail?.Material.Title ?? "Material") - LearningPortal</PageTitle>
+
+@if (_detail is null)
+{
+    <p class="page-loading">Loading...</p>
+}
+else
+{
+    var m = _detail.Material;
+    <nav class="crumbs" aria-label="Breadcrumb">
+        <a href="">Topics</a><span class="sep">/</span><a href="topics/@m.TopicId">Back to topic</a>
+    </nav>
+
+    <div class="page-head">
+        <div>
+            <h1>@m.Title</h1>
+            <div class="facts">
+                <span>@Format.Label(m.Kind)</span>
+                @if (m.OriginalFileName is not null)
+                {
+                    <span>@m.OriginalFileName</span>
+                }
+                <span>@Format.Tokens(m.TokenEstimate)</span>
+                <span>@Format.Plural(_detail.Sections.Count, "section", "sections")</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="two-col">
+        <article style="max-width:var(--read-max)">
+            @foreach (var s in _detail.Sections)
+            {
+                <section id="section-@s.Id" style="margin-bottom:40px;scroll-margin-top:calc(var(--topbar-h) + 16px)" @key="s.Id">
+                    <h2 style="margin-bottom:12px">@s.Heading</h2>
+                    <div class="reading">@s.Text</div>
+                </section>
+            }
+        </article>
+        <aside>
+            @if (!string.IsNullOrWhiteSpace(m.Outline))
+            {
+                <div class="panel" style="position:sticky;top:calc(var(--topbar-h) + 16px)">
+                    <h2>Outline</h2>
+                    <div class="small" style="white-space:pre-wrap;color:var(--ink-soft)">@m.Outline</div>
+                </div>
+            }
+        </aside>
+    </div>
+}
+
+@code {
+    [Parameter] public int MaterialId { get; set; }
+
+    private MaterialDetail? _detail;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            _detail = await Materials.GetAsync(await UserIdAsync(), MaterialId, PageToken);
+        }
+        catch (NotFoundException)
+        {
+            Nav.NavigateTo("not-found");
+        }
+    }
+}

@@ -1,0 +1,6 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/LearningPortal.Core/LearningPortal.Core.csproj" />
+    <Project Path="src/LearningPortal.Web/LearningPortal.Web.csproj" />
+  </Folder>
+</Solution>

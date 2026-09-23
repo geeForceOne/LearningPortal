@@ -1,0 +1,128 @@
+@page "/admin/users"
+@attribute [Authorize(Roles = Roles.Admin)]
+@inherits AppPage
+@inject UserAdminService Users
+
+<PageTitle>Users - LearningPortal</PageTitle>
+
+<div class="page-head">
+    <div>
+        <h1>Users</h1>
+        <p class="page-sub">
+            There's no public sign-up. Create an account here and give the person their username and
+            password; they can change the password after signing in. Each person's topics and results are private.
+        </p>
+    </div>
+</div>
+
+<div class="two-col">
+    <section>
+        <div class="section-head"><h2>Accounts<span class="count">@_users.Count</span></h2></div>
+        <ul class="rows">
+            @foreach (var u in _users)
+            {
+                var isMe = u.Id == _myId;
+                <li class="row" @key="u.Id">
+                    <div class="row-main">
+                        <span class="row-title">@u.UserName @(isMe ? "(you)" : "")</span>
+                        <div class="row-meta">
+                            <span>@(u.IsAdmin ? "Administrator" : "User")</span>
+                            <span>Created @Format.Ago(u.CreatedAt)</span>
+                        </div>
+                    </div>
+                    <div class="row-actions">
+                        <button type="button" class="btn btn-ghost btn-sm" @onclick="() => ResetAsync(u)">Reset password</button>
+                        @if (!isMe)
+                        {
+                            <button type="button" class="btn btn-ghost btn-sm" @onclick="() => ToggleAdminAsync(u)">@(u.IsAdmin ? "Remove admin" : "Make admin")</button>
+                            <button type="button" class="btn btn-ghost btn-icon btn-sm" aria-label="Delete @u.UserName" @onclick="() => DeleteAsync(u)"><Icon Name="trash" Size="16" /></button>
+                        }
+                    </div>
+                </li>
+            }
+        </ul>
+    </section>
+
+    <aside>
+        <div class="panel">
+            <h2>Create account</h2>
+            <form class="form" @onsubmit="CreateAsync" @onsubmit:preventDefault="true">
+                <label class="field">
+                    <span>Username</span>
+                    <input class="input" @bind="_newName" @bind:event="oninput" autocomplete="off" />
+                    <span class="field-hint">Letters, digits and - . _ @@ +</span>
+                </label>
+                <label class="field">
+                    <span>Password</span>
+                    <input class="input" type="text" @bind="_newPassword" @bind:event="oninput" autocomplete="off" spellcheck="false" />
+                    <span class="field-hint">At least 8 characters. Shown here so you can pass it on.</span>
+                </label>
+                <label class="check">
+                    <input type="checkbox" @bind="_newAdmin" /> Administrator
+                </label>
+                @foreach (var e in _errors)
+                {
+                    <div class="field-error">@e</div>
+                }
+                <button type="submit" class="btn btn-primary" disabled="@(string.IsNullOrWhiteSpace(_newName) || _newPassword.Length < 8)">Create account</button>
+            </form>
+        </div>
+    </aside>
+</div>
+
+@code {
+    [CascadingParameter] private AppUi Ui { get; set; } = default!;
+
+    private IReadOnlyList<UserRow> _users = [];
+    private string _myId = "";
+    private string _newName = "";
+    private string _newPassword = "";
+    private bool _newAdmin;
+    private List<string> _errors = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _myId = await UserIdAsync();
+        _users = await Users.ListAsync();
+    }
+
+    private async Task CreateAsync()
+    {
+        _errors = (await Users.CreateAsync(_newName, _newPassword, _newAdmin)).ToList();
+        if (_errors.Count > 0) return;
+
+        Ui.Toast.Success($"Account \"{_newName.Trim()}\" created.");
+        _newName = "";
+        _newPassword = "";
+        _newAdmin = false;
+        _users = await Users.ListAsync();
+    }
+
+    private async Task ResetAsync(UserRow u)
+    {
+        var password = await Ui.Prompt.AskAsync($"Reset password for {u.UserName}", "New password", okLabel: "Reset password",
+            hint: "At least 8 characters. Pass it on to them; they can change it after signing in.");
+        if (password is null) return;
+
+        var errors = await Users.ResetPasswordAsync(u.Id, password);
+        if (errors.Count > 0) Ui.Toast.Error(string.Join(" ", errors));
+        else Ui.Toast.Success($"Password for {u.UserName} reset.");
+    }
+
+    private async Task ToggleAdminAsync(UserRow u)
+    {
+        await Users.SetAdminAsync(u.Id, !u.IsAdmin);
+        _users = await Users.ListAsync();
+    }
+
+    private async Task DeleteAsync(UserRow u)
+    {
+        if (!await Ui.Confirm.AskAsync($"Delete {u.UserName}?",
+                "Their account and all their topics, material, exams and results are deleted. This can't be undone.",
+                "Delete account", danger: true))
+            return;
+        await Users.DeleteAsync(u.Id);
+        Ui.Toast.Success($"{u.UserName} deleted.");
+        _users = await Users.ListAsync();
+    }
+}

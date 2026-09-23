@@ -1,0 +1,199 @@
+@page "/statistics"
+@inherits AppPage
+@inject StatisticsService Stats
+@inject TopicService Topics
+
+<PageTitle>Statistics - LearningPortal</PageTitle>
+
+<div class="page-head">
+    <div>
+        <h1>Statistics</h1>
+        <p class="page-sub">How your practice is going: scores over time, where you're strong, and which questions keep tripping you up.</p>
+    </div>
+    <div class="filter-bar">
+        <label class="visually-hidden" for="topic-filter">Topic</label>
+        <select id="topic-filter" class="select" value="@(TopicFilter?.ToString() ?? "")" @onchange="OnFilterChanged">
+            <option value="">All topics</option>
+            @foreach (var t in _allTopics)
+            {
+                <option value="@t.Id">@t.Name</option>
+            }
+        </select>
+    </div>
+</div>
+
+@if (_report is null)
+{
+    <p class="page-loading">Loading...</p>
+}
+else if (_report.CompletedAttempts == 0)
+{
+    <div class="empty">
+        <h2>No results yet</h2>
+        <p>Finish an exam and your scores, progress and weak spots show up here.</p>
+        <a class="btn btn-secondary" href="">Go to your topics</a>
+    </div>
+}
+else
+{
+    <div class="kpis">
+        <div class="kpi">
+            <div class="kpi-value">@Format.Percent(_report.OverallAverage)</div>
+            <div class="kpi-label">Average score</div>
+        </div>
+        <div class="kpi">
+            <div class="kpi-value">@_report.CompletedAttempts</div>
+            <div class="kpi-label">Exams finished</div>
+        </div>
+        <div class="kpi">
+            <div class="kpi-value">@Format.Duration(_report.TotalActiveSeconds)</div>
+            <div class="kpi-label">Time practising</div>
+        </div>
+        <div class="kpi">
+            <div class="kpi-value">@_report.Exams.Count</div>
+            <div class="kpi-label">Exams practised</div>
+        </div>
+    </div>
+
+    <section class="section">
+        <div class="section-head">
+            <h2>Score over time</h2>
+            <span class="muted small">Dashed line: 80%, the mark for a correct answer</span>
+        </div>
+        <div class="chart-grid">
+            @foreach (var e in _report.Exams)
+            {
+                <div class="chart-card" @key="e.ExamId">
+                    <h3><a href="exams/@e.ExamId" style="text-decoration:none">@e.ExamName</a></h3>
+                    <div class="row-meta">
+                        <span>@e.TopicName</span>
+                        <span>best @Format.Percent(e.Best)</span>
+                        @if (e.Points.Count > 1)
+                        {
+                            <span>@(e.Change >= 0 ? "+" : "")@Math.Round(e.Change) points since the first attempt</span>
+                        }
+                    </div>
+                    <ScoreChart Points="e.Points" AriaLabel="@($"Score over time for {e.ExamName}, latest {Format.Percent(e.Latest)}")" />
+                </div>
+            }
+        </div>
+    </section>
+
+    <section class="section">
+        <div class="section-head"><h2>By topic</h2></div>
+        <div class="table-wrap">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Topic</th>
+                        <th>Average score</th>
+                        <th class="num">Attempts</th>
+                        <th>Last practised</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var t in _report.Topics.Where(t => t.AttemptCount > 0))
+                    {
+                        <tr @key="t.Id">
+                            <td><a href="topics/@t.Id">@t.Name</a></td>
+                            <td>@Meter(t.AverageScore ?? 0)</td>
+                            <td class="num">@t.AttemptCount</td>
+                            <td class="nowrap">@Format.Ago(t.LastPracticed!.Value)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="section">
+        <div class="section-head"><h2>By question type and difficulty</h2></div>
+        <div class="table-wrap">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Type</th>
+                        <th>Difficulty</th>
+                        <th>Average score</th>
+                        <th class="num">Answers</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var c in _report.Breakdown)
+                    {
+                        <tr>
+                            <td>@Format.Label(c.Type)</td>
+                            <td>@Format.Label(c.Difficulty)</td>
+                            <td>@Meter(c.AverageScore)</td>
+                            <td class="num">@c.Answered</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="section">
+        <div class="section-head">
+            <h2>Weak questions</h2>
+            <span class="muted small">Answered wrong or only partly right most often</span>
+        </div>
+        @if (_report.WeakQuestions.Count == 0)
+        {
+            <div class="empty"><p>Nothing here yet: every question you've answered, you got right.</p></div>
+        }
+        else
+        {
+            <ul class="rows">
+                @foreach (var w in _report.WeakQuestions)
+                {
+                    <li class="row" @key="w.QuestionId">
+                        <div class="row-main">
+                            <div class="reading" style="white-space:normal;font-size:1rem">@w.Prompt</div>
+                            <div class="row-meta">
+                                <a href="topics/@w.TopicId">@w.TopicName</a>
+                                <span>@Format.Label(w.Type)</span>
+                                <span>@Format.Label(w.Difficulty)</span>
+                                @if (w.SourceLabel is not null)
+                                {
+                                    <span>From @w.SourceLabel</span>
+                                }
+                            </div>
+                        </div>
+                        <div class="row-aside">
+                            <div><strong style="color:var(--wrong)">Missed @w.Missed of @w.Answered</strong></div>
+                            <div>average @Format.Percent(w.AverageScore)</div>
+                        </div>
+                    </li>
+                }
+            </ul>
+        }
+    </section>
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "topic")]
+    private int? TopicFilter { get; set; }
+
+    private StatisticsReport? _report;
+    private IReadOnlyList<TopicSummary> _allTopics = [];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var userId = await UserIdAsync();
+        _allTopics = await Topics.ListAsync(userId, PageToken);
+        _report = await Stats.GetAsync(userId, TopicFilter, PageToken);
+    }
+
+    private void OnFilterChanged(ChangeEventArgs e)
+    {
+        var value = e.Value?.ToString();
+        Nav.NavigateTo(string.IsNullOrEmpty(value) ? "statistics" : $"statistics?topic={value}");
+    }
+
+    // A bar for the score, coloured by grade band, with the number beside it in ink.
+    private static RenderFragment Meter(double score) => @<div class="meter">
+        <div class="meter-track"><div class="meter-fill @Format.VerdictClass(score)" style="width:@(Math.Clamp(score, 0, 100).ToString("0.#", System.Globalization.CultureInfo.InvariantCulture))%"></div></div>
+        <span class="meter-value">@Format.Percent(score)</span>
+    </div>;
+}

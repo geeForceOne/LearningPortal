@@ -1,0 +1,29 @@
+@page "/exams/{ExamId:int}/take"
+@inherits AppPage
+@inject AttemptService Attempts
+
+<p class="page-loading">@(_error ?? "Opening the exam...")</p>
+
+@code {
+    [Parameter] public int ExamId { get; set; }
+
+    private string? _error;
+
+    // Resumes the unfinished attempt if there is one, otherwise starts a fresh shuffled attempt.
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var id = await Attempts.StartOrResumeAsync(await UserIdAsync(), ExamId, PageToken);
+            Nav.NavigateTo($"attempts/{id}", replace: true);
+        }
+        catch (NotFoundException)
+        {
+            Nav.NavigateTo("not-found", replace: true);
+        }
+        catch (InvalidOperationException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+}

@@ -1,0 +1,421 @@
+@page "/topics/{TopicId:int}"
+@inherits AppPage
+@inject TopicService Topics
+@inject MaterialService Materials
+@inject AnalysisQueue Analysis
+@inject SettingsService Settings
+@inject LearningPortalOptions Options
+
+<PageTitle>@(_topic?.Summary.Name ?? "Topic") - LearningPortal</PageTitle>
+
+@if (_notFound)
+{
+    <div class="empty">
+        <h2>This topic doesn't exist</h2>
+        <p>It may have been deleted.</p>
+        <a class="btn btn-secondary" href="">Back to your topics</a>
+    </div>
+}
+else if (_topic is null)
+{
+    <p class="page-loading">Loading...</p>
+}
+else
+{
+    var t = _topic.Summary;
+
+    <nav class="crumbs" aria-label="Breadcrumb"><a href="">Topics</a></nav>
+
+    <div class="page-head">
+        <div>
+            <h1>@t.Name</h1>
+            @if (!string.IsNullOrWhiteSpace(t.Description))
+            {
+                <p class="page-sub">@t.Description</p>
+            }
+            <div class="facts">
+                <span>Language <strong>@t.Language</strong></span>
+                <span>Material <strong>@Format.Tokens(t.TokenTotal)</strong></span>
+                <span>Question bank <strong>@t.QuestionCount</strong></span>
+                @if (t.AverageScore is { } avg)
+                {
+                    <span>Average score <strong>@Format.Percent(avg)</strong></span>
+                }
+            </div>
+        </div>
+        <div class="actions">
+            <button type="button" class="btn btn-ghost" @onclick="EditAsync"><Icon Name="edit" /> Edit</button>
+            <button type="button" class="btn btn-danger" @onclick="DeleteAsync"><Icon Name="trash" /> Delete</button>
+        </div>
+    </div>
+
+    @if (_topic.ExceedsBudget)
+    {
+        <div class="notice" style="margin-bottom:28px">
+            This topic's material is larger than what's sent to the AI in one go
+            (@Format.Tokens(Options.TopicTokenBudget)). Exams are generated a few sections at a time,
+            starting with the parts the question bank covers least.
+        </div>
+    }
+
+    <div class="two-col">
+        <div>
+            <section class="section">
+                <div class="section-head">
+                    <h2>Exams<span class="count">@_topic.Exams.Count</span></h2>
+                    @if (_topic.Materials.Count > 0)
+                    {
+                        <a class="btn btn-primary btn-sm" href="topics/@TopicId/exams/new"><Icon Name="plus" Size="16" /> New exam</a>
+                    }
+                </div>
+
+                @if (_topic.Exams.Count == 0)
+                {
+                    <div class="empty">
+                        @if (_topic.Materials.Count == 0)
+                        {
+                            <p>Add study material first. Exams are generated from it.</p>
+                        }
+                        else
+                        {
+                            <p>No exams yet. Create one to start practising.</p>
+                            <a class="btn btn-primary" href="topics/@TopicId/exams/new"><Icon Name="plus" /> Create an exam</a>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <ul class="rows">
+                        @foreach (var e in _topic.Exams)
+                        {
+                            <li class="row" @key="e.Id">
+                                <div class="row-main">
+                                    <a class="row-title" href="exams/@e.Id">@e.Name</a>
+                                    <div class="row-meta">
+                                        <span>@Format.Label(e.Type)</span>
+                                        <span>@Format.Label(e.Difficulty)</span>
+                                        <span>
+                                            @Format.Plural(e.QuestionCount, "question", "questions")
+                                            @if (e.QuestionCount < e.TargetCount)
+                                            {
+                                                <span> of @e.TargetCount</span>
+                                            }
+                                        </span>
+                                        @if (e.AttemptCount > 0)
+                                        {
+                                            <span>@Format.Plural(e.AttemptCount, "attempt", "attempts")</span>
+                                        }
+                                    </div>
+                                </div>
+                                <div class="row-aside">
+                                    @if (e.LastScore is { } last)
+                                    {
+                                        <div><strong style="color:var(--ink)">@Format.Percent(last)</strong> last time</div>
+                                        <div>best @Format.Percent(e.BestScore)</div>
+                                    }
+                                </div>
+                                <div class="row-actions">
+                                    @if (e.QuestionCount > 0)
+                                    {
+                                        <a class="btn btn-secondary btn-sm" href="exams/@e.Id/take">
+                                            <Icon Name="play" Size="14" /> @(e.UnfinishedAttemptId is null ? "Start" : "Resume")
+                                        </a>
+                                    }
+                                </div>
+                            </li>
+                        }
+                    </ul>
+                }
+            </section>
+
+            <section class="section">
+                <div class="section-head">
+                    <h2>Material<span class="count">@_topic.Materials.Count</span></h2>
+                </div>
+
+                @if (_topic.Materials.Count == 0)
+                {
+                    <div class="empty">
+                        <p>No material yet. Upload files or paste text on the right. On a phone, it's below.</p>
+                    </div>
+                }
+                else
+                {
+                    <ul class="rows">
+                        @foreach (var m in _topic.Materials)
+                        {
+                            <li class="row" @key="m.Id">
+                                <div class="row-main">
+                                    <a class="row-title" href="materials/@m.Id">@m.Title</a>
+                                    <div class="row-meta">
+                                        <span>@Format.Label(m.Kind)</span>
+                                        @if (m.OriginalFileName is not null)
+                                        {
+                                            <span>@Format.Bytes(m.SizeBytes)</span>
+                                        }
+                                        <span>@Format.Tokens(m.TokenEstimate)</span>
+                                        <span>@Format.Plural(m.SectionCount, "section", "sections")</span>
+                                        @AnalysisState(m)
+                                    </div>
+                                </div>
+                                <div class="row-actions">
+                                    @if (m.AnalysisStatus == AnalysisStatus.Done)
+                                    {
+                                        <button type="button" class="btn btn-ghost btn-sm" @onclick="() => ToggleOutline(m.Id)">
+                                            @(_openOutlines.Contains(m.Id) ? "Hide outline" : "Outline")
+                                        </button>
+                                    }
+                                    <button type="button" class="btn btn-ghost btn-icon btn-sm" title="Rename" aria-label="Rename @m.Title" @onclick="() => RenameMaterialAsync(m)"><Icon Name="edit" Size="16" /></button>
+                                    <button type="button" class="btn btn-ghost btn-icon btn-sm" title="Delete" aria-label="Delete @m.Title" @onclick="() => DeleteMaterialAsync(m)"><Icon Name="trash" Size="16" /></button>
+                                </div>
+                            </li>
+                            @if (_openOutlines.Contains(m.Id) && m.Outline is not null)
+                            {
+                                <li class="row-detail"><div class="outline">@m.Outline</div></li>
+                            }
+                        }
+                    </ul>
+                }
+            </section>
+        </div>
+
+        <aside>
+            <div class="panel">
+                <h2>Add material</h2>
+                <label class="dropzone">
+                    <Icon Name="upload" Size="22" />
+                    <strong>Choose files</strong>
+                    <span>PDF, Word, LaTeX, Markdown or text, up to @(Options.MaxUploadBytes / 1024 / 1024) MB each</span>
+                    <InputFile OnChange="UploadAsync" multiple accept="@string.Join(",", LearningPortal.Core.Text.DocumentTextExtractor.SupportedExtensions)" disabled="@IsBusy" />
+                </label>
+                @if (IsBusy)
+                {
+                    <div style="margin-top:12px"><BusyBar Message="@BusyMessage" OnCancel="CancelBusy" /></div>
+                }
+            </div>
+
+            <div class="panel">
+                <h2>Paste text</h2>
+                <form class="form" @onsubmit="AddTextAsync" @onsubmit:preventDefault="true">
+                    <label class="field">
+                        <span>Title</span>
+                        <input class="input" @bind="_pasteTitle" @bind:event="oninput" maxlength="300" placeholder="e.g. Lecture 3 notes" />
+                    </label>
+                    <label class="field">
+                        <span>Text</span>
+                        <textarea class="textarea" rows="6" @bind="_pasteText" @bind:event="oninput"></textarea>
+                        @if (!string.IsNullOrEmpty(_pasteText))
+                        {
+                            <span class="field-hint">About @Format.Tokens(LearningPortal.Core.Text.TokenEstimator.Estimate(_pasteText))</span>
+                        }
+                    </label>
+                    <button type="submit" class="btn btn-secondary" disabled="@(IsBusy || string.IsNullOrWhiteSpace(_pasteText))"><Icon Name="text" /> Add text</button>
+                </form>
+            </div>
+        </aside>
+    </div>
+}
+
+<TopicDialog @ref="_dialog" />
+
+@code {
+    [Parameter] public int TopicId { get; set; }
+    [CascadingParameter] private AppUi Ui { get; set; } = default!;
+
+    private TopicDetail? _topic;
+    private bool _notFound;
+    private TopicDialog _dialog = default!;
+    private readonly HashSet<int> _openOutlines = [];
+    private string _pasteTitle = "";
+    private string _pasteText = "";
+    private AiModelInfo? _model;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        Analysis.MaterialAnalyzed -= OnMaterialAnalyzed;
+        Analysis.MaterialAnalyzed += OnMaterialAnalyzed;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            var userId = await UserIdAsync();
+            _topic = await Topics.GetAsync(userId, TopicId, PageToken);
+            _model = await Settings.GetPricedModelAsync(userId, PageToken);
+            _notFound = false;
+        }
+        catch (NotFoundException)
+        {
+            _notFound = true;
+        }
+    }
+
+    private void OnMaterialAnalyzed(string userId, int materialId)
+    {
+        if (_topic?.Materials.Any(m => m.Id == materialId) != true)
+            return;
+        _ = InvokeAsync(async () =>
+        {
+            await LoadAsync();
+            StateHasChanged();
+        });
+    }
+
+    private RenderFragment AnalysisState(MaterialSummary m) => m.AnalysisStatus switch
+    {
+        AnalysisStatus.Done => @<span></span>,
+        AnalysisStatus.Failed => @<span style="color:var(--wrong)">
+            Analysis failed: @m.AnalysisError
+            <button type="button" class="link-button" @onclick="() => Reanalyze(m.Id)">Try again</button>@CostHint(m.TokenEstimate)
+        </span>,
+        _ when Analysis.IsPending(m.Id) => @<span>Analysing...</span>,
+        _ => @<span>Not analysed <button type="button" class="link-button" @onclick="() => Reanalyze(m.Id)">Analyse now</button>@CostHint(m.TokenEstimate)</span>,
+    };
+
+    private string CostHint(int tokens) => Format.CostHint(tokens, _model) is { } cost ? $" ({cost})" : "";
+
+    private async Task UploadAsync(InputFileChangeEventArgs e)
+    {
+        var userId = await UserIdAsync();
+        var files = e.GetMultipleFiles(20);
+        var added = new List<(string Name, AddedMaterial Material)>();
+
+        await RunBusyAsync("Uploading...", async (progress, ct) =>
+        {
+            foreach (var file in files)
+            {
+                if (file.Size > Options.MaxUploadBytes)
+                {
+                    Ui.Toast.Error($"\"{file.Name}\" is larger than {Options.MaxUploadBytes / 1024 / 1024} MB and was skipped.");
+                    continue;
+                }
+
+                try
+                {
+                    await using var stream = file.OpenReadStream(Options.MaxUploadBytes, ct);
+                    added.Add((file.Name, await Materials.AddFileAsync(userId, TopicId, file.Name, stream, file.Size, progress, ct)));
+                }
+                catch (LearningPortal.Core.Text.UnsupportedMaterialException ex)
+                {
+                    Ui.Toast.Error(ex.Message);
+                }
+            }
+        }, Ui.Toast.Error);
+
+        if (added.Count > 0)
+            await StartAnalysisAsync(userId, added, added.Count == 1 ? "Material added" : $"{added.Count} files added");
+        await LoadAsync();
+    }
+
+    private async Task AddTextAsync()
+    {
+        var userId = await UserIdAsync();
+        var title = string.IsNullOrWhiteSpace(_pasteTitle) ? "Pasted text" : _pasteTitle;
+        AddedMaterial? added = null;
+        var ok = await RunBusyAsync("Adding text...", async (_, ct) =>
+            added = await Materials.AddTextAsync(userId, TopicId, title, _pasteText, ct), Ui.Toast.Error);
+
+        if (ok && added is not null)
+        {
+            _pasteTitle = "";
+            _pasteText = "";
+            await StartAnalysisAsync(userId, [(title, added)], "Text added");
+        }
+        await LoadAsync();
+    }
+
+    // Analysis sends the whole material to the AI, billed to the user's key. Normal-sized material
+    // is analysed right away; unusually large material is confirmed first, and if declined it stays
+    // "Not analysed" with an "Analyse now" link.
+    private async Task StartAnalysisAsync(string userId, List<(string Name, AddedMaterial Material)> added, string what)
+    {
+        var started = new List<AddedMaterial>();
+        foreach (var (name, material) in added)
+        {
+            if (material.TokenEstimate > Options.LargeGenerationWarnTokens)
+            {
+                var cost = Format.AnalysisCost(material.TokenEstimate, _model);
+                var go = await Ui.Confirm.AskAsync("This is a large file to analyse",
+                    $"\"{name}\" is about {Format.Tokens(material.TokenEstimate)}. The AI reads all of it once to outline it" +
+                    (cost is null ? "" : $", {cost}") + ". That's billed to your API key. You can also analyse it later. Analyse now?",
+                    "Analyse now");
+                if (!go)
+                    continue;
+            }
+            Analysis.Enqueue(userId, material.Id);
+            started.Add(material);
+        }
+
+        if (started.Count == 0)
+        {
+            Ui.Toast.Success($"{what}. It isn't analysed yet; use Analyse now when you're ready.");
+            return;
+        }
+
+        // The cost is mentioned only when it's worth noticing; a few cents isn't.
+        var them = started.Count == 1 ? "it" : "them";
+        var estimate = Format.CostHint(started.Sum(m => m.TokenEstimate), _model) is { } c ? $" Analysing {them} takes {c}." : "";
+        Ui.Toast.Success($"{what}.{estimate} The AI is analysing {them} now.");
+    }
+
+    private async Task Reanalyze(int materialId)
+    {
+        Analysis.Enqueue(await UserIdAsync(), materialId);
+        StateHasChanged();
+    }
+
+    private void ToggleOutline(int id)
+    {
+        if (!_openOutlines.Remove(id))
+            _openOutlines.Add(id);
+    }
+
+    private async Task RenameMaterialAsync(MaterialSummary m)
+    {
+        var title = await Ui.Prompt.AskAsync("Rename material", "Title", m.Title, "Rename");
+        if (title is null) return;
+        await Materials.RenameAsync(await UserIdAsync(), m.Id, title, PageToken);
+        await LoadAsync();
+    }
+
+    private async Task DeleteMaterialAsync(MaterialSummary m)
+    {
+        if (!await Ui.Confirm.AskAsync("Delete material?",
+                $"\"{m.Title}\" will be removed from this topic. Questions already generated from it stay in your exams.",
+                "Delete material", danger: true))
+            return;
+
+        await Materials.DeleteAsync(await UserIdAsync(), m.Id, PageToken);
+        Ui.Toast.Success("Material deleted.");
+        await LoadAsync();
+    }
+
+    private async Task EditAsync()
+    {
+        var t = _topic!.Summary;
+        var input = await _dialog.AskAsync("Edit topic", "Save", new TopicDialog.TopicInput(t.Name, t.Language, t.Description));
+        if (input is null) return;
+        await Topics.UpdateAsync(await UserIdAsync(), TopicId, input.Name, input.Description, input.Language, PageToken);
+        await LoadAsync();
+    }
+
+    private async Task DeleteAsync()
+    {
+        var t = _topic!.Summary;
+        if (!await Ui.Confirm.AskAsync($"Delete \"{t.Name}\"?",
+                "This deletes the topic with all its material, exams, questions and results. It can't be undone.",
+                "Delete topic", danger: true))
+            return;
+
+        await Topics.DeleteAsync(await UserIdAsync(), TopicId, PageToken);
+        Nav.NavigateTo("");
+    }
+
+    public override void Dispose()
+    {
+        Analysis.MaterialAnalyzed -= OnMaterialAnalyzed;
+        base.Dispose();
+    }
+}

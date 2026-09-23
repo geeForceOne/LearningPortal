@@ -1,0 +1,22 @@
+@* 80%+ is correct, 1-79% partially correct, 0% incorrect. *@
+<span class="verdict verdict-@Verdict.ToString().ToLowerInvariant()">
+    @Label
+    @if (ShowScore)
+    {
+        <span class="muted" style="font-weight:400">@Score%</span>
+    }
+</span>
+
+@code {
+    [Parameter, EditorRequired] public int Score { get; set; }
+    [Parameter] public bool ShowScore { get; set; } = true;
+
+    private Verdict Verdict => VerdictRules.FromScore(Score);
+
+    private string Label => Verdict switch
+    {
+        Verdict.Correct => "Correct",
+        Verdict.Partial => "Partially correct",
+        _ => "Incorrect",
+    };
+}

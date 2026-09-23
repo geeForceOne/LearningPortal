@@ -1,0 +1,17 @@
+@* Status line for a long-running AI operation, with a way out. *@
+@if (Message is not null)
+{
+    <div class="busy" role="status" aria-live="polite">
+        <span class="spinner" aria-hidden="true"></span>
+        <span class="busy-text">@Message</span>
+        @if (OnCancel.HasDelegate)
+        {
+            <button type="button" class="btn btn-ghost btn-sm" @onclick="OnCancel">Cancel</button>
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public string? Message { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+}

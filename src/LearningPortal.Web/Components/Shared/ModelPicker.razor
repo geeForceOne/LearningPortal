@@ -1,0 +1,87 @@
+@* Picks an AI model from a curated list with prices, or takes a custom model ID.
+   Value is null when the provider's default model is chosen. *@
+<div class="field">
+    <label class="field-label" for="@_id">Model</label>
+    <select id="@_id" class="select" value="@_selected" @onchange="OnSelect">
+        @foreach (var m in Models)
+        {
+            <option value="@m.Id">@m.Name@(m.Id == Default ? " (default)" : "") · @Price(m)</option>
+        }
+        <option value="@CustomKey">Custom model ID...</option>
+    </select>
+
+    @if (_selected == CustomKey)
+    {
+        <input class="input" style="margin-top:8px" value="@_customText" @oninput="OnCustomInput"
+               placeholder="Exact model ID, e.g. @Default" spellcheck="false" autocomplete="off" aria-label="Custom model ID" />
+        <span class="field-hint">Leave empty for @Default. The model must exist for your API key.</span>
+    }
+    else if (Models.FirstOrDefault(m => m.Id == _selected) is { } model)
+    {
+        <span class="field-hint">@model.Description</span>
+    }
+    <span class="field-hint">
+        Prices are per million input / output tokens, as of @AiModels.PricesAsOf.
+        <a href="@PricingUrl" target="_blank" rel="noopener noreferrer">Current prices</a>
+    </span>
+</div>
+
+@code {
+    private const string CustomKey = "__custom";
+    private readonly string _id = "model-" + Guid.NewGuid().ToString("N")[..8];
+    private string _selected = "";
+    private string _customText = "";
+    private string? _lastValue;
+    private bool _initialized;
+
+    [Parameter, EditorRequired] public IReadOnlyList<AiModelInfo> Models { get; set; } = [];
+    [Parameter, EditorRequired] public string Default { get; set; } = "";
+    [Parameter, EditorRequired] public string PricingUrl { get; set; } = "";
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public EventCallback<string?> ValueChanged { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        // Only re-derive the selection when the value changed from outside (e.g. after a reload),
+        // so typing a custom ID doesn't snap the dropdown back.
+        if (_initialized && Value == _lastValue) return;
+        _initialized = true;
+        _lastValue = Value;
+
+        var id = string.IsNullOrWhiteSpace(Value) ? Default : Value.Trim();
+        if (Models.Any(m => m.Id == id))
+        {
+            _selected = id;
+            _customText = "";
+        }
+        else
+        {
+            // A saved model that isn't in the list stays as a custom ID rather than being lost.
+            _selected = CustomKey;
+            _customText = id;
+        }
+    }
+
+    private Task OnSelect(ChangeEventArgs e)
+    {
+        _selected = e.Value?.ToString() ?? Default;
+        return _selected == CustomKey ? Emit(_customText) : Emit(_selected);
+    }
+
+    private Task OnCustomInput(ChangeEventArgs e)
+    {
+        _customText = e.Value?.ToString() ?? "";
+        return Emit(_customText);
+    }
+
+    private Task Emit(string id)
+    {
+        id = id.Trim();
+        _lastValue = id.Length == 0 || id == Default ? null : id;
+        return ValueChanged.InvokeAsync(_lastValue);
+    }
+
+    private static string Price(AiModelInfo m) => $"{Money(m.InputPrice)} / {Money(m.OutputPrice)}";
+
+    private static string Money(decimal d) => "$" + d.ToString(d % 1 == 0 ? "0" : "0.00", System.Globalization.CultureInfo.InvariantCulture);
+}

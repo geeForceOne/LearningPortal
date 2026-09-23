@@ -1,0 +1,444 @@
+@page "/exams/{ExamId:int}"
+@inherits AppPage
+@inject ExamService Exams
+@inject AttemptService Attempts
+@inject QuestionGenerationService Generator
+@inject LearningPortalOptions Options
+
+<PageTitle>@(_detail?.Exam.Name ?? "Exam") - LearningPortal</PageTitle>
+
+@if (_detail is null)
+{
+    <p class="page-loading">Loading...</p>
+}
+else
+{
+    var exam = _detail.Exam;
+    var openAttempt = _attempts.FirstOrDefault(a => a.CompletedAt is null);
+
+    <nav class="crumbs" aria-label="Breadcrumb">
+        <a href="">Topics</a><span class="sep">/</span><a href="topics/@exam.TopicId">@_detail.Topic.Name</a>
+    </nav>
+
+    <div class="page-head">
+        <div>
+            <h1>@exam.Name</h1>
+            <div class="facts">
+                <span>@Format.Label(exam.Type)</span>
+                <span>@Format.Label(exam.Difficulty)</span>
+                <span><strong>@_detail.Questions.Count</strong> @(_detail.Questions.Count == 1 ? "question" : "questions")</span>
+                <span>@Format.Plural(_attempts.Count(a => a.CompletedAt is not null), "attempt", "attempts")</span>
+            </div>
+        </div>
+        <div class="actions">
+            @if (_detail.Questions.Count > 0)
+            {
+                @if (openAttempt is not null)
+                {
+                    <a class="btn btn-primary btn-lg" href="attempts/@openAttempt.Id"><Icon Name="play" /> Resume (@openAttempt.Answered of @openAttempt.Total answered)</a>
+                    <button type="button" class="btn btn-secondary btn-lg" disabled="@IsBusy" @onclick="StartOverAsync">Start over</button>
+                }
+                else
+                {
+                    <button type="button" class="btn btn-primary btn-lg" disabled="@IsBusy" @onclick="StartAsync">
+                        <Icon Name="play" /> @(_attempts.Count > 0 ? "Take again" : "Start exam")
+                    </button>
+                }
+            }
+        </div>
+    </div>
+
+    @if (IsBusy)
+    {
+        <div style="margin-bottom:20px"><BusyBar Message="@BusyMessage" OnCancel="CancelBusy" /></div>
+    }
+    @if (_error is not null)
+    {
+        <div class="notice notice-error" style="margin-bottom:20px">@_error</div>
+    }
+
+    @if (_detail.Questions.Count < exam.QuestionCount && !IsBusy)
+    {
+        <div class="notice notice-warn" style="margin-bottom:24px">
+            This exam has @_detail.Questions.Count of @exam.QuestionCount questions.
+            <button type="button" class="link-button" @onclick="FillAsync">Add the missing @(exam.QuestionCount - _detail.Questions.Count)</button>
+            @if (CostHint(exam.QuestionCount - _detail.Questions.Count) is { } fillCost)
+            {
+                <span class="muted">(if the AI writes them all: @fillCost)</span>
+            }
+        </div>
+    }
+
+    <div class="two-col">
+        <section>
+            <div class="section-head">
+                <h2>Questions<span class="count">@_detail.Questions.Count</span></h2>
+                <button type="button" class="btn btn-ghost btn-sm" disabled="@IsBusy" @onclick="AddOwnAsync"><Icon Name="plus" Size="14" /> Add your own</button>
+            </div>
+
+            @if (_detail.Questions.Count > 0 && CostHint(1) is { } replaceCost)
+            {
+                <p class="muted small" style="margin:-4px 0 12px">Replacing a question with a new AI one sends the material each time: @replaceCost.</p>
+            }
+
+            @if (_detail.Questions.Count == 0)
+            {
+                <div class="empty"><p>No questions yet.</p></div>
+            }
+
+            <ol class="q-list">
+                @for (var i = 0; i < _detail.Questions.Count; i++)
+                {
+                    var q = _detail.Questions[i];
+                    var number = i + 1;
+                    <li class="q-item" @key="q.Id">
+                        <div class="q-head">
+                            <span class="q-num">@number</span>
+                            <div class="q-body">
+                                <div class="question-meta">
+                                    <span class="tag">@Format.Label(q.Type)</span>
+                                    @if (q.Type == QuestionType.MultipleChoice)
+                                    {
+                                        <span class="tag">@(q.AllowsMultiple ? "Choose all that apply" : "Choose one")</span>
+                                    }
+                                    @if (q.IsUserAuthored)
+                                    {
+                                        <span class="tag">Yours</span>
+                                    }
+                                </div>
+                                <p class="prompt">@q.Prompt</p>
+                                <details class="q-more">
+                                    <summary>Answer and explanation</summary>
+                                    @if (q.Type == QuestionType.MultipleChoice)
+                                    {
+                                        <ul class="q-options">
+                                            @foreach (var o in q.Options)
+                                            {
+                                                <li>
+                                                    @if (o.IsCorrect)
+                                                    {
+                                                        <span class="ok">Correct</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="no"></span>
+                                                    }
+                                                    <span>@o.Text</span>
+                                                </li>
+                                            }
+                                        </ul>
+                                    }
+                                    else
+                                    {
+                                        <div class="reference">
+                                            <h3>Reference answer</h3>
+                                            <div class="reading">@q.ReferenceAnswer</div>
+                                        </div>
+                                    }
+                                    <div class="explain">
+                                        <h3>Explanation</h3>
+                                        <div class="reading">@q.Explanation</div>
+                                    </div>
+                                </details>
+                                <div class="q-foot">
+                                    <SourceLink Question="q" />
+                                </div>
+                            </div>
+                            <div class="row-actions">
+                                <button type="button" class="btn btn-ghost btn-icon btn-sm" title="Edit" aria-label="Edit question @number" disabled="@IsBusy" @onclick="() => EditAsync(q)"><Icon Name="edit" Size="16" /></button>
+                                <button type="button" class="btn btn-ghost btn-icon btn-sm" title="@("Replace with a new AI question" + (CostHint(1) is { } c ? $" ({c})" : ""))" aria-label="Replace question @number" disabled="@IsBusy" @onclick="() => ReplaceAsync(q)"><Icon Name="swap" Size="16" /></button>
+                                <button type="button" class="btn btn-ghost btn-icon btn-sm" title="Remove from exam" aria-label="Remove question @number" disabled="@IsBusy" @onclick="() => RemoveAsync(q)"><Icon Name="trash" Size="16" /></button>
+                            </div>
+                        </div>
+                    </li>
+                }
+            </ol>
+        </section>
+
+        <aside>
+            <div class="panel">
+                <h2>Settings</h2>
+                @if (_editing)
+                {
+                    <ExamSettingsForm Model="_values" />
+                    <div class="actions" style="margin-top:20px">
+                        <button type="button" class="btn btn-primary" disabled="@IsBusy" @onclick="SaveSettingsAsync">Save</button>
+                        <button type="button" class="btn btn-ghost" @onclick="() => _editing = false">Cancel</button>
+                    </div>
+                    <p class="muted small" style="margin-top:12px">
+                        Questions that no longer fit the type or difficulty leave the exam but stay in your question bank.
+                        Missing questions are filled from the bank first, then written by the AI.
+                    </p>
+                }
+                else
+                {
+                    <div class="form" style="gap:10px">
+                        <div class="facts" style="margin:0;flex-direction:column;gap:4px">
+                            <span>Questions <strong>@exam.QuestionCount</strong></span>
+                            <span>Type <strong>@Format.Label(exam.Type)</strong></span>
+                            <span>Difficulty <strong>@Format.Label(exam.Difficulty)</strong></span>
+                            <span>Reuse from bank <strong>@exam.ReusePercent%</strong></span>
+                            @if (exam.Instructions is not null)
+                            {
+                                <span style="overflow-wrap:anywhere">Instructions <strong style="white-space:pre-wrap">@exam.Instructions</strong></span>
+                            }
+                        </div>
+                        <div class="actions">
+                            <button type="button" class="btn btn-secondary btn-sm" disabled="@IsBusy" @onclick="BeginEdit"><Icon Name="edit" Size="14" /> Edit settings</button>
+                            <button type="button" class="btn btn-ghost btn-sm" disabled="@IsBusy" @onclick="RegenerateAsync"><Icon Name="redo" Size="14" /> New questions</button>
+                        </div>
+                        @if (CostHint(exam.QuestionCount) is { } newCost)
+                        {
+                            <p class="muted small" style="margin:0">New questions: @newCost.</p>
+                        }
+                    </div>
+                }
+            </div>
+
+            <div class="panel">
+                <h2>Attempts</h2>
+                @if (_attempts.Count == 0)
+                {
+                    <p class="muted small">No attempts yet.</p>
+                }
+                else
+                {
+                    <ul class="rows">
+                        @foreach (var a in _attempts)
+                        {
+                            <li class="row" style="padding:10px 0" @key="a.Id">
+                                <div class="row-main">
+                                    <a class="row-title" href="attempts/@a.Id">@Format.Date(a.StartedAt)</a>
+                                    <div class="row-meta">
+                                        @if (a.CompletedAt is null)
+                                        {
+                                            <span>In progress, @a.Answered of @a.Total answered</span>
+                                        }
+                                        else
+                                        {
+                                            <span>@Format.Duration(a.ActiveSeconds)</span>
+                                        }
+                                    </div>
+                                </div>
+                                @if (a.ScorePercent is { } s)
+                                {
+                                    <div class="row-aside"><span class="verdict verdict-@Format.VerdictClass(s)">@Format.Percent(s)</span></div>
+                                }
+                            </li>
+                        }
+                    </ul>
+                }
+            </div>
+
+            <div class="actions" style="margin-top:16px">
+                <button type="button" class="btn btn-danger btn-sm" disabled="@IsBusy" @onclick="DeleteAsync"><Icon Name="trash" Size="14" /> Delete exam</button>
+            </div>
+        </aside>
+    </div>
+}
+
+<QuestionDialog @ref="_questionDialog" />
+
+@code {
+    [Parameter] public int ExamId { get; set; }
+    [CascadingParameter] private AppUi Ui { get; set; } = default!;
+
+    private ExamDetail? _detail;
+    private IReadOnlyList<AttemptService.AttemptSummary> _attempts = [];
+    private QuestionDialog _questionDialog = default!;
+    private readonly ExamSettingsForm.Values _values = new();
+    private bool _editing;
+    private GenerationCostBasis? _cost;
+    private string? _error;
+
+    protected override async Task OnParametersSetAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        var userId = await UserIdAsync();
+        try
+        {
+            _detail = await Exams.GetAsync(userId, ExamId, PageToken);
+            _attempts = await Attempts.ListForExamAsync(userId, ExamId, PageToken);
+            _cost = await Generator.CostBasisAsync(userId, _detail.Exam.TopicId, PageToken);
+        }
+        catch (NotFoundException)
+        {
+            Nav.NavigateTo("not-found");
+        }
+    }
+
+    private async Task StartAsync()
+    {
+        var id = await Attempts.StartOrResumeAsync(await UserIdAsync(), ExamId, PageToken);
+        Nav.NavigateTo($"attempts/{id}");
+    }
+
+    private async Task StartOverAsync()
+    {
+        if (!await Ui.Confirm.AskAsync("Start over?", "Your unfinished attempt and the answers in it will be discarded.", "Start over", danger: true))
+            return;
+        var id = await Attempts.StartNewAsync(await UserIdAsync(), ExamId, PageToken);
+        Nav.NavigateTo($"attempts/{id}");
+    }
+
+    // Tokens and cost of the AI writing this many questions, when it's enough to be worth showing.
+    private string? CostHint(int questionCount) =>
+        _cost is null || questionCount <= 0 ? null : Format.CostHint(Generator.Estimate(_cost, questionCount));
+
+    // Confirms first when the generation would send an unusually large amount of material.
+    private async Task<bool> ConfirmGenerationAsync(int questionCount)
+    {
+        if (questionCount <= 0)
+            return true;
+        var estimate = await Generator.EstimateAsync(await UserIdAsync(), _detail!.Exam.TopicId, questionCount, PageToken);
+        return estimate.TotalInputTokens <= Options.LargeGenerationWarnTokens ||
+               await Ui.Confirm.AskAsync("This is a large generation",
+                   Format.LargeGeneration(estimate),
+                   "Generate questions");
+    }
+
+    private async Task FillAsync()
+    {
+        _error = null;
+        var userId = await UserIdAsync();
+        var (mc, written) = await Exams.MissingAsync(userId, ExamId, PageToken);
+        if (!await ConfirmGenerationAsync(mc + written))
+            return;
+
+        FillResult? result = null;
+        await RunBusyAsync("Filling the exam...", async (progress, ct) =>
+            result = await Exams.FillAsync(userId, ExamId, progress, ct), m => _error = m);
+        ReportFill(result);
+        await LoadAsync();
+    }
+
+    private void ReportFill(FillResult? result)
+    {
+        if (result is null) return;
+        if (result.Missing > 0)
+            Ui.Toast.Error($"{Format.Plural(result.Missing, "question", "questions")} couldn't be generated. Try adding them again.");
+        else if (result.FromBank + result.Generated > 0)
+            Ui.Toast.Success($"Added {result.FromBank + result.Generated} questions ({result.FromBank} from the bank, {result.Generated} new).");
+    }
+
+    private void BeginEdit()
+    {
+        var e = _detail!.Exam;
+        _values.Name = e.Name;
+        _values.QuestionCount = e.QuestionCount;
+        _values.Type = e.Type;
+        _values.Difficulty = e.Difficulty;
+        _values.SetReusePercent(e.ReusePercent);
+        _values.Instructions = e.Instructions;
+        _editing = true;
+    }
+
+    private async Task SaveSettingsAsync()
+    {
+        _error = null;
+        var userId = await UserIdAsync();
+        try
+        {
+            await Exams.UpdateSettingsAsync(userId, ExamId, _values.ToSettings(), PageToken);
+        }
+        catch (ArgumentException ex)
+        {
+            Ui.Toast.Error(ex.Message);
+            return;
+        }
+
+        _editing = false;
+        await LoadAsync();
+        var (mc, written) = await Exams.MissingAsync(userId, ExamId, PageToken);
+        if (mc + written > 0)
+            await FillAsync();
+        else
+            Ui.Toast.Success("Settings saved.");
+    }
+
+    private async Task RegenerateAsync()
+    {
+        var exam = _detail!.Exam;
+        if (!await Ui.Confirm.AskAsync("Replace all questions?",
+                $"The AI writes {exam.QuestionCount} new questions for this exam" +
+                (CostHint(exam.QuestionCount) is { } cost ? $" ({cost})" : "") +
+                ". The current ones stay in your question bank, and past results are kept.",
+                "Write new questions"))
+            return;
+        if (!await ConfirmGenerationAsync(exam.QuestionCount))
+            return;
+
+        _error = null;
+        FillResult? result = null;
+        await RunBusyAsync("Writing new questions...", async (progress, ct) =>
+            result = await Exams.RegenerateAllAsync(await UserIdAsync(), ExamId, progress, ct), m => _error = m);
+        ReportFill(result);
+        await LoadAsync();
+    }
+
+    private async Task ReplaceAsync(Question q)
+    {
+        _error = null;
+        var ok = await RunBusyAsync("Writing a replacement question...", async (progress, ct) =>
+            await Exams.ReplaceQuestionAsync(await UserIdAsync(), ExamId, q.Id, progress, ct), m => _error = m);
+        if (ok) Ui.Toast.Success("Question replaced. The old one stays in your question bank.");
+        await LoadAsync();
+    }
+
+    private async Task RemoveAsync(Question q)
+    {
+        if (!await Ui.Confirm.AskAsync("Remove this question?",
+                "It leaves this exam but stays in your question bank, and past results keep it.", "Remove", danger: true))
+            return;
+        await Exams.RemoveQuestionAsync(await UserIdAsync(), ExamId, q.Id, PageToken);
+        await LoadAsync();
+    }
+
+    private async Task EditAsync(Question q)
+    {
+        var userId = await UserIdAsync();
+        var draft = await _questionDialog.EditAsync(q);
+        await SaveDraftLoopAsync(draft, d => Exams.UpdateQuestionAsync(userId, q.Id, d, PageToken), "Question saved.");
+    }
+
+    private async Task AddOwnAsync()
+    {
+        var type = _detail!.Exam.Type == ExamType.Written ? QuestionType.Written : QuestionType.MultipleChoice;
+        var userId = await UserIdAsync();
+        var draft = await _questionDialog.CreateAsync(type);
+        await SaveDraftLoopAsync(draft, d => Exams.AddOwnQuestionAsync(userId, ExamId, d, PageToken), "Question added.");
+    }
+
+    // Keeps the dialog open with the error shown until the draft is valid or the user cancels.
+    private async Task SaveDraftLoopAsync(QuestionDraft? draft, Func<QuestionDraft, Task> save, string doneMessage)
+    {
+        while (draft is not null)
+        {
+            try
+            {
+                await save(draft);
+                _questionDialog.Close();
+                Ui.Toast.Success(doneMessage);
+                await LoadAsync();
+                return;
+            }
+            catch (ArgumentException ex)
+            {
+                _questionDialog.ShowError(ex.Message);
+                draft = await _questionDialog.WaitAgainAsync();
+            }
+        }
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (!await Ui.Confirm.AskAsync($"Delete \"{_detail!.Exam.Name}\"?",
+                "The exam and all its attempts and results are deleted. Its questions stay in the topic's question bank.",
+                "Delete exam", danger: true))
+            return;
+        var topicId = _detail.Exam.TopicId;
+        await Exams.DeleteAsync(await UserIdAsync(), ExamId, PageToken);
+        Nav.NavigateTo($"topics/{topicId}");
+    }
+}

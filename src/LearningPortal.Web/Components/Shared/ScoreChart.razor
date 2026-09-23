@@ -1,0 +1,80 @@
+@* Score over time for one exam: one ink line on a fixed 0-100% axis, attempts evenly spaced,
+   a dashed line at the 80% "correct" threshold, and the latest attempt highlighted and labelled.
+   Hovering (or focusing) a point shows its details in the caption line above the chart. *@
+
+<div class="chart-caption small muted" aria-live="polite" style="min-height:1.5em">
+    @if (_hover is { } h)
+    {
+        var p = Points[h];
+        <span><strong style="color:var(--ink)">@Format.Percent(p.Score)</strong> on attempt @(h + 1), @Format.Date(p.CompletedAt), @Format.Duration(p.ActiveSeconds)</span>
+    }
+    else
+    {
+        <span>@Format.Plural(Points.Count, "attempt", "attempts")</span>
+    }
+</div>
+
+<svg class="chart" viewBox="0 0 @Width @Height" role="img" aria-label="@AriaLabel" @onmouseleave="() => _hover = null">
+    @foreach (var v in new[] { 0, 50, 100 })
+    {
+        @* Wrapped in <g> so Razor reads <text> as SVG markup, not its own text tag. *@
+        <g>
+            <line class="grid-line" x1="@PadLeft" x2="@(Width - PadRight)" y1="@Y(v)" y2="@Y(v)" />
+            <text class="axis-label" x="@(PadLeft - 8)" y="@(Y(v) + 4)" text-anchor="end">@v%</text>
+        </g>
+    }
+    <line class="threshold" x1="@PadLeft" x2="@(Width - PadRight)" y1="@Y(VerdictRules.CorrectThreshold)" y2="@Y(VerdictRules.CorrectThreshold)" />
+
+    @if (Points.Count > 1)
+    {
+        <polyline class="series" points="@PolylinePoints" />
+    }
+
+    @for (var i = 0; i < Points.Count; i++)
+    {
+        var index = i;
+        var last = i == Points.Count - 1;
+        <circle class="dot @(last ? "dot-last" : "")" cx="@X(i)" cy="@Y(Points[i].Score)" r="@(last || _hover == i ? 5 : 4)" />
+    }
+
+    @{
+        var lastIndex = Points.Count - 1;
+        var lastY = Y(Points[lastIndex].Score);
+    }
+    <text class="value-label" x="@X(lastIndex)" y="@(lastY < PadTop + 14 ? lastY + 20 : lastY - 11)" text-anchor="@(Points.Count == 1 ? "middle" : "end")">@Format.Percent(Points[lastIndex].Score)</text>
+
+    @* Hit targets: one full-height band per attempt, wider than the dot. *@
+    @for (var i = 0; i < Points.Count; i++)
+    {
+        var index = i;
+        <rect class="hit" x="@(X(i) - BandWidth / 2)" y="0" width="@BandWidth" height="@Height"
+              tabindex="0" @onmouseover="() => _hover = index" @onfocus="() => _hover = index" @onblur="() => _hover = null">
+            <title>Attempt @(i + 1): @Format.Percent(Points[i].Score)</title>
+        </rect>
+    }
+</svg>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<ScorePoint> Points { get; set; } = [];
+    [Parameter] public string AriaLabel { get; set; } = "Score over time";
+
+    private const double Width = 320;
+    private const double Height = 140;
+    private const double PadLeft = 40;
+    private const double PadRight = 14;
+    private const double PadTop = 12;
+    private const double PadBottom = 12;
+
+    private int? _hover;
+
+    private double PlotWidth => Width - PadLeft - PadRight;
+
+    private double BandWidth => Points.Count <= 1 ? PlotWidth : Math.Max(18, PlotWidth / (Points.Count - 1));
+
+    private double X(int i) => Points.Count <= 1 ? PadLeft + PlotWidth / 2 : PadLeft + PlotWidth * i / (Points.Count - 1);
+
+    private double Y(double score) => PadTop + (Height - PadTop - PadBottom) * (1 - Math.Clamp(score, 0, 100) / 100);
+
+    private string PolylinePoints => string.Join(" ", Points.Select((p, i) =>
+        FormattableString.Invariant($"{X(i):0.##},{Y(p.Score):0.##}")));
+}

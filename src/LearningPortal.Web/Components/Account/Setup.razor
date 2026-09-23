@@ -1,0 +1,95 @@
+@page "/account/setup"
+@attribute [AllowAnonymous]
+@inject SignInManager<AppUser> SignInManager
+@inject UserManager<AppUser> UserManager
+@inject NavigationManager Nav
+
+<PageTitle>Set up - LearningPortal</PageTitle>
+
+<div class="auth-form">
+    <h1>Create the admin account</h1>
+    <p class="page-sub">
+        This is a fresh installation. The account you create now is the administrator. After this,
+        only you can add accounts for other people.
+    </p>
+
+    @if (_errors.Count > 0)
+    {
+        <div class="notice notice-error" style="margin-bottom:18px">
+            @foreach (var e in _errors)
+            {
+                <div>@e</div>
+            }
+        </div>
+    }
+
+    <EditForm Model="Input" method="post" OnValidSubmit="CreateAsync" FormName="setup" class="form">
+        <DataAnnotationsValidator />
+        <label class="field">
+            <span>Username</span>
+            <InputText @bind-Value="Input.UserName" class="input" autocomplete="username" autofocus />
+            <ValidationMessage For="() => Input.UserName" />
+        </label>
+        <label class="field">
+            <span>Password</span>
+            <InputText type="password" @bind-Value="Input.Password" class="input" autocomplete="new-password" />
+            <span class="field-hint">At least 8 characters.</span>
+            <ValidationMessage For="() => Input.Password" />
+        </label>
+        <label class="field">
+            <span>Repeat password</span>
+            <InputText type="password" @bind-Value="Input.Confirm" class="input" autocomplete="new-password" />
+            <ValidationMessage For="() => Input.Confirm" />
+        </label>
+        <button type="submit" class="btn btn-primary btn-lg">Create admin account</button>
+    </EditForm>
+</div>
+
+@code {
+    private readonly List<string> _errors = [];
+
+    [SupplyParameterFromForm]
+    private SetupInput Input { get; set; } = new();
+
+    protected override void OnInitialized()
+    {
+        if (UserManager.Users.Any())
+            Nav.NavigateTo("account/login");
+    }
+
+    private async Task CreateAsync()
+    {
+        // Checked again at submit time so two people racing the setup page can't both become admin.
+        if (UserManager.Users.Any())
+        {
+            Nav.NavigateTo("account/login");
+            return;
+        }
+
+        var user = new AppUser { UserName = Input.UserName.Trim() };
+        var result = await UserManager.CreateAsync(user, Input.Password);
+        if (!result.Succeeded)
+        {
+            _errors.AddRange(result.Errors.Select(e => e.Description));
+            return;
+        }
+
+        await UserManager.AddToRoleAsync(user, Roles.Admin);
+        await SignInManager.SignInAsync(user, isPersistent: true);
+        Nav.NavigateTo("/settings", forceLoad: true);
+    }
+
+    private sealed class SetupInput
+    {
+        [Required(ErrorMessage = "Choose a username.")]
+        [RegularExpression(@"^[A-Za-z0-9\-._@+]+$", ErrorMessage = "Use letters, digits and - . _ @ + only.")]
+        public string UserName { get; set; } = "";
+
+        [Required(ErrorMessage = "Choose a password.")]
+        [MinLength(8, ErrorMessage = "Use at least 8 characters.")]
+        public string Password { get; set; } = "";
+
+        [Compare(nameof(Password), ErrorMessage = "The passwords don't match.")]
+        public string Confirm { get; set; } = "";
+    }
+}

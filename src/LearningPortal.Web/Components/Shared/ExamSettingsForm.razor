@@ -1,0 +1,140 @@
+@* Name, question count, type and difficulty: shared by "new exam" and "edit exam". *@
+<div class="form">
+    <label class="field">
+        <span>Name</span>
+        <input class="input" @bind="Model.Name" @bind:event="oninput" @bind:after="OnChanged.InvokeAsync" maxlength="200" />
+    </label>
+
+    <label class="field" style="max-width:220px">
+        <span>Number of questions</span>
+        <input class="input" type="number" min="1" max="@ExamService.MaxQuestions" @bind="Model.QuestionCount" @bind:event="oninput" @bind:after="OnChanged.InvokeAsync" />
+    </label>
+
+    <div class="field">
+        <span class="field-label" id="type-label">Question type</span>
+        <div class="segmented" role="radiogroup" aria-labelledby="type-label">
+            @foreach (var type in Enum.GetValues<ExamType>())
+            {
+                <label>
+                    <input type="radio" name="exam-type" checked="@(Model.Type == type)" @onchange="() => { Model.Type = type; return OnChanged.InvokeAsync(); }" />
+                    @Format.Label(type)
+                </label>
+            }
+        </div>
+        <span class="field-hint">
+            @(Model.Type switch
+            {
+                ExamType.MultipleChoice => "Pick the right option or options. Graded instantly.",
+                ExamType.Written => "Answer in your own words, in up to about 20 sentences. The AI grades each answer.",
+                _ => "Half multiple choice, half written.",
+            })
+        </span>
+    </div>
+
+    <div class="field">
+        <span class="field-label" id="difficulty-label">Difficulty</span>
+        <div class="segmented" role="radiogroup" aria-labelledby="difficulty-label">
+            @foreach (var d in Enum.GetValues<Difficulty>())
+            {
+                <label>
+                    <input type="radio" name="exam-difficulty" checked="@(Model.Difficulty == d)" @onchange="() => { Model.Difficulty = d; return OnChanged.InvokeAsync(); }" />
+                    @Format.Label(d)
+                </label>
+            }
+        </div>
+        <span class="field-hint">
+            @(Model.Difficulty switch
+            {
+                Difficulty.Easy => "Recall facts and definitions.",
+                Difficulty.Medium => "Apply and connect ideas.",
+                _ => "Reason through scenarios and subtle distinctions.",
+            })
+        </span>
+    </div>
+
+    <label class="field">
+        <span>Instructions for the AI <span class="muted">(optional)</span></span>
+        <textarea class="textarea" rows="3" maxlength="@ExamService.MaxInstructionsLength"
+                  @bind="Model.Instructions" @bind:event="oninput" @bind:after="OnChanged.InvokeAsync"
+                  placeholder="For example: focus on questions about photosynthesis, or ask more about dates and names."></textarea>
+        <span class="field-hint">Used whenever the AI writes questions for this exam. @(Model.Instructions?.Length ?? 0) / @ExamService.MaxInstructionsLength characters</span>
+    </label>
+
+    <div class="field">
+        <label class="check">
+            <input type="checkbox" checked="@Model.Reuse" @onchange="e => SetReuse((bool)e.Value!)" />
+            Reuse questions from the question bank
+        </label>
+        @if (Model.Reuse)
+        {
+            <label class="range-field">
+                <span>Reuse up to <strong>@Model.ReusePercent%</strong></span>
+                <input type="range" class="range" min="0" max="100" step="10" aria-label="Share of questions reused from the bank"
+                       @bind="Model.ReusePercent" @bind:event="oninput" @bind:after="OnChanged.InvokeAsync" />
+            </label>
+        }
+        <span class="field-hint">
+            Reused questions cost nothing; questions not used in another exam are picked first.
+            @(Model.Reuse ? "" : "Every question is newly written by the AI.")
+        </span>
+        @if (Model.Reuse && !string.IsNullOrWhiteSpace(Model.Instructions))
+        {
+            <span class="field-hint">Reused questions weren't written with your instructions. Lower the slider for a fully focused exam.</span>
+        }
+    </div>
+
+    @if (BankCounts is not null)
+    {
+        var (fromBank, generate) = ExamService.Plan(Model.ToSettings() with { QuestionCount = Math.Clamp(Model.QuestionCount, 0, ExamService.MaxQuestions) }, BankCounts);
+        <p class="muted small" style="margin:0">
+            @if (fromBank > 0)
+            {
+                <span>@Format.Plural(fromBank, "question comes", "questions come") from your question bank. </span>
+            }
+            @if (generate > 0)
+            {
+                <span>The AI writes @Format.Plural(generate, "new question", "new questions").</span>
+            }
+            else
+            {
+                <span>No AI generation needed.</span>
+            }
+        </p>
+    }
+</div>
+
+@code {
+    public sealed class Values
+    {
+        public string Name { get; set; } = "";
+        public int QuestionCount { get; set; } = 10;
+        public ExamType Type { get; set; } = ExamType.Mixed;
+        public Difficulty Difficulty { get; set; } = Difficulty.Medium;
+        public bool Reuse { get; set; } = true;
+        public int ReusePercent { get; set; } = 100;
+        public string? Instructions { get; set; }
+
+        public ExamSettings ToSettings() => new(Name, QuestionCount, Type, Difficulty, Reuse ? ReusePercent : 0, Instructions);
+
+        // A stored 0% shows as "don't reuse" with the slider ready at 100% if it's switched back on.
+        public void SetReusePercent(int percent)
+        {
+            Reuse = percent > 0;
+            ReusePercent = percent > 0 ? percent : 100;
+        }
+    }
+
+    [Parameter, EditorRequired] public Values Model { get; set; } = default!;
+
+    private Task SetReuse(bool value)
+    {
+        Model.Reuse = value;
+        return OnChanged.InvokeAsync();
+    }
+
+    // Lets the parent re-render (e.g. a live cost estimate) as the settings change.
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    // Existing bank questions per kind and difficulty, for the reuse hint. Null hides it.
+    [Parameter] public Dictionary<(QuestionType Type, Difficulty Difficulty), int>? BankCounts { get; set; }
+}

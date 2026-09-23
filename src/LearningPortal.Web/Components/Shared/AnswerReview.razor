@@ -1,0 +1,99 @@
+@* The revealed state of one question: the right answer highlighted, what you picked or wrote,
+   the grade, and the explanation you learn from. Used after "Reveal answer" and on results. *@
+
+@if (Q.Type == QuestionType.MultipleChoice)
+{
+    <div class="options locked @(Q.AllowsMultiple ? "multi" : "")" role="list">
+        @foreach (var o in OrderedOptions)
+        {
+            var picked = Answer.SelectedIds.Contains(o.Id);
+            <div class="option @(o.IsCorrect ? "is-key" : picked ? "is-wrong-pick" : "")" role="listitem">
+                <input type="@(Q.AllowsMultiple ? "checkbox" : "radio")" checked="@picked" disabled tabindex="-1" aria-hidden="true" />
+                <span class="option-box"></span>
+                <span class="option-text">@o.Text</span>
+                @if (o.IsCorrect && picked)
+                {
+                    <span class="option-mark">Your pick, correct</span>
+                }
+                else if (o.IsCorrect)
+                {
+                    <span class="option-mark">Correct</span>
+                }
+                else if (picked)
+                {
+                    <span class="option-mark">Your pick</span>
+                }
+            </div>
+        }
+    </div>
+}
+else
+{
+    <div class="your-answer">
+        <h3 class="small muted" style="margin-bottom:6px">Your answer</h3>
+        @if (string.IsNullOrWhiteSpace(Answer.WrittenAnswer))
+        {
+            <p class="muted">Not answered.</p>
+        }
+        else
+        {
+            <div class="reading">@Answer.WrittenAnswer</div>
+        }
+    </div>
+}
+
+<div class="result-line">
+    @if (!Answer.IsAnswered)
+    {
+        <span class="verdict verdict-incorrect">Not answered</span>
+    }
+    else if (Answer.Score is { } score)
+    {
+        <VerdictLabel Score="score" ShowScore="@(Q.Type == QuestionType.Written || Q.AllowsMultiple)" />
+    }
+    else
+    {
+        <span class="muted small">Not graded yet.</span>
+        @if (OnRetryGrade.HasDelegate)
+        {
+            <button type="button" class="btn btn-secondary btn-sm" @onclick="OnRetryGrade">Grade now</button>
+        }
+    }
+    <span class="spacer" style="flex:1"></span>
+    <SourceLink Question="Q" />
+</div>
+
+@if (!string.IsNullOrWhiteSpace(Answer.Feedback))
+{
+    <p class="feedback">@Answer.Feedback</p>
+}
+
+@if (Q.Type == QuestionType.Written)
+{
+    <div class="reference">
+        <h3>Reference answer</h3>
+        <div class="reading">@Q.ReferenceAnswer</div>
+    </div>
+}
+
+<div class="explain">
+    <h3>Why</h3>
+    <div class="reading">@Q.Explanation</div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public AttemptAnswer Answer { get; set; } = default!;
+    [Parameter] public EventCallback OnRetryGrade { get; set; }
+
+    private Question Q => Answer.Question!;
+
+    // Options in the order this attempt showed them.
+    private IEnumerable<QuestionOption> OrderedOptions
+    {
+        get
+        {
+            var order = Answer.OptionOrderIds.ToList();
+            return Q.Options.OrderBy(o => order.IndexOf(o.Id) is var i and >= 0 ? i : int.MaxValue);
+        }
+    }
+}

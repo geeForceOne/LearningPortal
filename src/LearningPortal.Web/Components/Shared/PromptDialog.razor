@@ -1,0 +1,84 @@
+@if (_visible)
+{
+    <div class="modal-backdrop" @onclick="() => Resolve(null)">
+        <div class="modal @(_multiline ? "modal-wide" : "")" role="dialog" aria-modal="true" aria-labelledby="prompt-title" @onclick:stopPropagation="true">
+            <h2 id="prompt-title">@_title</h2>
+            @if (_hint is not null)
+            {
+                <p>@_hint</p>
+            }
+            <label class="field">
+                <span>@_label</span>
+                @if (_multiline)
+                {
+                    <textarea class="textarea reading" rows="12" @bind="_value" @bind:event="oninput" @onkeydown="OnKeyDown" @ref="_input"></textarea>
+                }
+                else
+                {
+                    <input class="input" @bind="_value" @bind:event="oninput" @onkeydown="OnKeyDown" @ref="_input" />
+                }
+            </label>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-ghost" @onclick="() => Resolve(null)">Cancel</button>
+                <button type="button" class="btn btn-primary" disabled="@string.IsNullOrWhiteSpace(_value)" @onclick="Submit">@_okLabel</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool _visible;
+    private bool _focusPending;
+    private bool _multiline;
+    private string _title = "";
+    private string _label = "";
+    private string? _hint;
+    private string _okLabel = "Save";
+    private string _value = "";
+    private ElementReference _input;
+    private TaskCompletionSource<string?>? _tcs;
+
+    // Resolves to the trimmed text, or null if cancelled.
+    public Task<string?> AskAsync(string title, string label, string initialValue = "", string okLabel = "Save",
+        string? hint = null, bool multiline = false)
+    {
+        _tcs?.TrySetResult(null);
+        _title = title;
+        _label = label;
+        _value = initialValue;
+        _okLabel = okLabel;
+        _hint = hint;
+        _multiline = multiline;
+        _visible = true;
+        _focusPending = true;
+        _tcs = new TaskCompletionSource<string?>();
+        StateHasChanged();
+        return _tcs.Task;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_focusPending) return;
+        _focusPending = false;
+        try { await _input.FocusAsync(); } catch (JSException) { }
+    }
+
+    private void OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+            Resolve(null);
+        else if (e.Key == "Enter" && !_multiline && !string.IsNullOrWhiteSpace(_value))
+            Submit();
+    }
+
+    private void Submit() => Resolve(_value.Trim());
+
+    private void Resolve(string? result)
+    {
+        _visible = false;
+        var tcs = _tcs;
+        _tcs = null;
+        StateHasChanged();
+        tcs?.TrySetResult(result);
+    }
+}

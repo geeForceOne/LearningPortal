@@ -1,0 +1,103 @@
+@page "/settings"
+@inherits AppPage
+@inject SettingsService Settings
+@using LearningPortal.Core.Security
+
+<PageTitle>Settings - LearningPortal</PageTitle>
+
+<div class="page-head">
+    <div>
+        <h1>Settings</h1>
+        <p class="page-sub">
+            Choose which AI provider writes and grades your exams. You use your own API key: requests
+            are billed to your account with that provider.
+        </p>
+    </div>
+</div>
+
+@if (_view is null)
+{
+    <p class="page-loading">Loading...</p>
+}
+else
+{
+    <div class="form form-narrow">
+        <div class="field">
+            <span class="field-label" id="provider-label">AI provider</span>
+            <div class="segmented" role="radiogroup" aria-labelledby="provider-label">
+                <label><input type="radio" name="provider" checked="@(_provider == AiProvider.Claude)" @onchange="() => _provider = AiProvider.Claude" /> Claude (Anthropic)</label>
+                <label><input type="radio" name="provider" checked="@(_provider == AiProvider.OpenAi)" @onchange="() => _provider = AiProvider.OpenAi" /> ChatGPT (OpenAI)</label>
+            </div>
+        </div>
+
+        @if (_provider == AiProvider.Claude)
+        {
+            <KeyField Label="Anthropic API key" Status="_view.ClaudeKey" @bind-Value="_claudeKey" OnRemove="() => _removeClaude = true" Removing="_removeClaude"
+                      Placeholder="sk-ant-...">
+                <Hint>Create one at <a href="https://platform.claude.com/settings/keys" target="_blank" rel="noopener noreferrer">platform.claude.com</a> under API keys.</Hint>
+            </KeyField>
+            <ModelPicker Models="AiModels.Claude" Default="@AiModels.DefaultClaude" PricingUrl="@AiModels.ClaudePricingUrl" @bind-Value="_claudeModel" />
+        }
+        else
+        {
+            <KeyField Label="OpenAI API key" Status="_view.OpenAiKey" @bind-Value="_openAiKey" OnRemove="() => _removeOpenAi = true" Removing="_removeOpenAi"
+                      Placeholder="sk-...">
+                <Hint>Create one at <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer">platform.openai.com</a> under API keys.</Hint>
+            </KeyField>
+            <ModelPicker Models="AiModels.OpenAi" Default="@AiModels.DefaultOpenAi" PricingUrl="@AiModels.OpenAiPricingUrl" @bind-Value="_openAiModel" />
+        }
+
+        <div class="actions">
+            <button type="button" class="btn btn-primary" disabled="@_saving" @onclick="SaveAsync">Save settings</button>
+        </div>
+    </div>
+}
+
+@code {
+    [CascadingParameter] private AppUi Ui { get; set; } = default!;
+
+    private SettingsView? _view;
+    private AiProvider _provider;
+    private string? _claudeModel;
+    private string? _openAiModel;
+    private string _claudeKey = "";
+    private string _openAiKey = "";
+    private bool _removeClaude;
+    private bool _removeOpenAi;
+    private bool _saving;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _view = await Settings.GetAsync(await UserIdAsync(), PageToken);
+        _provider = _view.Provider;
+        _claudeModel = _view.ClaudeModel == AiModels.DefaultClaude ? null : _view.ClaudeModel;
+        _openAiModel = _view.OpenAiModel == AiModels.DefaultOpenAi ? null : _view.OpenAiModel;
+        _claudeKey = "";
+        _openAiKey = "";
+        _removeClaude = false;
+        _removeOpenAi = false;
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        try
+        {
+            // A typed key replaces the stored one; an empty box leaves it alone; "Remove" clears it.
+            await Settings.SaveAsync(await UserIdAsync(), new SettingsUpdate(
+                _provider,
+                _claudeModel,
+                _openAiModel,
+                _removeClaude ? "" : string.IsNullOrWhiteSpace(_claudeKey) ? null : _claudeKey,
+                _removeOpenAi ? "" : string.IsNullOrWhiteSpace(_openAiKey) ? null : _openAiKey), PageToken);
+            await LoadAsync();
+            Ui.Toast.Success("Settings saved.");
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

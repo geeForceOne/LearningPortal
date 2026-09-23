@@ -1,0 +1,42 @@
+@using LearningPortal.Core.Security
+@* An API key input that never shows the stored key: it only says whether one is saved. *@
+<div class="field">
+    <label class="field-label" for="@_id">@Label</label>
+
+    @if (Removing)
+    {
+        <div class="notice notice-warn">The saved key will be removed when you save.</div>
+    }
+    else if (Status == SecretStatus.Set)
+    {
+        <div class="notice notice-good" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <span style="flex:1">A key is saved. Type a new one below to replace it.</span>
+            <button type="button" class="btn btn-ghost btn-sm" @onclick="OnRemove">Remove key</button>
+        </div>
+    }
+    else if (Status == SecretStatus.Unreadable)
+    {
+        <div class="notice notice-error">
+            Your saved key can't be read anymore, usually because the server's encryption keys were
+            reset. Enter it again below.
+        </div>
+    }
+
+    <input id="@_id" class="input" type="password" autocomplete="off" spellcheck="false"
+           value="@Value" @oninput="e => ValueChanged.InvokeAsync(e.Value?.ToString() ?? string.Empty)"
+           placeholder="@(Status == SecretStatus.Set ? "Leave empty to keep the saved key" : Placeholder)" />
+    <span class="field-hint">@Hint It's stored encrypted and never shown again.</span>
+</div>
+
+@code {
+    private readonly string _id = "key-" + Guid.NewGuid().ToString("N")[..8];
+
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter] public SecretStatus Status { get; set; }
+    [Parameter] public string Value { get; set; } = "";
+    [Parameter] public EventCallback<string> ValueChanged { get; set; }
+    [Parameter] public EventCallback OnRemove { get; set; }
+    [Parameter] public bool Removing { get; set; }
+    [Parameter] public RenderFragment? Hint { get; set; }
+    [Parameter] public string? Placeholder { get; set; }
+}

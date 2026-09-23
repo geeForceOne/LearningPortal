@@ -1,0 +1,117 @@
+@page "/topics/{TopicId:int}/exams/new"
+@inherits AppPage
+@inject TopicService Topics
+@inject ExamService Exams
+@inject QuestionGenerationService Generator
+@inject LearningPortalOptions Options
+
+<PageTitle>New exam - LearningPortal</PageTitle>
+
+@if (_topic is null)
+{
+    <p class="page-loading">Loading...</p>
+}
+else
+{
+    <nav class="crumbs" aria-label="Breadcrumb">
+        <a href="">Topics</a><span class="sep">/</span><a href="topics/@TopicId">@_topic.Summary.Name</a>
+    </nav>
+    <div class="page-head">
+        <div>
+            <h1>New exam</h1>
+            <p class="page-sub">
+                Questions come from this topic's question bank first. The AI writes only the ones that are
+                still missing, in @_topic.Summary.Language.
+            </p>
+        </div>
+    </div>
+
+    <div class="form-narrow">
+        <ExamSettingsForm Model="_values" BankCounts="_bank" OnChanged="StateHasChanged" />
+
+        <div class="actions" style="margin-top:28px">
+            <button type="button" class="btn btn-primary btn-lg" disabled="@(IsBusy || !IsValid)" @onclick="CreateAsync">Create exam</button>
+            <a class="btn btn-ghost btn-lg" href="topics/@TopicId">Cancel</a>
+        </div>
+        @if (IsValid && _cost is not null && Format.CostHint(Generator.Estimate(_cost, ToGenerate())) is { } hint)
+        {
+            <p class="muted small" style="margin-top:8px">The AI writes @Format.Plural(ToGenerate(), "new question", "new questions"): @hint.</p>
+        }
+
+        @if (IsBusy)
+        {
+            <div style="margin-top:20px"><BusyBar Message="@BusyMessage" OnCancel="CancelBusy" /></div>
+            <p class="muted small" style="margin-top:8px">Writing questions can take a minute or two. Questions finished so far are kept even if you cancel.</p>
+        }
+        @if (_error is not null)
+        {
+            <div class="notice notice-error" style="margin-top:20px">@_error</div>
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public int TopicId { get; set; }
+    [CascadingParameter] private AppUi Ui { get; set; } = default!;
+
+    private TopicDetail? _topic;
+    private Dictionary<(QuestionType Type, Difficulty Difficulty), int>? _bank;
+    private readonly ExamSettingsForm.Values _values = new();
+    private string? _error;
+    private GenerationCostBasis? _cost;
+
+    private bool IsValid => !string.IsNullOrWhiteSpace(_values.Name) && _values.QuestionCount is >= 1 and <= ExamService.MaxQuestions;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var userId = await UserIdAsync();
+        try
+        {
+            _topic = await Topics.GetAsync(userId, TopicId, PageToken);
+        }
+        catch (NotFoundException)
+        {
+            Nav.NavigateTo("not-found");
+            return;
+        }
+        _bank = await Topics.BankCountsAsync(userId, TopicId, PageToken);
+        _cost = await Generator.CostBasisAsync(userId, TopicId, PageToken);
+        _values.Name = $"{_topic.Summary.Name} practice {_topic.Exams.Count + 1}";
+    }
+
+    // Questions the AI still has to write: the requested count minus what the bank can supply.
+    private int ToGenerate() => ExamService.Plan(_values.ToSettings(), _bank!).Generated;
+
+    private async Task CreateAsync()
+    {
+        _error = null;
+        var userId = await UserIdAsync();
+
+        // Guardrail: users pay with their own keys, so a generation that sends a lot of material
+        // is confirmed first.
+        var estimate = await Generator.EstimateAsync(userId, TopicId, ToGenerate(), PageToken);
+        if (estimate.TotalInputTokens > Options.LargeGenerationWarnTokens &&
+            !await Ui.Confirm.AskAsync("This is a large generation",
+                Format.LargeGeneration(estimate),
+                "Generate questions"))
+            return;
+
+        int? examId = null;
+        FillResult? result = null;
+        await RunBusyAsync("Creating the exam...", async (progress, ct) =>
+        {
+            examId = await Exams.CreateAsync(userId, TopicId, _values.ToSettings(), ct);
+            result = await Exams.FillAsync(userId, examId.Value, progress, ct);
+        }, message => _error = message);
+
+        if (examId is null)
+            return;
+
+        if (result is { Missing: > 0 })
+            Ui.Toast.Error($"The exam has {Format.Plural(result.Missing, "question", "questions")} fewer than asked. You can top it up from the exam page.");
+        else if (_error is not null)
+            Ui.Toast.Error(_error);
+
+        Nav.NavigateTo($"exams/{examId}");
+    }
+}
