@@ -37,15 +37,7 @@ else
         {
             <p class="muted small" style="margin-top:8px">The AI writes @Format.Plural(ToGenerate(), "new question", "new questions"): @hint.</p>
         }
-        @if (ToGenerate() > 0 && _cost is not null && BankSize > 0
-             && QuestionGenerationService.BankSaturated(BankSize, _cost.TopicTokens))
-        {
-            <div class="notice notice-warn" style="margin-top:14px">
-                This topic's bank already has @Format.Plural(BankSize, "question", "questions") for about
-                @Format.Tokens(_cost.TopicTokens) of material, which is close to what it can support. New questions
-                will increasingly overlap with existing ones. Add more material to the topic, or reuse more from the bank.
-            </div>
-        }
+        <SaturationNotice Basis="_cost" Show="@(ToGenerate() > 0)" Style="margin-top:14px" />
 
         @if (IsBusy)
         {
@@ -90,8 +82,6 @@ else
 
     // Questions the AI still has to write: the requested count minus what the bank can supply.
     private int ToGenerate() => ExamService.Plan(_values.ToSettings(), _bank!).Generated;
-
-    private int BankSize => _bank?.Values.Sum() ?? 0;
 
     private async Task CreateAsync()
     {

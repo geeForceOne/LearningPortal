@@ -7,7 +7,12 @@ using Microsoft.EntityFrameworkCore;
 
 namespace LearningPortal.Core.Services;
 
-public sealed record GenerationCostBasis(int TopicTokens, AiModelInfo? Model);
+// What generating for a topic depends on: its material size, the user's priced model, and how
+// many questions its bank already holds (for the saturation hint).
+public sealed record GenerationCostBasis(int TopicTokens, AiModelInfo? Model, int BankQuestions)
+{
+    public bool BankSaturated => QuestionGenerationService.BankSaturated(BankQuestions, TopicTokens);
+}
 
 // Model is the user's chosen model when its price is known, so the UI can show a rough cost.
 public sealed record GenerationEstimate(int Calls, int InputTokensPerCall, bool WholeTopic, AiModelInfo? Model)
@@ -52,7 +57,8 @@ public sealed class QuestionGenerationService(
         var total = await db.MaterialSections
             .Where(s => s.Material!.TopicId == topicId && s.Material.UserId == userId)
             .SumAsync(s => (int?)s.TokenEstimate, ct) ?? 0;
-        return new GenerationCostBasis(total, await settings.GetPricedModelAsync(userId, ct));
+        var bank = await db.Questions.CountAsync(q => q.TopicId == topicId && q.UserId == userId, ct);
+        return new GenerationCostBasis(total, await settings.GetPricedModelAsync(userId, ct), bank);
     }
 
     public GenerationEstimate Estimate(GenerationCostBasis basis, int questionCount)

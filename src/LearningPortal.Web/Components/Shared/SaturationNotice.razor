@@ -1,0 +1,22 @@
+@* Shown next to anything that has the AI write new questions for a topic whose bank already
+   holds about as many questions as its material can support: new ones will increasingly
+   overlap, however they're worded. Renders nothing otherwise. *@
+@if (Show && Basis is { BankSaturated: true } b)
+{
+    <div class="notice notice-warn" style="@Style">
+        This topic's bank already has @Format.Plural(b.BankQuestions, "question", "questions") for about
+        @Format.Tokens(b.TopicTokens) of material, which is close to what it can support. New questions
+        will increasingly overlap with existing ones. @Advice
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public GenerationCostBasis? Basis { get; set; }
+
+    // False hides it, e.g. when nothing would be generated.
+    [Parameter] public bool Show { get; set; } = true;
+
+    [Parameter] public string Advice { get; set; } = "Add more material to the topic, or reuse more from the bank.";
+
+    [Parameter] public string? Style { get; set; }
+}
