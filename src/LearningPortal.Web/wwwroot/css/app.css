@@ -1,5 +1,5 @@
 /* ---------------------------------------------------------------------------
-   LearningPortal design system.
+   Recall (LearningPortal) design system.
 
    A study desk rather than a dashboard: slate "paper", chalk-white ink, and one
    highlighter yellow that is only ever used where learning happens - a revealed
@@ -25,6 +25,10 @@
     --marker: #f5dc5c;
     --marker-ink: #1d2213;
     --marker-soft: rgba(245, 220, 92, 0.14);
+
+    /* The logo's colours only; the UI accent stays the highlighter yellow. */
+    --brand: #8b7cf6;
+    --brand-lit: #f5dc5c;
 
     --right: #6fcf97;
     --right-soft: rgba(111, 207, 151, 0.13);
@@ -76,6 +80,10 @@
         --marker: #ffe45c;
         --marker-ink: #172127;
         --marker-soft: rgba(255, 216, 0, 0.18);
+
+        --brand: #6a58d6;
+        /* Deeper than the light-theme highlighter, which washes out on white. */
+        --brand-lit: #e0a800;
 
         --right: #1d7f47;
         --right-soft: rgba(29, 127, 71, 0.1);
@@ -205,6 +213,7 @@ h1:focus { outline: none; }
 }
 
 .brand svg { flex: none; }
+.brand span { font-family: var(--font-read); font-size: 1.3rem; font-weight: 700; letter-spacing: -0.02em; }
 
 .nav {
     display: flex;
@@ -716,6 +725,13 @@ a.row-title:hover { text-decoration: underline; text-decoration-color: var(--rul
 .notice-warn { border-left-color: var(--partial); background: var(--partial-soft); }
 .notice-error { border-left-color: var(--wrong); background: var(--wrong-soft); }
 .notice-good { border-left-color: var(--right); background: var(--right-soft); }
+
+/* A link to pass on by hand: read-only field plus a copy button, stacked on narrow screens. */
+.link-copy { display: flex; gap: 8px; margin: 10px 0 6px; }
+.link-copy .input { flex: 1; min-width: 0; font-size: var(--t-xs); }
+@media (max-width: 480px) {
+    .link-copy { flex-direction: column; }
+}
 
 .empty {
     padding: 48px 20px;
@@ -1300,6 +1316,34 @@ details.q-more[open] summary { margin-bottom: 8px; }
     border-right: 1px solid var(--rule);
 }
 
+.auth-brand {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 18px;
+    text-decoration: none;
+    color: var(--ink);
+}
+
+.auth-brand svg { flex: none; }
+
+.auth-name {
+    font-family: var(--font-read);
+    font-size: clamp(2.8rem, 2rem + 2.4vw, 4.2rem);
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: -0.03em;
+}
+
+/* A quiet personal note under the name: small, italic, easy to miss on purpose. */
+.auth-dedication {
+    margin: 10px 0 0 3px;
+    font-family: var(--font-read);
+    font-style: italic;
+    font-size: var(--t-sm);
+    color: var(--pencil);
+}
+
 .auth-quote {
     font-family: var(--font-read);
     font-size: clamp(1.5rem, 1.1rem + 1.4vw, 2.3rem);
@@ -1318,9 +1362,14 @@ details.q-more[open] summary { margin-bottom: 8px; }
 .auth-form .page-sub { margin: 0 0 26px; }
 
 @media (max-width: 820px) {
-    .auth { grid-template-columns: minmax(0, 1fr); }
-    .auth-side { padding: 22px var(--gutter); border-right: 0; border-bottom: 1px solid var(--rule); }
+    /* The header takes only the height it needs; the form gets the rest. */
+    .auth { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; }
+    .auth-side { padding: 22px var(--gutter); gap: 14px; border-right: 0; border-bottom: 1px solid var(--rule); }
     .auth-quote { display: none; }
+    .auth-brand { flex-direction: row; align-items: center; gap: 14px; }
+    .auth-brand svg { width: 56px; height: 56px; }
+    .auth-name { font-size: 2.2rem; }
+    .auth-dedication { margin: 6px 0 0 70px; }
 }
 
 /* ---------- Blazor chrome ---------- */

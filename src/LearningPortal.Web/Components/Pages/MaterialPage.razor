@@ -2,7 +2,7 @@
 @inherits AppPage
 @inject MaterialService Materials
 
-<PageTitle>@(_detail?.Material.Title ?? "Material") - LearningPortal</PageTitle>
+<PageTitle>@(_detail?.Material.Title ?? "Material") - @AppInfo.Name</PageTitle>
 
 @if (_detail is null)
 {

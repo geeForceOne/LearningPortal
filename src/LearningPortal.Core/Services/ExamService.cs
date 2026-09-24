@@ -8,7 +8,8 @@ namespace LearningPortal.Core.Services;
 // ReusePercent: how much of the exam may come from the question bank; 0 means all new questions.
 // Instructions: optional guidance for the AI when it writes this exam's questions.
 public sealed record ExamSettings(
-    string Name, int QuestionCount, ExamType Type, Difficulty Difficulty, int ReusePercent = 100, string? Instructions = null);
+    string Name, int QuestionCount, ExamType Type, Difficulty Difficulty,
+    int ReusePercent = ExamService.DefaultReusePercent, string? Instructions = null);
 
 public sealed record ExamDetail(Exam Exam, Topic Topic, IReadOnlyList<Question> Questions);
 
@@ -28,6 +29,10 @@ public sealed class ExamService(
 {
     public const int MaxQuestions = 100;
     public const int MaxInstructionsLength = 500;
+
+    // A new exam takes at most this share from the bank and has the AI write the rest, so
+    // practice stays mostly fresh while the bank still saves some cost.
+    public const int DefaultReusePercent = 20;
 
     public async Task<ExamDetail> GetAsync(string userId, int examId, CancellationToken ct = default)
     {

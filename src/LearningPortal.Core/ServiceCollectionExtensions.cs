@@ -1,4 +1,5 @@
 using LearningPortal.Core.Data;
+using LearningPortal.Core.Email;
 using LearningPortal.Core.Security;
 using LearningPortal.Core.Services;
 using Microsoft.EntityFrameworkCore;
@@ -14,6 +15,8 @@ public static class ServiceCollectionExtensions
         this IServiceCollection services, string connectionString, LearningPortalOptions options)
     {
         services.AddSingleton(options);
+        services.AddSingleton<EmailSettingsService>();
+        services.AddSingleton<EmailSender>();
         services.AddDbContextFactory<AppDbContext>(o => o.UseSqlite(connectionString));
         services.AddSingleton<SecretProtector>();
         services.AddSingleton<SettingsService>();

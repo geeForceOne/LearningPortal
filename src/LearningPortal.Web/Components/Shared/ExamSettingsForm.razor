@@ -111,16 +111,16 @@
         public ExamType Type { get; set; } = ExamType.Mixed;
         public Difficulty Difficulty { get; set; } = Difficulty.Medium;
         public bool Reuse { get; set; } = true;
-        public int ReusePercent { get; set; } = 100;
+        public int ReusePercent { get; set; } = ExamService.DefaultReusePercent;
         public string? Instructions { get; set; }
 
         public ExamSettings ToSettings() => new(Name, QuestionCount, Type, Difficulty, Reuse ? ReusePercent : 0, Instructions);
 
-        // A stored 0% shows as "don't reuse" with the slider ready at 100% if it's switched back on.
+        // A stored 0% shows as "don't reuse" with the slider ready at the default if it's switched back on.
         public void SetReusePercent(int percent)
         {
             Reuse = percent > 0;
-            ReusePercent = percent > 0 ? percent : 100;
+            ReusePercent = percent > 0 ? percent : ExamService.DefaultReusePercent;
         }
     }
 

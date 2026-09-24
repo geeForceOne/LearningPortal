@@ -27,6 +27,7 @@ portalOptions.FilesRoot = filesPath;
 builder.Services.AddLearningPortalCore($"Data Source={dbPath}", portalOptions);
 
 builder.Services.AddDataProtection()
+    // Not the product name (see AppInfo): changing it would make every stored secret unreadable.
     .SetApplicationName("LearningPortal")
     .PersistKeysToFileSystem(new DirectoryInfo(keysPath));
 
@@ -63,9 +64,13 @@ builder.Services.AddIdentityCore<AppUser>(options =>
     .AddRoles<IdentityRole>()
     .AddEntityFrameworkStores<AppDbContext>()
     .AddSignInManager()
-    .AddDefaultTokenProviders();
+    .AddDefaultTokenProviders()
+    .AddTokenProvider<InviteTokenProvider>(AccountMailService.InviteProvider);
+// Password reset links are short-lived; invite links get their own, longer lifespan.
+builder.Services.Configure<DataProtectionTokenProviderOptions>(o => o.TokenLifespan = AccountMailService.ResetLifespan);
 
 builder.Services.AddSingleton<UserAdminService>();
+builder.Services.AddSingleton<AccountMailService>();
 builder.Services.AddSingleton<AnalysisQueue>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<AnalysisQueue>());
 

@@ -156,11 +156,14 @@ public static class Prompts
         {
             sb.AppendLine();
             sb.AppendLine("These questions already exist. Don't repeat them or ask the same thing in other words:");
-            foreach (var p in avoidPrompts.Take(80))
-                sb.AppendLine("- " + Truncate(p, 200));
+            foreach (var p in avoidPrompts)
+                sb.AppendLine("- " + p);
         }
         return sb.ToString();
     }
+
+    // One entry of the "already exist" list, shortened; the caller decides how many fit.
+    public static string AvoidLine(string prompt) => Truncate(prompt.ReplaceLineEndings(" "), 200);
 
     // ---------- Written answer grading ----------
 

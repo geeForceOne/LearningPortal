@@ -4,7 +4,7 @@
 @inject UserManager<AppUser> UserManager
 @inject NavigationManager Nav
 
-<PageTitle>Sign in - LearningPortal</PageTitle>
+<PageTitle>Sign in - @AppInfo.Name</PageTitle>
 
 <div class="auth-form">
     <h1>Sign in</h1>
@@ -33,6 +33,7 @@
         </label>
         <button type="submit" class="btn btn-primary btn-lg">Sign in</button>
     </EditForm>
+    <p class="small" style="margin-top:18px"><a href="account/forgot">Forgot password?</a></p>
 </div>
 
 @code {

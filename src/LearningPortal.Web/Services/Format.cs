@@ -95,6 +95,7 @@ public static class Format
     {
         MaterialKind.Pdf => "PDF",
         MaterialKind.Word => "Word",
+        MaterialKind.PowerPoint => "PowerPoint",
         MaterialKind.Latex => "LaTeX",
         MaterialKind.Markdown => "Markdown",
         _ => "Text",

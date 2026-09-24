@@ -13,11 +13,17 @@ public enum SecretStatus
 
 public readonly record struct SecretReadResult(SecretStatus Status, string? Value);
 
-// Encrypts user API keys at rest. A value that fails to decrypt is reported as Unreadable,
-// never thrown and never silently dropped, so Settings can ask the user to re-enter it.
-public sealed class SecretProtector(IDataProtectionProvider provider)
+// Encrypts secrets at rest: user API keys by default, or another kind of secret under its own
+// purpose. A value that fails to decrypt is reported as Unreadable, never thrown and never
+// silently dropped, so the UI can ask for it to be entered again.
+public sealed class SecretProtector
 {
-    private readonly IDataProtector _protector = provider.CreateProtector("LearningPortal.UserApiKeys.v1");
+    private readonly IDataProtector _protector;
+
+    public SecretProtector(IDataProtectionProvider provider) : this(provider, "LearningPortal.UserApiKeys.v1") { }
+
+    public SecretProtector(IDataProtectionProvider provider, string purpose) =>
+        _protector = provider.CreateProtector(purpose);
 
     public string Protect(string plaintext) => _protector.Protect(plaintext);
 

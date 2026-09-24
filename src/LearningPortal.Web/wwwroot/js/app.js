@@ -10,4 +10,9 @@ window.learningPortal = {
     setPref: (key, value) => {
         try { localStorage.setItem("lp." + key, value); } catch { }
     },
+
+    // Resolves to false when the browser refuses (no permission, insecure context).
+    copyText: async (text) => {
+        try { await navigator.clipboard.writeText(text); return true; } catch { return false; }
+    },
 };

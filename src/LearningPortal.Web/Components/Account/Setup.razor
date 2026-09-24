@@ -3,8 +3,9 @@
 @inject SignInManager<AppUser> SignInManager
 @inject UserManager<AppUser> UserManager
 @inject NavigationManager Nav
+@inject UserAdminService Users
 
-<PageTitle>Set up - LearningPortal</PageTitle>
+<PageTitle>Set up - @AppInfo.Name</PageTitle>
 
 <div class="auth-form">
     <h1>Create the admin account</h1>
@@ -29,6 +30,12 @@
             <span>Username</span>
             <InputText @bind-Value="Input.UserName" class="input" autocomplete="username" autofocus />
             <ValidationMessage For="() => Input.UserName" />
+        </label>
+        <label class="field">
+            <span>Email address</span>
+            <InputText type="email" @bind-Value="Input.Email" class="input" autocomplete="email" />
+            <span class="field-hint">For resetting a forgotten password.</span>
+            <ValidationMessage For="() => Input.Email" />
         </label>
         <label class="field">
             <span>Password</span>
@@ -66,7 +73,13 @@
             return;
         }
 
-        var user = new AppUser { UserName = Input.UserName.Trim() };
+        if (await Users.CheckEmailAsync(Input.Email, exceptUserId: null) is { } emailError)
+        {
+            _errors.Add(emailError);
+            return;
+        }
+
+        var user = new AppUser { UserName = Input.UserName.Trim(), Email = Input.Email.Trim() };
         var result = await UserManager.CreateAsync(user, Input.Password);
         if (!result.Succeeded)
         {
@@ -84,6 +97,10 @@
         [Required(ErrorMessage = "Choose a username.")]
         [RegularExpression(@"^[A-Za-z0-9\-._@+]+$", ErrorMessage = "Use letters, digits and - . _ @ + only.")]
         public string UserName { get; set; } = "";
+
+        [Required(ErrorMessage = "Enter your email address.")]
+        [EmailAddress(ErrorMessage = "That doesn't look like an email address.")]
+        public string Email { get; set; } = "";
 
         [Required(ErrorMessage = "Choose a password.")]
         [MinLength(8, ErrorMessage = "Use at least 8 characters.")]

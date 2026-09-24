@@ -5,7 +5,7 @@
 @inject QuestionGenerationService Generator
 @inject LearningPortalOptions Options
 
-<PageTitle>@(_detail?.Exam.Name ?? "Exam") - LearningPortal</PageTitle>
+<PageTitle>@(_detail?.Exam.Name ?? "Exam") - @AppInfo.Name</PageTitle>
 
 @if (_detail is null)
 {

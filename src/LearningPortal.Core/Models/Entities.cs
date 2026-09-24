@@ -18,6 +18,23 @@ public sealed class UserSettings
     public string? OpenAiModel { get; set; }
 }
 
+// App-wide outgoing mail settings, edited by the admin. A single row (Id 1); no row or an empty
+// Host means email is off. The SMTP password is Data Protection ciphertext, never in the clear.
+public sealed class EmailSettings
+{
+    public int Id { get; set; } = 1;
+    public string? Host { get; set; }
+    public int Port { get; set; } = 587;
+    public EmailSecurity Security { get; set; } = EmailSecurity.Auto;
+    public string? UserName { get; set; }
+    public string? PasswordProtected { get; set; }
+    public string? From { get; set; }
+    public string? FromName { get; set; }
+    // The address people use to reach the app; links in emails point here.
+    public string? PublicUrl { get; set; }
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+}
+
 public sealed class Topic
 {
     public int Id { get; set; }
@@ -114,7 +131,7 @@ public sealed class Exam
     public ExamType Type { get; set; }
     public Difficulty Difficulty { get; set; }
     // How much of a fill may come from the topic's question bank (0-100); the rest is newly written.
-    public int ReusePercent { get; set; } = 100;
+    public int ReusePercent { get; set; } = Services.ExamService.DefaultReusePercent;
     // Optional guidance from the user for every AI generation for this exam ("focus on XY").
     public string? Instructions { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

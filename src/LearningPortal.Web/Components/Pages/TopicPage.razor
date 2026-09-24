@@ -6,7 +6,7 @@
 @inject SettingsService Settings
 @inject LearningPortalOptions Options
 
-<PageTitle>@(_topic?.Summary.Name ?? "Topic") - LearningPortal</PageTitle>
+<PageTitle>@(_topic?.Summary.Name ?? "Topic") - @AppInfo.Name</PageTitle>
 
 @if (_notFound)
 {
@@ -185,7 +185,7 @@ else
                 <label class="dropzone">
                     <Icon Name="upload" Size="22" />
                     <strong>Choose files</strong>
-                    <span>PDF, Word, LaTeX, Markdown or text, up to @(Options.MaxUploadBytes / 1024 / 1024) MB each</span>
+                    <span>PDF, Word, PowerPoint, LaTeX, Markdown or text, up to @(Options.MaxUploadBytes / 1024 / 1024) MB each</span>
                     <InputFile OnChange="UploadAsync" multiple accept="@string.Join(",", LearningPortal.Core.Text.DocumentTextExtractor.SupportedExtensions)" disabled="@IsBusy" />
                 </label>
                 @if (IsBusy)

@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 LearningPortal is a multi-user, Docker-hosted web app that turns a user's own study material into training exams using AI.
 
-- **Topics.** A user creates topics. Each topic holds any number of content materials: uploaded PDF, Word, LaTeX, or Markdown files, or text pasted in directly.
+- **Topics.** A user creates topics. Each topic holds any number of content materials: uploaded PDF, Word, PowerPoint, LaTeX, or Markdown files, or text pasted in directly.
 - **AI.** Content material is sent to an AI provider (Claude or ChatGPT) for analysis. Each user configures their provider and API key in Settings. In the UI it's just called **"AI"**, with no vendor-specific wording outside Settings.
 - **Exams.** A user creates any number of exams per topic and can amend them later. An exam definition has a user-chosen name, a question count, a type (multiple choice, written, or a mix), and a difficulty (easy, medium, or hard). The AI generates the questions and answers.
 - **Written answers.** The user types an answer and the AI judges whether it qualifies as correct. Answers are short, at most 10–20 sentences, not essays. The UI should make this limit clear.
@@ -22,7 +22,7 @@ LearningPortal is a multi-user, Docker-hosted web app that turns a user's own st
 - **AI key.** Each user configures their own AI provider and API key. There is no shared or admin key.
 - **Multiple choice.** The AI decides per question whether it has one correct answer or several. The UI clearly shows which kind it is ("choose one" vs. "choose all that apply").
 - **Written grading.** The AI returns a score from 0 to 100% plus feedback on what was right and what was missing. The UI labels a score of 80% or more as *correct*, 1–79% as *partially correct*, and 0% as *incorrect*.
-- **Question bank reuse.** When a new exam is created, it first uses questions from the topic's bank that match its type and difficulty. The AI generates only the questions that are still missing.
+- **Question bank reuse.** Each exam has a reuse percentage (default 20%): up to that share of its questions comes from the topic's bank (matching type and difficulty, least-used first), and the AI writes the rest. New questions must not repeat what the bank already asks. When a topic's bank is large compared to its material, the UI says new questions will increasingly overlap.
 - **Repeating an exam.** A repeat uses the same questions, with the question order and the multiple-choice options shuffled.
 - **Amending an exam.** The user can:
   - edit its settings (name, count, type, difficulty) and regenerate
@@ -76,7 +76,7 @@ Uses the latest .NET (currently .NET 10, `net10.0`) with Blazor Server. It is sp
 - Each user's data (topics, content, exams, attempts, settings) is isolated to that user. Every query in Core is scoped by the user's ID.
 
 ### Document text extraction
-- PDF files use **PdfPig**, and Word (`.docx`) files use **DocumentFormat.OpenXml**.
+- PDF files use **PdfPig**. Word (`.docx`) and PowerPoint (`.pptx`) files use **DocumentFormat.OpenXml**; a presentation becomes one section per slide, with its speaker notes. Old binary `.doc`/`.ppt` files aren't supported: the upload asks for "Save as" .docx/.pptx or PDF.
 - LaTeX and Markdown files, and pasted text, are stored and sent as plain text.
 
 ### Secrets

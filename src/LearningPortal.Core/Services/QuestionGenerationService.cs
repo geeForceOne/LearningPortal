@@ -2,6 +2,7 @@ using System.Text.Json;
 using LearningPortal.Core.Ai;
 using LearningPortal.Core.Data;
 using LearningPortal.Core.Models;
+using LearningPortal.Core.Text;
 using Microsoft.EntityFrameworkCore;
 
 namespace LearningPortal.Core.Services;
@@ -27,6 +28,15 @@ public sealed class QuestionGenerationService(
     LearningPortalOptions options)
 {
     private const int SystemAndPromptOverheadTokens = 1_500;
+
+    // Rough amount of material per distinct question it can support. Study text holds about one
+    // testable fact or idea per 100-200 tokens; past that many questions, new ones mostly re-ask
+    // what the bank already covers, however the prompt is worded.
+    public const int TokensPerDistinctQuestion = 150;
+
+    // True when the bank already holds about as many questions as the material can support.
+    public static bool BankSaturated(int bankQuestions, int topicTokens) =>
+        topicTokens > 0 && bankQuestions >= Math.Max(1, topicTokens / TokensPerDistinctQuestion);
 
     // Upper bound for the material sent in one call when the topic exceeds the budget.
     private int SectionBudget => Math.Max(options.SectionTargetTokens * 2, options.TopicTokenBudget / 4);
@@ -82,11 +92,13 @@ public sealed class QuestionGenerationService(
         var totalTokens = allSections.Sum(s => s.TokenEstimate);
         var wholeTopic = totalTokens <= options.TopicTokenBudget;
 
+        // Oldest first, so the end of the list is the most recent.
         var existing = await db.Questions.AsNoTracking()
             .Where(q => q.TopicId == topicId && q.UserId == userId)
-            .Select(q => new { q.Prompt, q.SourceSectionId })
+            .OrderBy(q => q.Id)
+            .Select(q => new ExistingQuestion(q.Prompt, q.SourceSectionId))
             .ToListAsync(ct);
-        var avoid = existing.Select(q => q.Prompt).ToList();
+        var similarity = new QuestionSimilarity(existing.Select(q => q.Prompt));
         var coverage = existing.Where(q => q.SourceSectionId is not null)
             .GroupBy(q => q.SourceSectionId!.Value)
             .ToDictionary(g => g.Key, g => g.Count());
@@ -96,6 +108,7 @@ public sealed class QuestionGenerationService(
             : null;
 
         var created = new List<Question>();
+        var skippedRepeats = 0;
         var mcLeft = multipleChoice;
         var writtenLeft = written;
         var target = multipleChoice + written;
@@ -111,6 +124,7 @@ public sealed class QuestionGenerationService(
 
             string context;
             string? focus = null;
+            HashSet<int>? sectionsSent = null;
             if (wholeTopic)
             {
                 context = wholeContext!;
@@ -118,13 +132,16 @@ public sealed class QuestionGenerationService(
             else
             {
                 var picked = PickLeastCovered(allSections, coverage, SectionBudget);
+                sectionsSent = picked.Select(s => s.Id).ToHashSet();
                 context = Prompts.OutlinesContext(materials) + "\n" + Prompts.MaterialContext(
                     picked.GroupBy(s => s.MaterialId)
                         .Select(g => (materialById[g.Key], (IReadOnlyList<MaterialSection>)g.OrderBy(s => s.Index).ToList())));
                 focus = "Base the questions only on the full sections included below; the outlines are for orientation.";
             }
 
-            progress?.Report($"Writing questions {created.Count + 1}-{created.Count + batch} of {target}...");
+            progress?.Report($"Writing questions {created.Count + 1}-{created.Count + batch} of {target}..."
+                + (skippedRepeats > 0 ? $" (skipped {skippedRepeats} that repeated existing questions)" : ""));
+            var avoid = AvoidList(existing, created, sectionsSent);
 
             var json = await client.CompleteJsonAsync(new AiRequest
             {
@@ -141,12 +158,19 @@ public sealed class QuestionGenerationService(
                 // Keep to the requested mix; surplus of one kind is dropped rather than skewing the exam.
                 if (q.Type == QuestionType.MultipleChoice ? mcLeft <= 0 : writtenLeft <= 0)
                     continue;
+                // A repeat of a bank question (or of one from this run) is dropped; the spare
+                // calls above ask for a replacement.
+                if (similarity.IsDuplicate(q.Prompt))
+                {
+                    skippedRepeats++;
+                    continue;
+                }
 
                 q.TopicId = topicId;
                 q.UserId = userId;
                 db.Questions.Add(q);
                 created.Add(q);
-                avoid.Add(q.Prompt);
+                similarity.Add(q.Prompt);
                 if (q.SourceSectionId is { } sid)
                     coverage[sid] = coverage.GetValueOrDefault(sid) + 1;
                 if (q.Type == QuestionType.MultipleChoice) mcLeft--; else writtenLeft--;
@@ -158,6 +182,38 @@ public sealed class QuestionGenerationService(
 
         return created;
     }
+
+    private sealed record ExistingQuestion(string Prompt, int? SourceSectionId);
+
+    // The "don't repeat these" list for one call, most relevant first until the size cap: this
+    // run's questions, then bank questions from the sections being sent, then the rest of the bank,
+    // newest first. The AI is most likely to repeat what it just wrote or what covers the same text.
+    private static List<string> AvoidList(List<ExistingQuestion> bank, List<Question> thisRun, HashSet<int>? sectionsSent)
+    {
+        var ordered = thisRun.AsEnumerable().Reverse().Select(q => q.Prompt)
+            .Concat(Enumerable.Reverse(bank)
+                .Where(q => sectionsSent is not null && q.SourceSectionId is { } id && sectionsSent.Contains(id))
+                .Select(q => q.Prompt))
+            .Concat(Enumerable.Reverse(bank).Select(q => q.Prompt));
+
+        var list = new List<string>();
+        var seen = new HashSet<string>();
+        var chars = 0;
+        foreach (var prompt in ordered)
+        {
+            var line = Prompts.AvoidLine(prompt);
+            if (!seen.Add(line))
+                continue;
+            if (chars + line.Length > MaxAvoidChars)
+                break;
+            list.Add(line);
+            chars += line.Length;
+        }
+        return list;
+    }
+
+    // Cap on the avoid list, about 6k tokens: roughly 120-300 questions depending on their length.
+    private const int MaxAvoidChars = 24_000;
 
     private static List<MaterialSection> PickLeastCovered(
         List<MaterialSection> sections, Dictionary<int, int> coverage, int budget)

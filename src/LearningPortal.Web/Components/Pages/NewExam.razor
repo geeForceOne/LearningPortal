@@ -5,7 +5,7 @@
 @inject QuestionGenerationService Generator
 @inject LearningPortalOptions Options
 
-<PageTitle>New exam - LearningPortal</PageTitle>
+<PageTitle>New exam - @AppInfo.Name</PageTitle>
 
 @if (_topic is null)
 {
@@ -20,8 +20,8 @@ else
         <div>
             <h1>New exam</h1>
             <p class="page-sub">
-                Questions come from this topic's question bank first. The AI writes only the ones that are
-                still missing, in @_topic.Summary.Language.
+                Up to the share you choose below comes from this topic's question bank; the AI writes the
+                rest, in @_topic.Summary.Language.
             </p>
         </div>
     </div>
@@ -36,6 +36,15 @@ else
         @if (IsValid && _cost is not null && Format.CostHint(Generator.Estimate(_cost, ToGenerate())) is { } hint)
         {
             <p class="muted small" style="margin-top:8px">The AI writes @Format.Plural(ToGenerate(), "new question", "new questions"): @hint.</p>
+        }
+        @if (ToGenerate() > 0 && _cost is not null && BankSize > 0
+             && QuestionGenerationService.BankSaturated(BankSize, _cost.TopicTokens))
+        {
+            <div class="notice notice-warn" style="margin-top:14px">
+                This topic's bank already has @Format.Plural(BankSize, "question", "questions") for about
+                @Format.Tokens(_cost.TopicTokens) of material, which is close to what it can support. New questions
+                will increasingly overlap with existing ones. Add more material to the topic, or reuse more from the bank.
+            </div>
         }
 
         @if (IsBusy)
@@ -81,6 +90,8 @@ else
 
     // Questions the AI still has to write: the requested count minus what the bank can supply.
     private int ToGenerate() => ExamService.Plan(_values.ToSettings(), _bank!).Generated;
+
+    private int BankSize => _bank?.Values.Sum() ?? 0;
 
     private async Task CreateAsync()
     {

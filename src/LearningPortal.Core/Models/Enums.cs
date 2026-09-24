@@ -13,6 +13,8 @@ public enum MaterialKind
     Latex,
     Markdown,
     Text,
+    // Added after the others: stored as a number, so existing rows keep their meaning.
+    PowerPoint,
 }
 
 public enum AnalysisStatus
@@ -62,4 +64,16 @@ public static class VerdictRules
         > 0 => Verdict.Partial,
         _ => Verdict.Incorrect,
     };
+}
+
+public enum EmailSecurity
+{
+    // STARTTLS when the server offers it; implicit TLS on port 465.
+    Auto,
+    // TLS from the first byte (usually port 465).
+    SslOnConnect,
+    // Plain connection upgraded with STARTTLS (usually port 587); refuses servers without it.
+    StartTls,
+    // No encryption. Only for a relay on the same machine or private network.
+    None,
 }

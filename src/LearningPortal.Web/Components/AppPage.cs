@@ -65,7 +65,8 @@ public abstract class AppPage : ComponentBase, IDisposable
             return false;
         }
         catch (Exception ex) when (ex is AiException or ArgumentException or InvalidOperationException or NotFoundException
-                                       or LearningPortal.Core.Text.UnsupportedMaterialException)
+                                       or LearningPortal.Core.Text.UnsupportedMaterialException
+                                       or LearningPortal.Core.Email.EmailException)
         {
             onError(ex.Message);
             return false;

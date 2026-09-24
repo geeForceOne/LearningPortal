@@ -7,6 +7,7 @@ namespace LearningPortal.Core.Data;
 public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbContext<AppUser>(options)
 {
     public DbSet<UserSettings> UserSettings => Set<UserSettings>();
+    public DbSet<EmailSettings> EmailSettings => Set<EmailSettings>();
     public DbSet<Topic> Topics => Set<Topic>();
     public DbSet<Material> Materials => Set<Material>();
     public DbSet<MaterialSection> MaterialSections => Set<MaterialSection>();
@@ -25,6 +26,16 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
         {
             e.HasKey(x => x.UserId);
             e.HasOne<AppUser>().WithOne().HasForeignKey<UserSettings>(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        b.Entity<EmailSettings>(e =>
+        {
+            e.Property(x => x.Id).ValueGeneratedNever();
+            e.Property(x => x.Host).HasMaxLength(255);
+            e.Property(x => x.UserName).HasMaxLength(320);
+            e.Property(x => x.From).HasMaxLength(320);
+            e.Property(x => x.FromName).HasMaxLength(200);
+            e.Property(x => x.PublicUrl).HasMaxLength(500);
         });
 
         b.Entity<Topic>(e =>

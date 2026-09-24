@@ -1,30 +1,30 @@
 @using LearningPortal.Core.Security
-@* An API key input that never shows the stored key: it only says whether one is saved. *@
+@* A secret input (API key, password) that never shows the stored value: it only says whether one is saved. *@
 <div class="field">
     <label class="field-label" for="@_id">@Label</label>
 
     @if (Removing)
     {
-        <div class="notice notice-warn">The saved key will be removed when you save.</div>
+        <div class="notice notice-warn">The saved @Noun will be removed when you save.</div>
     }
     else if (Status == SecretStatus.Set)
     {
         <div class="notice notice-good" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-            <span style="flex:1">A key is saved. Type a new one below to replace it.</span>
-            <button type="button" class="btn btn-ghost btn-sm" @onclick="OnRemove">Remove key</button>
+            <span style="flex:1">A @Noun is saved. Type a new one below to replace it.</span>
+            <button type="button" class="btn btn-ghost btn-sm" @onclick="OnRemove">Remove @Noun</button>
         </div>
     }
     else if (Status == SecretStatus.Unreadable)
     {
         <div class="notice notice-error">
-            Your saved key can't be read anymore, usually because the server's encryption keys were
+            Your saved @Noun can't be read anymore, usually because the server's encryption keys were
             reset. Enter it again below.
         </div>
     }
 
     <input id="@_id" class="input" type="password" autocomplete="off" spellcheck="false"
            value="@Value" @oninput="e => ValueChanged.InvokeAsync(e.Value?.ToString() ?? string.Empty)"
-           placeholder="@(Status == SecretStatus.Set ? "Leave empty to keep the saved key" : Placeholder)" />
+           placeholder="@(Status == SecretStatus.Set ? $"Leave empty to keep the saved {Noun}" : Placeholder)" />
     <span class="field-hint">@Hint It's stored encrypted and never shown again.</span>
 </div>
 
@@ -39,4 +39,6 @@
     [Parameter] public bool Removing { get; set; }
     [Parameter] public RenderFragment? Hint { get; set; }
     [Parameter] public string? Placeholder { get; set; }
+    // What the secret is called in the messages: "key", "password".
+    [Parameter] public string Noun { get; set; } = "key";
 }

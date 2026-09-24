@@ -2,6 +2,8 @@
 @inherits AppPage
 @inject AttemptService Attempts
 
+<PageTitle>Opening exam - @AppInfo.Name</PageTitle>
+
 <p class="page-loading">@(_error ?? "Opening the exam...")</p>
 
 @code {

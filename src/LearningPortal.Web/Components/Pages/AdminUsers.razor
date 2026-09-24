@@ -2,21 +2,36 @@
 @attribute [Authorize(Roles = Roles.Admin)]
 @inherits AppPage
 @inject UserAdminService Users
+@inject AccountMailService Mail
+@inject IJSRuntime JS
 
-<PageTitle>Users - LearningPortal</PageTitle>
+<PageTitle>Users - @AppInfo.Name</PageTitle>
 
 <div class="page-head">
     <div>
         <h1>Users</h1>
         <p class="page-sub">
-            There's no public sign-up. Create an account here and give the person their username and
-            password; they can change the password after signing in. Each person's topics and results are private.
+            There's no public sign-up. Create an account here and the person gets an invite link to choose
+            their own password. Each person's topics and results are private.
         </p>
     </div>
 </div>
 
 <div class="two-col">
     <section>
+        @if (_link is not null)
+        {
+            <div class="notice notice-warn" style="margin-bottom:18px" role="status">
+                <strong>@_link.Title</strong>
+                <div>@_link.Reason Copy the link and send it to them yourself. @_link.Validity</div>
+                <div class="link-copy">
+                    <input class="input" readonly value="@_link.Url" aria-label="Link" onfocus="this.select()" />
+                    <button type="button" class="btn btn-primary btn-sm" @onclick="CopyLinkAsync">Copy link</button>
+                </div>
+                <button type="button" class="btn btn-ghost btn-sm" @onclick="() => _link = null">Done</button>
+            </div>
+        }
+
         <div class="section-head"><h2>Accounts<span class="count">@_users.Count</span></h2></div>
         <ul class="rows">
             @foreach (var u in _users)
@@ -27,11 +42,17 @@
                         <span class="row-title">@u.UserName @(isMe ? "(you)" : "")</span>
                         <div class="row-meta">
                             <span>@(u.IsAdmin ? "Administrator" : "User")</span>
+                            <span>@(u.Email ?? "No email address")</span>
+                            @if (!u.HasPassword)
+                            {
+                                <span class="tag">Invite pending</span>
+                            }
                             <span>Created @Format.Ago(u.CreatedAt)</span>
                         </div>
                     </div>
                     <div class="row-actions">
-                        <button type="button" class="btn btn-ghost btn-sm" @onclick="() => ResetAsync(u)">Reset password</button>
+                        <button type="button" class="btn btn-ghost btn-sm" disabled="@_sending" @onclick="() => SendLinkAsync(u)">@(u.HasPassword ? "Send reset link" : "Resend invite")</button>
+                        <button type="button" class="btn btn-ghost btn-sm" @onclick="() => EditEmailAsync(u)">@(u.Email is null ? "Add email" : "Change email")</button>
                         @if (!isMe)
                         {
                             <button type="button" class="btn btn-ghost btn-sm" @onclick="() => ToggleAdminAsync(u)">@(u.IsAdmin ? "Remove admin" : "Make admin")</button>
@@ -53,9 +74,18 @@
                     <span class="field-hint">Letters, digits and - . _ @@ +</span>
                 </label>
                 <label class="field">
-                    <span>Password</span>
-                    <input class="input" type="text" @bind="_newPassword" @bind:event="oninput" autocomplete="off" spellcheck="false" />
-                    <span class="field-hint">At least 8 characters. Shown here so you can pass it on.</span>
+                    <span>Email address</span>
+                    <input class="input" type="email" @bind="_newEmail" @bind:event="oninput" autocomplete="off" spellcheck="false" />
+                    <span class="field-hint">
+                        @if (_emailOn)
+                        {
+                            @:The invite link goes here. They use this address to reset a forgotten password too.
+                        }
+                        else
+                        {
+                            @:Email isn't set up, so you'll get the invite link to pass on yourself.
+                        }
+                    </span>
                 </label>
                 <label class="check">
                     <input type="checkbox" @bind="_newAdmin" /> Administrator
@@ -64,8 +94,25 @@
                 {
                     <div class="field-error">@e</div>
                 }
-                <button type="submit" class="btn btn-primary" disabled="@(string.IsNullOrWhiteSpace(_newName) || _newPassword.Length < 8)">Create account</button>
+                <button type="submit" class="btn btn-primary" disabled="@(_sending || string.IsNullOrWhiteSpace(_newName) || string.IsNullOrWhiteSpace(_newEmail))">
+                    @(_emailOn ? "Create and send invite" : "Create account")
+                </button>
             </form>
+        </div>
+
+        <div class="panel">
+            <h2>Email</h2>
+            <p class="muted small">
+                @if (_emailOn)
+                {
+                    @:Email is on: invites and reset links are sent by email, and anyone can use "Forgot password?" on the sign-in page.
+                }
+                else
+                {
+                    @:Email is off, so invite and reset links are shown here for you to pass on, and "Forgot password?" on the sign-in page tells people to ask you.
+                }
+            </p>
+            <a class="btn btn-ghost btn-sm" href="admin/email">Email settings</a>
         </div>
     </aside>
 </div>
@@ -73,40 +120,120 @@
 @code {
     [CascadingParameter] private AppUi Ui { get; set; } = default!;
 
+    private sealed record LinkToShare(string Title, string Reason, string Url, string Validity);
+
     private IReadOnlyList<UserRow> _users = [];
     private string _myId = "";
     private string _newName = "";
-    private string _newPassword = "";
+    private string _newEmail = "";
     private bool _newAdmin;
+    private bool _sending;
+    private bool _emailOn;
     private List<string> _errors = [];
+    private LinkToShare? _link;
 
     protected override async Task OnInitializedAsync()
     {
         _myId = await UserIdAsync();
         _users = await Users.ListAsync();
+        _emailOn = await Mail.EmailConfiguredAsync();
     }
 
     private async Task CreateAsync()
     {
-        _errors = (await Users.CreateAsync(_newName, _newPassword, _newAdmin)).ToList();
-        if (_errors.Count > 0) return;
+        _sending = true;
+        try
+        {
+            var name = _newName.Trim();
+            var (userId, errors) = await Users.CreateAsync(name, _newEmail, _newAdmin);
+            _errors = errors.ToList();
+            if (userId is null) return;
 
-        Ui.Toast.Success($"Account \"{_newName.Trim()}\" created.");
-        _newName = "";
-        _newPassword = "";
-        _newAdmin = false;
-        _users = await Users.ListAsync();
+            _newName = "";
+            _newEmail = "";
+            _newAdmin = false;
+            _users = await Users.ListAsync();
+            await DeliverAsync(userId, name, isInvite: true, $"Account \"{name}\" created.");
+        }
+        finally
+        {
+            _sending = false;
+        }
     }
 
-    private async Task ResetAsync(UserRow u)
+    private async Task SendLinkAsync(UserRow u)
     {
-        var password = await Ui.Prompt.AskAsync($"Reset password for {u.UserName}", "New password", okLabel: "Reset password",
-            hint: "At least 8 characters. Pass it on to them; they can change it after signing in.");
-        if (password is null) return;
+        _sending = true;
+        try
+        {
+            await DeliverAsync(u.Id, u.UserName, isInvite: !u.HasPassword, prefix: null);
+        }
+        finally
+        {
+            _sending = false;
+        }
+    }
 
-        var errors = await Users.ResetPasswordAsync(u.Id, password);
-        if (errors.Count > 0) Ui.Toast.Error(string.Join(" ", errors));
-        else Ui.Toast.Success($"Password for {u.UserName} reset.");
+    // Emails the invite or reset link, or shows it for the admin to pass on when it can't be emailed.
+    private async Task DeliverAsync(string userId, string userName, bool isInvite, string? prefix)
+    {
+        var what = isInvite ? "Invite" : "Password reset link";
+        PasswordLinkResult result;
+        try
+        {
+            result = await Mail.SendLinkAsync(userId, Nav.BaseUri, PageToken);
+        }
+        catch (InvalidOperationException ex)
+        {
+            Ui.Toast.Error(ex.Message);
+            return;
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
+        if (result.Emailed)
+        {
+            _link = null;
+            Ui.Toast.Success($"{prefix} {what} sent to {result.SentTo}.".Trim());
+            return;
+        }
+
+        if (prefix is not null)
+            Ui.Toast.Success(prefix);
+        var lifespan = isInvite ? AccountMailService.InviteLifespan : AccountMailService.ResetLifespan;
+        _link = new LinkToShare(
+            $"{what} for {userName}",
+            result.Reason ?? "",
+            result.Link!,
+            $"It works once and expires in {(lifespan.TotalDays >= 1 ? $"{lifespan.TotalDays:0} days" : $"{lifespan.TotalHours:0} hours")}.");
+        await JS.InvokeVoidAsync("learningPortal.scrollToTop");
+    }
+
+    private async Task CopyLinkAsync()
+    {
+        if (_link is null) return;
+        if (await JS.InvokeAsync<bool>("learningPortal.copyText", _link.Url))
+            Ui.Toast.Success("Link copied.");
+        else
+            Ui.Toast.Error("The browser didn't allow copying. Select the link and copy it by hand.");
+    }
+
+    private async Task EditEmailAsync(UserRow u)
+    {
+        var email = await Ui.Prompt.AskAsync($"Email address for {u.UserName}", "Email address", u.Email ?? "", okLabel: "Save",
+            hint: "Used for invites and to reset a forgotten password.");
+        if (email is null) return;
+
+        var errors = await Users.SetEmailAsync(u.Id, email);
+        if (errors.Count > 0)
+        {
+            Ui.Toast.Error(string.Join(" ", errors));
+            return;
+        }
+        Ui.Toast.Success($"Email address for {u.UserName} saved.");
+        _users = await Users.ListAsync();
     }
 
     private async Task ToggleAdminAsync(UserRow u)

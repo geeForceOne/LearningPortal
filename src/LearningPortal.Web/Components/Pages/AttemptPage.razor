@@ -3,7 +3,7 @@
 @inject AttemptService Attempts
 @inject IJSRuntime JS
 
-<PageTitle>@(_view?.Exam.Name ?? "Exam") - LearningPortal</PageTitle>
+<PageTitle>@(_view?.Exam.Name ?? "Exam") - @AppInfo.Name</PageTitle>
 
 @if (_view is null)
 {

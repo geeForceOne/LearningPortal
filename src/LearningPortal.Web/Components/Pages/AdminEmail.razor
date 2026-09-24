@@ -1,0 +1,198 @@
+@page "/admin/email"
+@attribute [Authorize(Roles = Roles.Admin)]
+@inherits AppPage
+@inject EmailSettingsService EmailSettings
+@inject AccountMailService Mail
+@using LearningPortal.Core.Email
+@using LearningPortal.Core.Models
+
+<PageTitle>Email settings - @AppInfo.Name</PageTitle>
+
+<div class="page-head">
+    <div>
+        <h1>Email settings</h1>
+        <p class="page-sub">
+            The mail server @AppInfo.Name uses to send invites and password reset links. Without it,
+            you get the links on the Users page to pass on yourself.
+        </p>
+    </div>
+</div>
+
+@if (_view is null)
+{
+    <p class="page-loading">Loading...</p>
+}
+else
+{
+    <div class="form form-narrow">
+        @if (_view.IsConfigured)
+        {
+            <div class="notice notice-good">Email is on. Sending as @_view.From through @_view.Host.</div>
+        }
+        else
+        {
+            <div class="notice">Email is off. Fill in the server and the sender address to turn it on.</div>
+        }
+
+        <div class="field">
+            <span class="field-label">Fill in for a common provider</span>
+            <div class="actions" style="margin:0">
+                <button type="button" class="btn btn-ghost btn-sm" @onclick="FillGmail">Gmail</button>
+                <button type="button" class="btn btn-ghost btn-sm" @onclick="FillBrevo">Brevo</button>
+            </div>
+            @if (_providerHint is not null)
+            {
+                <span class="field-hint">@_providerHint</span>
+            }
+        </div>
+
+        <label class="field">
+            <span>SMTP server</span>
+            <input class="input" @bind="_host" @bind:event="oninput" placeholder="smtp.example.com" autocomplete="off" spellcheck="false" />
+            <span class="field-hint">Leave empty to turn email off.</span>
+        </label>
+
+        <div class="field-row">
+            <label class="field">
+                <span>Port</span>
+                <input class="input" type="number" min="1" max="65535" @bind="_port" />
+            </label>
+            <label class="field">
+                <span>Encryption</span>
+                <select class="select" @bind="_security">
+                    <option value="@EmailSecurity.Auto">Automatic</option>
+                    <option value="@EmailSecurity.StartTls">STARTTLS (usually port 587)</option>
+                    <option value="@EmailSecurity.SslOnConnect">SSL/TLS (usually port 465)</option>
+                    <option value="@EmailSecurity.None">None (local relay only)</option>
+                </select>
+            </label>
+        </div>
+
+        <label class="field">
+            <span>Username</span>
+            <input class="input" @bind="_userName" @bind:event="oninput" autocomplete="off" spellcheck="false" />
+            <span class="field-hint">Leave empty if the server doesn't need a login.</span>
+        </label>
+
+        <KeyField Label="Password" Noun="password" Status="_view.Password" @bind-Value="_password"
+                  OnRemove="() => _removePassword = true" Removing="_removePassword">
+            <Hint>For Gmail, an app password; for Brevo, an SMTP key.</Hint>
+        </KeyField>
+
+        <div class="field-row">
+            <label class="field">
+                <span>Sender address</span>
+                <input class="input" type="email" @bind="_from" @bind:event="oninput" placeholder="learn@example.com" autocomplete="off" spellcheck="false" />
+            </label>
+            <label class="field">
+                <span>Sender name</span>
+                <input class="input" @bind="_fromName" @bind:event="oninput" placeholder="@EmailSettingsService.DefaultFromName" />
+            </label>
+        </div>
+        <span class="field-hint" style="margin-top:-10px">Most providers only send from an address or domain you've verified with them.</span>
+
+        <label class="field">
+            <span>@(AppInfo.Name)'s address</span>
+            <input class="input" type="url" @bind="_publicUrl" @bind:event="oninput" placeholder="https://learn.example.com" autocomplete="off" spellcheck="false" />
+            <span class="field-hint">Links in emails point here. It's the address you're using now, unless people reach the app some other way.</span>
+        </label>
+
+        @foreach (var e in _errors)
+        {
+            <div class="field-error">@e</div>
+        }
+
+        <div class="actions">
+            <button type="button" class="btn btn-primary" disabled="@(_saving || IsBusy)" @onclick="SaveClickedAsync">Save settings</button>
+            <button type="button" class="btn btn-ghost" disabled="@(_saving || IsBusy || string.IsNullOrWhiteSpace(_host))" @onclick="SaveAndTestAsync">Save and send a test email to me</button>
+        </div>
+        @if (IsBusy)
+        {
+            <p class="muted small">@BusyMessage <button type="button" class="btn btn-ghost btn-sm" @onclick="CancelBusy">Cancel</button></p>
+        }
+    </div>
+}
+
+@code {
+    [CascadingParameter] private AppUi Ui { get; set; } = default!;
+
+    private EmailSettingsView? _view;
+    private string _host = "";
+    private int _port = 587;
+    private EmailSecurity _security;
+    private string _userName = "";
+    private string _password = "";
+    private bool _removePassword;
+    private string _from = "";
+    private string _fromName = "";
+    private string _publicUrl = "";
+    private string? _providerHint;
+    private bool _saving;
+    private List<string> _errors = [];
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _view = await EmailSettings.GetAsync(PageToken);
+        _host = _view.Host ?? "";
+        _port = _view.Port;
+        _security = _view.Security;
+        _userName = _view.UserName ?? "";
+        _password = "";
+        _removePassword = false;
+        _from = _view.From ?? "";
+        _fromName = _view.FromName ?? "";
+        // Prefilled with the address the admin is using right now; saved only when they save.
+        _publicUrl = _view.PublicUrl ?? Nav.BaseUri.TrimEnd('/');
+    }
+
+    private void FillGmail()
+    {
+        (_host, _port, _security) = ("smtp.gmail.com", 587, EmailSecurity.StartTls);
+        _providerHint = "Username: your full Gmail address. Password: an app password from myaccount.google.com/apppasswords (needs 2-Step Verification), not your normal password. Gmail sends from your own address.";
+    }
+
+    private void FillBrevo()
+    {
+        (_host, _port, _security) = ("smtp-relay.brevo.com", 587, EmailSecurity.StartTls);
+        _providerHint = "Username and password: the SMTP login and an SMTP key from Brevo's \"SMTP & API\" page. The sender address must be a sender or domain you verified in Brevo.";
+    }
+
+    private async Task SaveClickedAsync()
+    {
+        if (await SaveAsync())
+            Ui.Toast.Success(_view!.IsConfigured ? "Email settings saved. Email is on." : "Email settings saved. Email is off.");
+    }
+
+    private async Task SaveAndTestAsync()
+    {
+        if (!await SaveAsync())
+            return;
+        var userId = await UserIdAsync();
+        if (await RunBusyAsync("Sending test email...", (progress, ct) => Mail.SendTestAsync(userId, progress, ct),
+                error => Ui.Toast.Error(error)))
+            Ui.Toast.Success("Settings saved and test email sent to you. Check the spam folder if it doesn't show up.");
+    }
+
+    private async Task<bool> SaveAsync()
+    {
+        _saving = true;
+        try
+        {
+            // A typed password replaces the stored one; an empty box leaves it alone; "Remove" clears it.
+            _errors = (await EmailSettings.SaveAsync(new EmailSettingsUpdate(
+                _host, _port, _security, _userName,
+                _removePassword ? "" : _password.Length == 0 ? null : _password,
+                _from, _fromName, _publicUrl), PageToken)).ToList();
+            if (_errors.Count > 0)
+                return false;
+            await LoadAsync();
+            return true;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}
