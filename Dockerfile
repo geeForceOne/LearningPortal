@@ -19,9 +19,10 @@ COPY --from=build /app .
 # which docker-compose mounts as a volume. Nothing is written inside the image.
 ENV ASPNETCORE_URLS=http://+:8080 \
     Storage__DataDirectory=/data
-RUN mkdir -p /data && chown -R $APP_UID /data
 VOLUME /data
-USER $APP_UID
+# Runs as root, like MeuralManager, so a host folder or an existing volume mounted at /data works
+# without first changing its owner. (The base image's non-root "app" user couldn't write to
+# root-owned mounts and the app failed at startup.)
 EXPOSE 8080
 
 ENTRYPOINT ["dotnet", "LearningPortal.Web.dll"]
