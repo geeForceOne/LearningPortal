@@ -137,8 +137,12 @@ The repository's own `docker-compose.yml` does the same with `docker compose up 
 
 ## Publishing a new image
 
+First add the version's section to `CHANGELOG.md`. The app shows that file on its release notes
+page (linked from the version number), and the GitHub release uses the same text.
+
 Pushing a version tag builds the image on GitHub and publishes it as
-`ghcr.io/geeforceone/recall` (`latest`, plus the version):
+`ghcr.io/geeforceone/recall` (`latest`, plus the version), with that version number shown in the
+app:
 
 ```
 git tag v1.0.0

@@ -22,7 +22,11 @@
         </div>
     }
 
-    <input id="@_id" class="input" type="password" autocomplete="off" spellcheck="false"
+    @* Browsers ignore autocomplete="off" on password inputs and fill in the saved Recall login.
+       "new-password" stops that, and the data-* attributes tell 1Password, LastPass and Bitwarden
+       to leave the field alone. *@
+    <input id="@_id" class="input" type="password" autocomplete="new-password" spellcheck="false"
+           data-1p-ignore data-lpignore="true" data-bwignore="true" data-form-type="other"
            value="@Value" @oninput="e => ValueChanged.InvokeAsync(e.Value?.ToString() ?? string.Empty)"
            placeholder="@(Status == SecretStatus.Set ? $"Leave empty to keep the saved {Noun}" : Placeholder)" />
     <span class="field-hint">@Hint It's stored encrypted and never shown again.</span>

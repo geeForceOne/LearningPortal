@@ -8,16 +8,29 @@
             <a class="brand" href="">
                 <BrandMark />
                 <span>@AppInfo.Name</span>
+                <AuthorizeView>
+                    <small class="brand-version" title="Version @AppInfo.Version">@AppInfo.Version</small>
+                </AuthorizeView>
             </a>
 
-            <nav class="nav" aria-label="Main">
-                <NavLink href="" Match="NavLinkMatch.All" ActiveClass="active">Topics</NavLink>
-                <NavLink href="statistics" ActiveClass="active">Statistics</NavLink>
-                <NavLink href="settings" ActiveClass="active">Settings</NavLink>
-                <AuthorizeView Roles="@Roles.Admin">
-                    <NavLink href="admin/users" ActiveClass="active">Users</NavLink>
-                </AuthorizeView>
-            </nav>
+            @* Pages open to everyone (release notes, not found) use this layout too; signed out, they
+               get just the brand and a way to sign in. *@
+            <AuthorizeView>
+                <Authorized>
+                    <nav class="nav" aria-label="Main">
+                        <NavLink href="" Match="NavLinkMatch.All" ActiveClass="active">Topics</NavLink>
+                        <NavLink href="statistics" ActiveClass="active">Statistics</NavLink>
+                        <NavLink href="settings" ActiveClass="active">Settings</NavLink>
+                        <AuthorizeView Roles="@Roles.Admin" Context="adminContext">
+                            <NavLink href="admin/users" ActiveClass="active">Users</NavLink>
+                        </AuthorizeView>
+                    </nav>
+                </Authorized>
+                <NotAuthorized>
+                    <span class="nav"></span>
+                    <a class="btn btn-ghost btn-sm" href="account/login">Sign in</a>
+                </NotAuthorized>
+            </AuthorizeView>
 
             <AuthorizeView>
                 <div class="usermenu">
@@ -35,12 +48,12 @@
                                 <a href="admin/users"><Icon Name="users" /> Users</a>
                                 <a href="admin/email"><Icon Name="mail" /> Email settings</a>
                             }
+                            <a href="release-notes"><Icon Name="file" /> Release notes</a>
                             <hr />
                             <form action="account/logout" method="post">
                                 <AntiforgeryToken />
                                 <button type="submit"><Icon Name="logout" /> Sign out</button>
-                            </form>
-                        </div>
+                            </form>                        </div>
                     }
                 </div>
             </AuthorizeView>
@@ -53,11 +66,13 @@
         </CascadingValue>
     </main>
 
-    <nav class="tabbar" aria-label="Main">
-        <NavLink href="" Match="NavLinkMatch.All" ActiveClass="active"><Icon Name="book" Size="22" />Topics</NavLink>
-        <NavLink href="statistics" ActiveClass="active"><Icon Name="chart" Size="22" />Statistics</NavLink>
-        <NavLink href="settings" ActiveClass="active"><Icon Name="settings" Size="22" />Settings</NavLink>
-    </nav>
+    <AuthorizeView>
+        <nav class="tabbar" aria-label="Main">
+            <NavLink href="" Match="NavLinkMatch.All" ActiveClass="active"><Icon Name="book" Size="22" />Topics</NavLink>
+            <NavLink href="statistics" ActiveClass="active"><Icon Name="chart" Size="22" />Statistics</NavLink>
+            <NavLink href="settings" ActiveClass="active"><Icon Name="settings" Size="22" />Settings</NavLink>
+        </nav>
+    </AuthorizeView>
 </div>
 
 <ConfirmDialog @ref="_ui.Confirm" />

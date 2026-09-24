@@ -70,7 +70,9 @@ else
 
         <label class="field">
             <span>Username</span>
-            <input class="input" @bind="_userName" @bind:event="oninput" autocomplete="off" spellcheck="false" />
+            @* Sits right before a password field, so browsers would otherwise fill in the Recall login name. *@
+            <input class="input" @bind="_userName" @bind:event="oninput" autocomplete="off" spellcheck="false"
+                   data-1p-ignore data-lpignore="true" data-bwignore="true" data-form-type="other" />
             <span class="field-hint">Leave empty if the server doesn't need a login.</span>
         </label>
 

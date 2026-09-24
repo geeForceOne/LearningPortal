@@ -9,7 +9,11 @@ COPY src/LearningPortal.Web/LearningPortal.Web.csproj src/LearningPortal.Web/
 RUN dotnet restore src/LearningPortal.Web/LearningPortal.Web.csproj
 
 COPY src/ src/
-RUN dotnet publish src/LearningPortal.Web/LearningPortal.Web.csproj -c Release -o /app
+# Built into the app for its release notes page.
+COPY CHANGELOG.md ./
+# The version shown in the app; the publish workflow passes the release tag's number.
+ARG VERSION=dev
+RUN dotnet publish src/LearningPortal.Web/LearningPortal.Web.csproj -c Release -o /app -p:InformationalVersion=$VERSION
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
 WORKDIR /app
