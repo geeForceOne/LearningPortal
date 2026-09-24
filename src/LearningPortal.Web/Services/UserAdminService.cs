@@ -6,11 +6,14 @@ using Microsoft.EntityFrameworkCore;
 namespace LearningPortal.Web.Services;
 
 // HasPassword is false while an invite is pending: the account exists but nobody can sign in yet.
-public sealed record UserRow(string Id, string UserName, string? Email, bool IsAdmin, bool HasPassword, DateTime CreatedAt);
+// ShownName is what the UI calls the person (see AppUser.ShownName).
+public sealed record UserRow(
+    string Id, string UserName, string? Email, string? DisplayName, string ShownName,
+    bool IsAdmin, bool HasPassword, DateTime CreatedAt);
 
 // Account management. Mostly admin-only (there's no public sign-up: accounts exist only when the
-// admin creates them here); FindAsync, SetEmailAsync and ChangePasswordAsync also back each
-// user's own Account page. Each call uses its own scope so Identity's DbContext never goes stale over
+// admin creates them here); FindAsync, SetEmailAsync, SetDisplayNameAsync and ChangePasswordAsync
+// also back each user's own Account page. Each call uses its own scope so Identity's DbContext never goes stale over
 // a long-lived Blazor circuit.
 public sealed class UserAdminService(IServiceScopeFactory scopes)
 {
@@ -19,8 +22,9 @@ public sealed class UserAdminService(IServiceScopeFactory scopes)
         await using var scope = scopes.CreateAsyncScope();
         var users = scope.ServiceProvider.GetRequiredService<UserManager<AppUser>>();
         var admins = (await users.GetUsersInRoleAsync(Roles.Admin)).Select(u => u.Id).ToHashSet();
-        var all = await users.Users.AsNoTracking().OrderBy(u => u.UserName).ToListAsync();
-        return all.Select(u => new UserRow(u.Id, u.UserName ?? "", u.Email, admins.Contains(u.Id), u.PasswordHash is not null, u.CreatedAt)).ToList();
+        var all = await users.Users.AsNoTracking().ToListAsync();
+        return all.Select(u => ToRow(u, admins.Contains(u.Id)))
+            .OrderBy(r => r.ShownName, StringComparer.CurrentCultureIgnoreCase).ToList();
     }
 
     public async Task<UserRow?> FindAsync(string userId)
@@ -30,7 +34,28 @@ public sealed class UserAdminService(IServiceScopeFactory scopes)
         var u = await users.FindByIdAsync(userId);
         if (u is null)
             return null;
-        return new UserRow(u.Id, u.UserName ?? "", u.Email, await users.IsInRoleAsync(u, Roles.Admin), u.PasswordHash is not null, u.CreatedAt);
+        return ToRow(u, await users.IsInRoleAsync(u, Roles.Admin));
+    }
+
+    private static UserRow ToRow(AppUser u, bool isAdmin) =>
+        new(u.Id, u.UserName ?? "", u.Email, u.DisplayName, u.ShownName, isAdmin, u.PasswordHash is not null, u.CreatedAt);
+
+    // The account a sign-in or reset request means: by email first (the normal way), then by
+    // username, which older accounts still use. An email that somehow matches several accounts
+    // finds none rather than picking one, since uniqueness is checked in code, not by the database.
+    public static async Task<AppUser?> FindByLoginAsync(UserManager<AppUser> users, string login)
+    {
+        login = login.Trim();
+        if (login.Length == 0)
+            return null;
+        if (login.Contains('@'))
+        {
+            var normalized = users.NormalizeEmail(login);
+            var matches = await users.Users.Where(u => u.NormalizedEmail == normalized).OrderBy(u => u.Id).Take(2).ToListAsync();
+            if (matches.Count == 1)
+                return matches[0];
+        }
+        return await users.FindByNameAsync(login);
     }
 
     // Rotates the security stamp, so the caller must re-issue the sign-in cookie afterwards
@@ -49,15 +74,18 @@ public sealed class UserAdminService(IServiceScopeFactory scopes)
     }
 
     // Creates the account without a password; the person chooses one through the invite link.
-    public async Task<(string? UserId, IReadOnlyList<string> Errors)> CreateAsync(string userName, string email, bool isAdmin)
+    // They sign in with the email, which also becomes the internal UserName.
+    public async Task<(string? UserId, IReadOnlyList<string> Errors)> CreateAsync(string email, string? displayName, bool isAdmin)
     {
         await using var scope = scopes.CreateAsyncScope();
         var users = scope.ServiceProvider.GetRequiredService<UserManager<AppUser>>();
         email = email.Trim();
         if (await CheckEmailAsync(users, email, exceptUserId: null) is { } emailError)
             return (null, [emailError]);
+        if (CheckDisplayName(displayName) is { } nameError)
+            return (null, [nameError]);
 
-        var user = new AppUser { UserName = userName.Trim(), Email = email };
+        var user = new AppUser { UserName = email, Email = email, DisplayName = NullIfBlank(displayName) };
         var result = await users.CreateAsync(user);
         if (!result.Succeeded)
             return (null, result.Errors.Select(e => e.Description).ToList());
@@ -78,13 +106,41 @@ public sealed class UserAdminService(IServiceScopeFactory scopes)
         if (await CheckEmailAsync(users, email, userId) is { } emailError)
             return [emailError];
 
+        // Accounts that sign in with their email have it as their UserName too; keep the two
+        // together. Older accounts keep their own username, which still works as a login.
+        if (string.Equals(user.UserName, user.Email, StringComparison.OrdinalIgnoreCase))
+            user.UserName = email;
+
         // Set directly rather than through UserManager.SetEmailAsync, which rotates the security
         // stamp and would sign the person out everywhere and void a pending invite.
         user.Email = email;
         user.EmailConfirmed = false;
         var result = await users.UpdateAsync(user);
+        return result.Succeeded ? [] : result.Errors.Select(e => e.Code == "DuplicateUserName"
+            ? "Another account already signs in with that email address." : e.Description).ToList();
+    }
+
+    public async Task<IReadOnlyList<string>> SetDisplayNameAsync(string userId, string? displayName)
+    {
+        if (CheckDisplayName(displayName) is { } nameError)
+            return [nameError];
+        await using var scope = scopes.CreateAsyncScope();
+        var users = scope.ServiceProvider.GetRequiredService<UserManager<AppUser>>();
+        var user = await users.FindByIdAsync(userId);
+        if (user is null)
+            return ["That account no longer exists."];
+
+        user.DisplayName = NullIfBlank(displayName);
+        var result = await users.UpdateAsync(user);
         return result.Succeeded ? [] : result.Errors.Select(e => e.Description).ToList();
     }
+
+    public static string? CheckDisplayName(string? displayName) =>
+        displayName?.Trim().Length > AppUser.MaxDisplayNameLength
+            ? $"Keep the display name under {AppUser.MaxDisplayNameLength} characters."
+            : null;
+
+    private static string? NullIfBlank(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
 
     public async Task<string?> CheckEmailAsync(string email, string? exceptUserId)
     {

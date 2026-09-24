@@ -78,7 +78,7 @@ public sealed class EmailSettingsService(IDbContextFactory<AppDbContext> dbFacto
             return errors;
 
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var s = await db.EmailSettings.FirstOrDefaultAsync(ct);
+        var s = await db.EmailSettings.OrderBy(x => x.Id).FirstOrDefaultAsync(ct);
         if (s is null)
         {
             s = new EmailSettings();
@@ -122,7 +122,7 @@ public sealed class EmailSettingsService(IDbContextFactory<AppDbContext> dbFacto
         if (_cached is not null)
             return _cached;
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        return _cached = await db.EmailSettings.AsNoTracking().FirstOrDefaultAsync(ct) ?? new EmailSettings();
+        return _cached = await db.EmailSettings.AsNoTracking().OrderBy(x => x.Id).FirstOrDefaultAsync(ct) ?? new EmailSettings();
     }
 
     private static string? NullIfBlank(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();

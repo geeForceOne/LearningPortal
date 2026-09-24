@@ -8,7 +8,7 @@
 
 <div class="auth-form">
     <h1>Sign in</h1>
-    <p class="page-sub">Use the username and password your administrator gave you.</p>
+    <p class="page-sub">Sign in with your email address and password.</p>
 
     @if (_error is not null)
     {
@@ -18,9 +18,11 @@
     <EditForm Model="Input" method="post" OnValidSubmit="SignInAsync" FormName="login" class="form">
         <DataAnnotationsValidator />
         <label class="field">
-            <span>Username</span>
-            <InputText @bind-Value="Input.UserName" class="input" autocomplete="username" autofocus />
-            <ValidationMessage For="() => Input.UserName" />
+            <span>Email address</span>
+            @* Text, not type="email": older accounts can still sign in with their username here. *@
+            <InputText @bind-Value="Input.Login" class="input" inputmode="email" autocomplete="username" autofocus />
+            <span class="field-hint">Older accounts can still use their username.</span>
+            <ValidationMessage For="() => Input.Login" />
         </label>
         <label class="field">
             <span>Password</span>
@@ -54,7 +56,11 @@
 
     private async Task SignInAsync()
     {
-        var result = await SignInManager.PasswordSignInAsync(Input.UserName.Trim(), Input.Password, Input.RememberMe, lockoutOnFailure: true);
+        // Email first, username as the fallback for older accounts.
+        var user = await UserAdminService.FindByLoginAsync(UserManager, Input.Login);
+        var result = user is null
+            ? Microsoft.AspNetCore.Identity.SignInResult.Failed
+            : await SignInManager.PasswordSignInAsync(user, Input.Password, Input.RememberMe, lockoutOnFailure: true);
         if (result.Succeeded)
         {
             Nav.NavigateTo(SafeReturnUrl(ReturnUrl), forceLoad: true);
@@ -63,7 +69,7 @@
 
         _error = result.IsLockedOut
             ? "This account is locked for a few minutes after too many failed attempts. Try again later."
-            : "That username and password don't match. Check both and try again.";
+            : "That email and password don't match. Check both and try again.";
     }
 
     // Only same-site paths, so the login page can't be used to bounce people to another site.
@@ -72,8 +78,8 @@
 
     private sealed class LoginInput
     {
-        [Required(ErrorMessage = "Enter your username.")]
-        public string UserName { get; set; } = "";
+        [Required(ErrorMessage = "Enter your email address.")]
+        public string Login { get; set; } = "";
 
         [Required(ErrorMessage = "Enter your password.")]
         public string Password { get; set; } = "";

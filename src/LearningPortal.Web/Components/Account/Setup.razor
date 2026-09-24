@@ -27,15 +27,16 @@
     <EditForm Model="Input" method="post" OnValidSubmit="CreateAsync" FormName="setup" class="form">
         <DataAnnotationsValidator />
         <label class="field">
-            <span>Username</span>
-            <InputText @bind-Value="Input.UserName" class="input" autocomplete="username" autofocus />
-            <ValidationMessage For="() => Input.UserName" />
+            <span>Email address</span>
+            <InputText type="email" @bind-Value="Input.Email" class="input" autocomplete="username" autofocus />
+            <span class="field-hint">You sign in with this. It's also where a forgotten-password link goes.</span>
+            <ValidationMessage For="() => Input.Email" />
         </label>
         <label class="field">
-            <span>Email address</span>
-            <InputText type="email" @bind-Value="Input.Email" class="input" autocomplete="email" />
-            <span class="field-hint">For resetting a forgotten password.</span>
-            <ValidationMessage For="() => Input.Email" />
+            <span>Display name <span class="muted">(optional)</span></span>
+            <InputText @bind-Value="Input.DisplayName" class="input" autocomplete="nickname" maxlength="@AppUser.MaxDisplayNameLength" />
+            <span class="field-hint">What @AppInfo.Name calls you. Without one, the first part of your email is used.</span>
+            <ValidationMessage For="() => Input.DisplayName" />
         </label>
         <label class="field">
             <span>Password</span>
@@ -79,7 +80,14 @@
             return;
         }
 
-        var user = new AppUser { UserName = Input.UserName.Trim(), Email = Input.Email.Trim() };
+        // Signs in with the email, which is also the internal UserName (as for every new account).
+        var email = Input.Email.Trim();
+        var user = new AppUser
+        {
+            UserName = email,
+            Email = email,
+            DisplayName = string.IsNullOrWhiteSpace(Input.DisplayName) ? null : Input.DisplayName.Trim(),
+        };
         var result = await UserManager.CreateAsync(user, Input.Password);
         if (!result.Succeeded)
         {
@@ -94,13 +102,12 @@
 
     private sealed class SetupInput
     {
-        [Required(ErrorMessage = "Choose a username.")]
-        [RegularExpression(@"^[A-Za-z0-9\-._@+]+$", ErrorMessage = "Use letters, digits and - . _ @ + only.")]
-        public string UserName { get; set; } = "";
-
         [Required(ErrorMessage = "Enter your email address.")]
         [EmailAddress(ErrorMessage = "That doesn't look like an email address.")]
         public string Email { get; set; } = "";
+
+        [MaxLength(AppUser.MaxDisplayNameLength, ErrorMessage = "Keep the display name shorter.")]
+        public string? DisplayName { get; set; }
 
         [Required(ErrorMessage = "Choose a password.")]
         [MinLength(8, ErrorMessage = "Use at least 8 characters.")]

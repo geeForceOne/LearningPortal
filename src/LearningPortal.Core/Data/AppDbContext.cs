@@ -22,6 +22,12 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
     {
         base.OnModelCreating(b);
 
+        b.Entity<AppUser>(e =>
+        {
+            e.Property(x => x.DisplayName).HasMaxLength(AppUser.MaxDisplayNameLength);
+            e.Ignore(x => x.ShownName);
+        });
+
         b.Entity<UserSettings>(e =>
         {
             e.HasKey(x => x.UserId);

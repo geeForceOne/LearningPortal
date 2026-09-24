@@ -10,7 +10,7 @@
         <p class="page-sub">
             @if (_me is not null)
             {
-                @:Signed in as <strong>@_me.UserName</strong>@(_me.IsAdmin ? " (administrator)" : "").
+                @:Signed in as <strong>@_me.ShownName</strong>@(_me.IsAdmin ? " (administrator)" : "").
             }
         </p>
     </div>
@@ -24,19 +24,29 @@ else
 {
     <div class="form form-narrow">
         <section class="panel">
-            <h2>Email address</h2>
-            <form class="form" @onsubmit="SaveEmailAsync" @onsubmit:preventDefault="true">
+            <h2>Profile</h2>
+            @if (ProfileSaved)
+            {
+                <div class="notice notice-good" style="margin-bottom:14px" role="status">Profile saved.</div>
+            }
+            <form class="form" @onsubmit="SaveProfileAsync" @onsubmit:preventDefault="true">
+                <label class="field">
+                    <span>Display name <span class="muted">(optional)</span></span>
+                    <input class="input" @bind="_displayName" @bind:event="oninput" autocomplete="nickname" maxlength="@AppUser.MaxDisplayNameLength"
+                           placeholder="@AppUser.ShownNameFor(null, _me.Email, _me.UserName)" />
+                    <span class="field-hint">What @AppInfo.Name calls you. Leave it empty to use the first part of your email.</span>
+                </label>
                 <label class="field">
                     <span>Email address</span>
                     <input class="input" type="email" @bind="_email" @bind:event="oninput" autocomplete="email" spellcheck="false" />
-                    <span class="field-hint">Where password reset links are sent if you forget your password.</span>
+                    <span class="field-hint">You sign in with this, and forgotten-password links go here.</span>
                 </label>
-                @foreach (var e in _emailErrors)
+                @foreach (var e in _profileErrors)
                 {
                     <div class="field-error">@e</div>
                 }
                 <div class="actions" style="margin:0">
-                    <button type="submit" class="btn btn-primary" disabled="@(_busy || string.IsNullOrWhiteSpace(_email) || _email.Trim() == _me.Email)">Save email address</button>
+                    <button type="submit" class="btn btn-primary" disabled="@(_busy || string.IsNullOrWhiteSpace(_email) || !ProfileChanged)">Save profile</button>
                 </div>
             </form>
         </section>
@@ -49,7 +59,7 @@ else
             }
             <form class="form" @onsubmit="ChangePasswordAsync" @onsubmit:preventDefault="true">
                 @* Lets password managers tie the new password to the right account. *@
-                <input type="text" value="@_me.UserName" autocomplete="username" hidden readonly />
+                <input type="text" value="@(_me.Email ?? _me.UserName)" autocomplete="username" hidden readonly />
                 <label class="field">
                     <span>Current password</span>
                     <input class="input" type="password" @bind="_current" @bind:event="oninput" autocomplete="current-password" />
@@ -83,35 +93,53 @@ else
 @code {
     [CascadingParameter] private AppUi Ui { get; set; } = default!;
 
-    // Set by /account/refresh-signin's redirect back here after a password change.
+    // Set by /account/refresh-signin's redirect back here after a password or profile change.
     [SupplyParameterFromQuery(Name = "changed")]
     private bool PasswordChanged { get; set; }
 
+    [SupplyParameterFromQuery(Name = "saved")]
+    private bool ProfileSaved { get; set; }
+
     private UserRow? _me;
+    private string _displayName = "";
     private string _email = "";
     private string _current = "";
     private string _new = "";
     private string _confirm = "";
     private bool _busy;
-    private List<string> _emailErrors = [];
+    private List<string> _profileErrors = [];
     private List<string> _passwordErrors = [];
 
     protected override async Task OnInitializedAsync()
     {
         _me = await Users.FindAsync(await UserIdAsync());
+        _displayName = _me?.DisplayName ?? "";
         _email = _me?.Email ?? "";
     }
 
-    private async Task SaveEmailAsync()
+    private bool NameChanged => _displayName.Trim() != (_me?.DisplayName ?? "");
+    private bool EmailChanged => _email.Trim() != (_me?.Email ?? "");
+    private bool ProfileChanged => NameChanged || EmailChanged;
+
+    private async Task SaveProfileAsync()
     {
         _busy = true;
         try
         {
-            _emailErrors = (await Users.SetEmailAsync(await UserIdAsync(), _email)).ToList();
-            if (_emailErrors.Count > 0) return;
-            _me = await Users.FindAsync(await UserIdAsync());
-            _email = _me?.Email ?? "";
-            Ui.Toast.Success("Email address saved.");
+            var userId = await UserIdAsync();
+            _profileErrors = [];
+            if (NameChanged)
+                _profileErrors.AddRange(await Users.SetDisplayNameAsync(userId, _displayName));
+            if (_profileErrors.Count == 0 && EmailChanged)
+                _profileErrors.AddRange(await Users.SetEmailAsync(userId, _email));
+            if (_profileErrors.Count > 0)
+            {
+                _me = await Users.FindAsync(userId);
+                return;
+            }
+
+            // The name in the top bar comes from the sign-in cookie; re-issue it so it shows the change.
+            Nav.NavigateTo("account/refresh-signin?returnUrl=" + Uri.EscapeDataString("/account?saved=true"), forceLoad: true);
         }
         finally
         {

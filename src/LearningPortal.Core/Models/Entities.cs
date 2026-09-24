@@ -2,9 +2,32 @@ using Microsoft.AspNetCore.Identity;
 
 namespace LearningPortal.Core.Models;
 
+// People sign in with their email. New accounts get their email as the (internal) UserName too;
+// accounts from before that keep their own UserName, which still works as a login.
 public sealed class AppUser : IdentityUser
 {
+    public const int MaxDisplayNameLength = 100;
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    // Optional; what the app calls the person. See ShownName for the fallback.
+    public string? DisplayName { get; set; }
+
+    // The name shown in the UI: the display name, else the part of the email before the "@",
+    // else the username (older accounts without an email).
+    public string ShownName => ShownNameFor(DisplayName, Email, UserName);
+
+    public static string ShownNameFor(string? displayName, string? email, string? userName)
+    {
+        if (!string.IsNullOrWhiteSpace(displayName))
+            return displayName.Trim();
+        if (!string.IsNullOrWhiteSpace(email))
+        {
+            var at = email.IndexOf('@');
+            return at > 0 ? email[..at] : email;
+        }
+        return userName ?? "";
+    }
 }
 
 // One row per user. API keys are stored as Data Protection ciphertext, never in the clear.

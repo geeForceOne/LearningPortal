@@ -35,13 +35,13 @@
             <AuthorizeView>
                 <div class="usermenu">
                     <button type="button" class="usermenu-button" aria-expanded="@_menuOpen" @onclick="() => _menuOpen = !_menuOpen">
-                        <span class="avatar">@Initial(context.User.Identity?.Name)</span>
-                        <span class="username">@context.User.Identity?.Name</span>
+                        <span class="avatar">@Initial(AppClaimsPrincipalFactory.ShownName(context.User))</span>
+                        <span class="username">@AppClaimsPrincipalFactory.ShownName(context.User)</span>
                     </button>
                     @if (_menuOpen)
                     {
                         <div class="usermenu-list" @onclick="() => _menuOpen = false">
-                            <div class="usermenu-name">Signed in as @context.User.Identity?.Name</div>
+                            <div class="usermenu-name">Signed in as @AppClaimsPrincipalFactory.ShownName(context.User)</div>
                             <a href="account"><Icon Name="key" /> Account</a>
                             @if (context.User.IsInRole(Roles.Admin))
                             {

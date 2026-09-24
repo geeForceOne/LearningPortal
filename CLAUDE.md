@@ -71,7 +71,7 @@ Uses the latest .NET (currently .NET 10, `net10.0`) with Blazor Server. It is sp
 - Everything persistent (the SQLite database, uploaded content files, and Data Protection keys) lives in a Docker **volume**, never in the image or container filesystem. Paths are configured through environment variables.
 
 ### Authentication
-- **Phase 1:** username and password login with ASP.NET Core Identity, stored in the same SQLite database.
+- **Phase 1:** email and password login with ASP.NET Core Identity, stored in the same SQLite database. New accounts use their email as the Identity UserName (kept in sync when the email changes); accounts created before that keep their own username, which still works as a login. Each account has an optional display name shown in the UI.
 - **Later phase:** add SSO with Google, Apple, and Facebook on top of Identity as external logins. Keep the auth code structured so these can be added without reworking it.
 - Each user's data (topics, content, exams, attempts, settings) is isolated to that user. Every query in Core is scoped by the user's ID.
 

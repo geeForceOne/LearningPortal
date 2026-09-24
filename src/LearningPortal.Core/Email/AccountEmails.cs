@@ -6,27 +6,28 @@ namespace LearningPortal.Core.Email;
 // mail clients drop stylesheets.
 public static class AccountEmails
 {
-    public static EmailMessage Invite(string userName, string link, TimeSpan validFor) => Build(
+    // login: what they sign in with, normally their email address.
+    public static EmailMessage Invite(string shownName, string login, string link, TimeSpan validFor) => Build(
         $"Your {AppInfo.Name} account",
-        $"An account has been created for you on {AppInfo.Name}, where you can turn your own study material into practice exams.",
-        $"Your username is {userName}. Open the link below to choose your password and sign in.",
+        $"Hello {shownName}, an account has been created for you on {AppInfo.Name}, where you can turn your own study material into practice exams.",
+        $"You sign in with your email address, {login}. Open the link below to choose your password and sign in.",
         "Choose your password",
         link,
         $"The link works once and expires in {Describe(validFor)}. If it has expired, ask your administrator for a new one.");
 
-    public static EmailMessage PasswordReset(string userName, string link, TimeSpan validFor) => Build(
+    public static EmailMessage PasswordReset(string login, string link, TimeSpan validFor) => Build(
         $"Reset your {AppInfo.Name} password",
-        $"Someone asked to reset the password for the {AppInfo.Name} account {userName}.",
+        $"Someone asked to reset the password for the {AppInfo.Name} account {login}.",
         "Open the link below to choose a new password.",
         "Reset password",
         link,
         $"The link works once and expires in {Describe(validFor)}. If you didn't ask for this, ignore this email; your password stays the same.");
 
-    public static EmailMessage Test(string userName) => new(
+    public static EmailMessage Test(string shownName) => new(
         $"{AppInfo.Name} test email",
-        $"Hello {userName},\n\nEmail from {AppInfo.Name} works. Invites and password reset links will arrive like this one.\n",
+        $"Hello {shownName},\n\nEmail from {AppInfo.Name} works. Invites and password reset links will arrive like this one.\n",
         Html($"Email from {AppInfo.Name} works.",
-            $"<p style=\"margin:0 0 16px\">Hello {Enc(userName)},</p>" +
+            $"<p style=\"margin:0 0 16px\">Hello {Enc(shownName)},</p>" +
             "<p style=\"margin:0\">Invites and password reset links will arrive like this one.</p>"));
 
     private static EmailMessage Build(string subject, string intro, string action, string button, string link, string footer)

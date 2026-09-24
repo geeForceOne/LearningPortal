@@ -67,11 +67,11 @@ public sealed class AccountMailService(
         if (!await emailSettings.IsConfiguredAsync(ct))
             return new(false, null, link, "Email isn't set up.");
         if (string.IsNullOrEmpty(user.Email))
-            return new(false, null, link, $"{user.UserName} has no email address.");
+            return new(false, null, link, $"{user.ShownName} has no email address.");
 
         try
         {
-            await sender.SendAsync(user.Email, user.UserName, Compose(kind, user, link), null, ct);
+            await sender.SendAsync(user.Email, user.ShownName, Compose(kind, user, link), null, ct);
             return new(true, user.Email, null, null);
         }
         catch (EmailException ex)
@@ -90,7 +90,7 @@ public sealed class AccountMailService(
 
         await using var scope = scopes.CreateAsyncScope();
         var users = scope.ServiceProvider.GetRequiredService<UserManager<AppUser>>();
-        var user = await FindForResetAsync(users, userNameOrEmail.Trim());
+        var user = await UserAdminService.FindByLoginAsync(users, userNameOrEmail);
         if (user?.Email is null || user.PasswordHash is null)
             return;
 
@@ -101,7 +101,7 @@ public sealed class AccountMailService(
 
         var link = await CreateLinkAsync(users, user, PasswordLinkKind.Reset, requestBaseUrl);
         var message = Compose(PasswordLinkKind.Reset, user, link);
-        var (to, name, id) = (user.Email, user.UserName, user.Id);
+        var (to, name, id) = (user.Email, user.ShownName, user.Id);
         _ = Task.Run(async () =>
         {
             try
@@ -123,7 +123,7 @@ public sealed class AccountMailService(
             ?? throw new InvalidOperationException("That account no longer exists.");
         if (string.IsNullOrEmpty(user.Email))
             throw new InvalidOperationException("Your account has no email address. Add one first.");
-        await sender.SendAsync(user.Email, user.UserName, AccountEmails.Test(user.UserName ?? ""), progress, ct);
+        await sender.SendAsync(user.Email, user.ShownName, AccountEmails.Test(user.ShownName), progress, ct);
     }
 
     // Null when the link is valid; otherwise why it can't be used.
@@ -195,22 +195,9 @@ public sealed class AccountMailService(
         return valid ? user : null;
     }
 
-    private static async Task<AppUser?> FindForResetAsync(UserManager<AppUser> users, string input)
-    {
-        var byName = await users.FindByNameAsync(input);
-        if (byName is not null)
-            return byName;
-
-        // Emails are unique by the app's own checks, not a database constraint, so a lookup that
-        // somehow matches several accounts sends nothing rather than picking one.
-        var normalized = users.NormalizeEmail(input);
-        var matches = await users.Users.Where(u => u.NormalizedEmail == normalized).Take(2).ToListAsync();
-        return matches.Count == 1 ? matches[0] : null;
-    }
-
     private static EmailMessage Compose(PasswordLinkKind kind, AppUser user, string link) => kind == PasswordLinkKind.Invite
-        ? AccountEmails.Invite(user.UserName ?? "", link, InviteLifespan)
-        : AccountEmails.PasswordReset(user.UserName ?? "", link, ResetLifespan);
+        ? AccountEmails.Invite(user.ShownName, user.Email ?? user.UserName ?? "", link, InviteLifespan)
+        : AccountEmails.PasswordReset(user.Email ?? user.UserName ?? "", link, ResetLifespan);
 
     private static string LinkInvalidMessage(PasswordLinkKind kind) => kind == PasswordLinkKind.Invite
         ? "This invite link has expired or was already used. Ask your administrator for a new one."

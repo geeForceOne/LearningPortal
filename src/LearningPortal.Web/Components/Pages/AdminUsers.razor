@@ -39,10 +39,15 @@
                 var isMe = u.Id == _myId;
                 <li class="row" @key="u.Id">
                     <div class="row-main">
-                        <span class="row-title">@u.UserName @(isMe ? "(you)" : "")</span>
+                        <span class="row-title">@u.ShownName @(isMe ? "(you)" : "")</span>
                         <div class="row-meta">
                             <span>@(u.IsAdmin ? "Administrator" : "User")</span>
                             <span>@(u.Email ?? "No email address")</span>
+                            @* Older accounts sign in with their own username as well. *@
+                            @if (!string.Equals(u.UserName, u.Email, StringComparison.OrdinalIgnoreCase))
+                            {
+                                <span>Username @u.UserName</span>
+                            }
                             @if (!u.HasPassword)
                             {
                                 <span class="tag">Invite pending</span>
@@ -56,7 +61,7 @@
                         @if (!isMe)
                         {
                             <button type="button" class="btn btn-ghost btn-sm" @onclick="() => ToggleAdminAsync(u)">@(u.IsAdmin ? "Remove admin" : "Make admin")</button>
-                            <button type="button" class="btn btn-ghost btn-icon btn-sm" aria-label="Delete @u.UserName" @onclick="() => DeleteAsync(u)"><Icon Name="trash" Size="16" /></button>
+                            <button type="button" class="btn btn-ghost btn-icon btn-sm" aria-label="Delete @u.ShownName" @onclick="() => DeleteAsync(u)"><Icon Name="trash" Size="16" /></button>
                         }
                     </div>
                 </li>
@@ -69,23 +74,24 @@
             <h2>Create account</h2>
             <form class="form" @onsubmit="CreateAsync" @onsubmit:preventDefault="true">
                 <label class="field">
-                    <span>Username</span>
-                    <input class="input" @bind="_newName" @bind:event="oninput" autocomplete="off" />
-                    <span class="field-hint">Letters, digits and - . _ @@ +</span>
-                </label>
-                <label class="field">
                     <span>Email address</span>
                     <input class="input" type="email" @bind="_newEmail" @bind:event="oninput" autocomplete="off" spellcheck="false" />
                     <span class="field-hint">
+                        They sign in with this.
                         @if (_emailOn)
                         {
-                            @:The invite link goes here. They use this address to reset a forgotten password too.
+                            @:The invite link goes here too.
                         }
                         else
                         {
                             @:Email isn't set up, so you'll get the invite link to pass on yourself.
                         }
                     </span>
+                </label>
+                <label class="field">
+                    <span>Display name <span class="muted">(optional)</span></span>
+                    <input class="input" @bind="_newName" @bind:event="oninput" autocomplete="off" maxlength="@AppUser.MaxDisplayNameLength" />
+                    <span class="field-hint">Without one, the first part of their email is shown. They can change it later.</span>
                 </label>
                 <label class="check">
                     <input type="checkbox" @bind="_newAdmin" /> Administrator
@@ -94,7 +100,7 @@
                 {
                     <div class="field-error">@e</div>
                 }
-                <button type="submit" class="btn btn-primary" disabled="@(_sending || string.IsNullOrWhiteSpace(_newName) || string.IsNullOrWhiteSpace(_newEmail))">
+                <button type="submit" class="btn btn-primary" disabled="@(_sending || string.IsNullOrWhiteSpace(_newEmail))">
                     @(_emailOn ? "Create and send invite" : "Create account")
                 </button>
             </form>
@@ -144,16 +150,16 @@
         _sending = true;
         try
         {
-            var name = _newName.Trim();
-            var (userId, errors) = await Users.CreateAsync(name, _newEmail, _newAdmin);
+            var (userId, errors) = await Users.CreateAsync(_newEmail, _newName, _newAdmin);
             _errors = errors.ToList();
             if (userId is null) return;
 
+            var name = AppUser.ShownNameFor(_newName, _newEmail.Trim(), null);
             _newName = "";
             _newEmail = "";
             _newAdmin = false;
             _users = await Users.ListAsync();
-            await DeliverAsync(userId, name, isInvite: true, $"Account \"{name}\" created.");
+            await DeliverAsync(userId, name, isInvite: true, $"Account for {name} created.");
         }
         finally
         {
@@ -166,7 +172,7 @@
         _sending = true;
         try
         {
-            await DeliverAsync(u.Id, u.UserName, isInvite: !u.HasPassword, prefix: null);
+            await DeliverAsync(u.Id, u.ShownName, isInvite: !u.HasPassword, prefix: null);
         }
         finally
         {
@@ -175,7 +181,7 @@
     }
 
     // Emails the invite or reset link, or shows it for the admin to pass on when it can't be emailed.
-    private async Task DeliverAsync(string userId, string userName, bool isInvite, string? prefix)
+    private async Task DeliverAsync(string userId, string shownName, bool isInvite, string? prefix)
     {
         var what = isInvite ? "Invite" : "Password reset link";
         PasswordLinkResult result;
@@ -204,7 +210,7 @@
             Ui.Toast.Success(prefix);
         var lifespan = isInvite ? AccountMailService.InviteLifespan : AccountMailService.ResetLifespan;
         _link = new LinkToShare(
-            $"{what} for {userName}",
+            $"{what} for {shownName}",
             result.Reason ?? "",
             result.Link!,
             $"It works once and expires in {(lifespan.TotalDays >= 1 ? $"{lifespan.TotalDays:0} days" : $"{lifespan.TotalHours:0} hours")}.");
@@ -222,8 +228,8 @@
 
     private async Task EditEmailAsync(UserRow u)
     {
-        var email = await Ui.Prompt.AskAsync($"Email address for {u.UserName}", "Email address", u.Email ?? "", okLabel: "Save",
-            hint: "Used for invites and to reset a forgotten password.");
+        var email = await Ui.Prompt.AskAsync($"Email address for {u.ShownName}", "Email address", u.Email ?? "", okLabel: "Save",
+            hint: "They sign in with it, and invites and reset links go there.");
         if (email is null) return;
 
         var errors = await Users.SetEmailAsync(u.Id, email);
@@ -232,7 +238,7 @@
             Ui.Toast.Error(string.Join(" ", errors));
             return;
         }
-        Ui.Toast.Success($"Email address for {u.UserName} saved.");
+        Ui.Toast.Success($"Email address for {u.ShownName} saved.");
         _users = await Users.ListAsync();
     }
 
@@ -244,12 +250,12 @@
 
     private async Task DeleteAsync(UserRow u)
     {
-        if (!await Ui.Confirm.AskAsync($"Delete {u.UserName}?",
+        if (!await Ui.Confirm.AskAsync($"Delete {u.ShownName}?",
                 "Their account and all their topics, material, exams and results are deleted. This can't be undone.",
                 "Delete account", danger: true))
             return;
         await Users.DeleteAsync(u.Id);
-        Ui.Toast.Success($"{u.UserName} deleted.");
+        Ui.Toast.Success($"{u.ShownName} deleted.");
         _users = await Users.ListAsync();
     }
 }

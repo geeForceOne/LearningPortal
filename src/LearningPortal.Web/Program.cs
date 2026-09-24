@@ -53,7 +53,9 @@ builder.Services.AddAuthorization();
 builder.Services.AddIdentityCore<AppUser>(options =>
     {
         options.User.RequireUniqueEmail = false;
-        options.User.AllowedUserNameCharacters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._@+";
+        // New accounts use their email as UserName, and an email may contain characters beyond the
+        // old username set (apostrophes, non-Latin letters). Empty means any character is allowed.
+        options.User.AllowedUserNameCharacters = "";
         options.Password.RequiredLength = 8;
         options.Password.RequireNonAlphanumeric = false;
         options.Password.RequireUppercase = false;
@@ -62,6 +64,7 @@ builder.Services.AddIdentityCore<AppUser>(options =>
         options.Lockout.MaxFailedAccessAttempts = 10;
     })
     .AddRoles<IdentityRole>()
+    .AddClaimsPrincipalFactory<AppClaimsPrincipalFactory>()
     .AddEntityFrameworkStores<AppDbContext>()
     .AddSignInManager()
     .AddDefaultTokenProviders()
