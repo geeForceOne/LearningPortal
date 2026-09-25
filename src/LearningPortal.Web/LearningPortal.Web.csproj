@@ -29,4 +29,10 @@
     <EmbeddedResource Include="..\..\CHANGELOG.md" LogicalName="CHANGELOG.md" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- The day this build was made (AppInfo.BuildDate). For a release image that's the day the tag
+         was pushed, so the release notes can date the running version. -->
+    <AssemblyMetadata Include="BuildDate" Value="$([System.DateTime]::UtcNow.ToString('yyyy-MM-dd'))" />
+  </ItemGroup>
+
 </Project>

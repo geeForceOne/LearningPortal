@@ -29,6 +29,12 @@ public static class AppInfo
     // local builds. Read from the app (entry) assembly, where the host project sets it.
     public static string Version { get; } = ReadVersion();
 
+    // The day the app was built, as "2026-09-25" (UTC), stamped in by the host project; null when
+    // the build didn't record it.
+    public static string? BuildDate { get; } = Assembly.GetEntryAssembly()?
+        .GetCustomAttributes<AssemblyMetadataAttribute>()
+        .FirstOrDefault(a => a.Key == "BuildDate")?.Value;
+
     private static string ReadVersion()
     {
         var version = Assembly.GetEntryAssembly()?
