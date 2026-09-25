@@ -1,0 +1,26 @@
+@inject IJSRuntime JS
+
+@* AI-written text with code formatting (see Services/RichTextHtml). Code blocks get syntax colouring
+   in the browser after each render. *@
+<div class="rich @Class" @ref="_element">@((MarkupString)RichTextHtml.ToHtml(Text))</div>
+
+@code {
+    [Parameter] public string? Text { get; set; }
+    [Parameter] public string? Class { get; set; }
+
+    private ElementReference _element;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (Text is null || (!Text.Contains("```") && !Text.Contains("~~~")))
+            return;
+        try
+        {
+            await JS.InvokeVoidAsync("learningPortal.highlightCode", _element);
+        }
+        catch (JSDisconnectedException)
+        {
+            // The browser left; nothing to colour.
+        }
+    }
+}

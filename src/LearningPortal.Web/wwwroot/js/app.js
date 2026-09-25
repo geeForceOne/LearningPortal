@@ -15,4 +15,13 @@ window.learningPortal = {
     copyText: async (text) => {
         try { await navigator.clipboard.writeText(text); return true; } catch { return false; }
     },
+
+    // Syntax colouring for the code blocks inside one RichText element. Blocks already coloured are
+    // skipped; an unknown language falls back to auto-detection, which is harmless if it's wrong.
+    highlightCode: (element) => {
+        if (!element || !window.hljs) return;
+        for (const block of element.querySelectorAll("pre code:not([data-highlighted])")) {
+            try { window.hljs.highlightElement(block); } catch { }
+        }
+    },
 };

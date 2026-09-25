@@ -85,6 +85,7 @@ Uses the latest .NET (currently .NET 10, `net10.0`) with Blazor Server. It is sp
 ## Conventions
 
 - **Verify external APIs, don't work from memory.** Before coding against the Claude or OpenAI API, an SSO provider, or a document-parsing library, check its current official docs or spec. Model IDs and SDK shapes change.
+- **AI-written text.** Show questions, options, answers, explanations and grading feedback through the `RichText` component (safe Markdown with code blocks and syntax colouring), never as raw text or unescaped HTML.
 - **Shared dialogs.** Use reusable `ConfirmDialog`, `PromptDialog`, and `Toast` components in `Components/Shared/`, which are awaited from code, instead of writing one-off modals per page.
 - **Hand-written CSS design system** in `wwwroot/css/app.css`. It is dark-first, with a light theme via `prefers-color-scheme`, and uses no component library. It must be responsive at desktop, tablet, and phone widths.
 - **Gotcha:** don't name a component parameter `Assets`, because it collides with `ComponentBase.Assets` in .NET 10.

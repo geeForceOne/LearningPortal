@@ -37,6 +37,14 @@
     --wrong: #ef7a6f;
     --wrong-soft: rgba(239, 122, 111, 0.13);
 
+    /* Syntax colouring for code in questions. Blues and violets only, so code never borrows the
+       highlighter or the grading colours. */
+    --syn-keyword: #b3a6ff;
+    --syn-type: #9cc2f0;
+    --syn-string: #86cfd9;
+    --syn-number: #e3a9cf;
+    --syn-comment: #8d9ba3;
+
     --btn-ink: #e6ebe8;
     --btn-ink-text: #141c22;
     --focus: #9ad0e6;
@@ -45,6 +53,7 @@
 
     --font-ui: "Atkinson Hyperlegible Next", "Segoe UI", system-ui, sans-serif;
     --font-read: "Literata", Georgia, "Times New Roman", serif;
+    --font-code: ui-monospace, "Cascadia Code", "Cascadia Mono", Consolas, "SF Mono", Menlo, monospace;
 
     /* Type scale, ratio 1.25 from a 16px base. */
     --t-xs: 0.8rem;
@@ -91,6 +100,12 @@
         --partial-soft: rgba(166, 95, 0, 0.1);
         --wrong: #bf3a2e;
         --wrong-soft: rgba(191, 58, 46, 0.09);
+
+        --syn-keyword: #5a45c9;
+        --syn-type: #245a9e;
+        --syn-string: #17677f;
+        --syn-number: #93306f;
+        --syn-comment: #5a6970;
 
         --btn-ink: #172127;
         --btn-ink-text: #ffffff;
@@ -910,6 +925,48 @@ a.row-title:hover { text-decoration: underline; text-decoration-color: var(--rul
 
 /* ---------- Reading ---------- */
 
+/* AI-written text rendered from Markdown (RichText component). The containers below (.prompt,
+   .reading, .feedback) keep their fonts; line breaks come from the markup instead of pre-wrap. */
+/* Beats the pre-wrap of .prompt, .reading and .feedback, which come later in this file. */
+.rich, .rich.prompt, .rich.reading, .rich.feedback, .prompt .rich { white-space: normal; }
+.rich > :first-child { margin-top: 0; }
+.rich > :last-child { margin-bottom: 0; }
+.rich p { margin: 0 0 0.7em; }
+.rich ul, .rich ol { margin: 0 0 0.7em; padding-left: 1.4em; }
+.rich li { margin: 0.15em 0; }
+.rich code {
+    font-family: var(--font-code);
+    font-size: 0.86em;
+    padding: 1px 5px;
+    border-radius: var(--r-sm);
+    background: var(--sheet-2);
+    overflow-wrap: anywhere;
+}
+.rich pre {
+    margin: 0.4em 0 0.8em;
+    padding: 12px 14px;
+    border: 1px solid var(--rule);
+    border-radius: var(--r-md);
+    background: var(--sheet-2);
+    overflow-x: auto;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    font-weight: 400;
+    white-space: pre;
+    tab-size: 4;
+}
+.rich pre code { display: block; padding: 0; border-radius: 0; background: none; font-size: inherit; overflow-wrap: normal; }
+.option-text .rich pre { margin: 6px 0 0; }
+.q-options .rich { flex: 1; min-width: 0; }
+.row-main .rich.reading { font-size: 1rem; }
+
+.hljs-keyword, .hljs-built_in, .hljs-literal, .hljs-meta, .hljs-selector-tag { color: var(--syn-keyword); }
+.hljs-type, .hljs-title, .hljs-class .hljs-title, .hljs-attr, .hljs-attribute, .hljs-tag, .hljs-name { color: var(--syn-type); }
+.hljs-string, .hljs-regexp, .hljs-char, .hljs-template-variable, .hljs-subst { color: var(--syn-string); }
+.hljs-number, .hljs-symbol, .hljs-variable.constant_ { color: var(--syn-number); }
+.hljs-comment, .hljs-quote, .hljs-doctag { color: var(--syn-comment); font-style: italic; }
+.hljs-deletion { text-decoration: line-through; }
+
 .reading {
     font-family: var(--font-read);
     font-size: 1.06rem;
@@ -1118,6 +1175,7 @@ a.row-title:hover { text-decoration: underline; text-decoration-color: var(--rul
 
 .answer-box { display: grid; gap: 6px; }
 .answer-box .textarea { min-height: 180px; font-family: var(--font-read); font-size: 1.04rem; background: var(--sheet); }
+.answer-box .textarea.code-answer { font-family: var(--font-code); font-size: 0.95rem; tab-size: 4; }
 
 .answer-foot {
     display: flex;

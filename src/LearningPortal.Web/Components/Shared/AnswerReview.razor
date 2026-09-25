@@ -10,7 +10,7 @@
             <div class="option @(o.IsCorrect ? "is-key" : picked ? "is-wrong-pick" : "")" role="listitem">
                 <input type="@(Q.AllowsMultiple ? "checkbox" : "radio")" checked="@picked" disabled tabindex="-1" aria-hidden="true" />
                 <span class="option-box"></span>
-                <span class="option-text">@o.Text</span>
+                <span class="option-text"><RichText Text="@o.Text" /></span>
                 @if (o.IsCorrect && picked)
                 {
                     <span class="option-mark">Your pick, correct</span>
@@ -65,20 +65,20 @@ else
 
 @if (!string.IsNullOrWhiteSpace(Answer.Feedback))
 {
-    <p class="feedback">@Answer.Feedback</p>
+    <RichText Class="feedback" Text="@Answer.Feedback" />
 }
 
 @if (Q.Type == QuestionType.Written)
 {
     <div class="reference">
         <h3>Reference answer</h3>
-        <div class="reading">@Q.ReferenceAnswer</div>
+        <RichText Class="reading" Text="@Q.ReferenceAnswer" />
     </div>
 }
 
 <div class="explain">
     <h3>Why</h3>
-    <div class="reading">@Q.Explanation</div>
+    <RichText Class="reading" Text="@Q.Explanation" />
 </div>
 
 @code {

@@ -149,7 +149,7 @@ else
                 {
                     <li class="row" @key="w.QuestionId">
                         <div class="row-main">
-                            <div class="reading" style="white-space:normal;font-size:1rem">@w.Prompt</div>
+                            <RichText Class="reading" Text="@w.Prompt" />
                             <div class="row-meta">
                                 <a href="topics/@w.TopicId">@w.TopicName</a>
                                 <span>@Format.Label(w.Type)</span>

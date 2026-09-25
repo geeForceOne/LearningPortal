@@ -24,6 +24,7 @@
                 <label class="field">
                     <span>Question</span>
                     <textarea class="textarea reading" rows="3" @bind="_prompt" @bind:event="oninput"></textarea>
+                    <span class="field-hint">For code, use `backticks` inline or a block between lines of ``` (for example ```csharp). This works in every field.</span>
                 </label>
 
                 @if (_type == QuestionType.MultipleChoice)

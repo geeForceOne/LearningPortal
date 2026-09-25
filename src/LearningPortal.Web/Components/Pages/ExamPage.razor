@@ -110,7 +110,7 @@ else
                                         <span class="tag">Yours</span>
                                     }
                                 </div>
-                                <p class="prompt">@q.Prompt</p>
+                                <RichText Class="prompt" Text="@q.Prompt" />
                                 <details class="q-more">
                                     <summary>Answer and explanation</summary>
                                     @if (q.Type == QuestionType.MultipleChoice)
@@ -127,7 +127,7 @@ else
                                                     {
                                                         <span class="no"></span>
                                                     }
-                                                    <span>@o.Text</span>
+                                                    <RichText Text="@o.Text" />
                                                 </li>
                                             }
                                         </ul>
@@ -136,12 +136,12 @@ else
                                     {
                                         <div class="reference">
                                             <h3>Reference answer</h3>
-                                            <div class="reading">@q.ReferenceAnswer</div>
+                                            <RichText Class="reading" Text="@q.ReferenceAnswer" />
                                         </div>
                                     }
                                     <div class="explain">
                                         <h3>Explanation</h3>
-                                        <div class="reading">@q.Explanation</div>
+                                        <RichText Class="reading" Text="@q.Explanation" />
                                     </div>
                                 </details>
                                 <div class="q-foot">

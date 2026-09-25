@@ -208,6 +208,8 @@ else
         try { await JS.InvokeVoidAsync("learningPortal.scrollToTop"); } catch (JSException) { }
     }
 
+    private static bool HasCode(string text) => text.Contains("```") || text.Contains("~~~");
+
     private static int CountSentences(string text) =>
         System.Text.RegularExpressions.Regex.Matches(text.Trim(), @"[^.!?]+[.!?]*").Count(m => m.Value.Trim().Length > 1);
 
@@ -252,7 +254,7 @@ else
                 <span class="tag">@Format.Label(q.Difficulty)</span>
             </div>
 
-            <h1 class="prompt">@q.Prompt</h1>
+            <div class="prompt" role="heading" aria-level="1"><RichText Text="@q.Prompt" /></div>
 
             @if (a.IsAnswered && a.Revealed)
             {
@@ -287,7 +289,7 @@ else
                             <input type="@(q.AllowsMultiple ? "checkbox" : "radio")" name="answer-@a.Id" checked="@_selected.Contains(id)"
                                    @onchange="() => Toggle(id)" disabled="@IsBusy" />
                             <span class="option-box" aria-hidden="true"></span>
-                            <span class="option-text">@option.Text</span>
+                            <span class="option-text"><RichText Text="@option.Text" /></span>
                         </label>
                     }
                 </fieldset>
@@ -295,15 +297,22 @@ else
             else
             {
                 var sentences = CountSentences(_written);
+                // With code in the question, answers may contain code too: monospace keeps it readable,
+                // and sentences aren't counted since every "." in code would count as one.
+                var codeQuestion = HasCode(q.Prompt);
                 <div class="answer-box">
-                    <label for="written-answer" class="kind-hint" style="margin-bottom:4px">Your answer, in a few sentences</label>
-                    <textarea id="written-answer" class="textarea" maxlength="@AttemptService.MaxWrittenAnswerLength"
+                    <label for="written-answer" class="kind-hint" style="margin-bottom:4px">Your answer, in a few sentences@(codeQuestion ? " or a few lines of code" : "")</label>
+                    <textarea id="written-answer" class="textarea @(codeQuestion ? "code-answer" : "")" maxlength="@AttemptService.MaxWrittenAnswerLength"
                               @bind="_written" @bind:event="oninput" disabled="@IsBusy"
                               placeholder="Write it in your own words. Short is fine: the grader looks for the key ideas, not length."></textarea>
                     <div class="answer-foot">
                         <span>Keep it short: at most about 20 sentences.</span>
-                        <span class="@(sentences > 20 ? "over" : "")">
-                            @Format.Plural(sentences, "sentence", "sentences"), @_written.Length / @AttemptService.MaxWrittenAnswerLength characters
+                        <span class="@(!codeQuestion && sentences > 20 ? "over" : "")">
+                            @if (!codeQuestion)
+                            {
+                                @($"{Format.Plural(sentences, "sentence", "sentences")}, ")
+                            }
+                            @_written.Length / @AttemptService.MaxWrittenAnswerLength characters
                         </span>
                     </div>
                 </div>
@@ -397,7 +406,7 @@ else
                             <span class="tag">@(item.Question.AllowsMultiple ? "Choose all that apply" : "Choose one")</span>
                         }
                     </div>
-                    <h2 class="prompt">@item.Question.Prompt</h2>
+                    <div class="prompt" role="heading" aria-level="2"><RichText Text="@item.Question.Prompt" /></div>
                     <AnswerReview Answer="item" />
                 </article>
             }
