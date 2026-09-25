@@ -91,7 +91,7 @@ else
         // Guardrail: users pay with their own keys, so a generation that sends a lot of material
         // is confirmed first.
         var estimate = await Generator.EstimateAsync(userId, TopicId, ToGenerate(), PageToken);
-        if (estimate.TotalInputTokens > Options.LargeGenerationWarnTokens &&
+        if (Options.IsLargeGeneration(estimate.TotalInputTokens, estimate.Model) &&
             !await Ui.Confirm.AskAsync("This is a large generation",
                 Format.LargeGeneration(estimate),
                 "Generate questions"))

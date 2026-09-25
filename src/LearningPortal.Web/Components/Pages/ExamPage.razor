@@ -296,7 +296,7 @@ else
         if (questionCount <= 0)
             return true;
         var estimate = await Generator.EstimateAsync(await UserIdAsync(), _detail!.Exam.TopicId, questionCount, PageToken);
-        return estimate.TotalInputTokens <= Options.LargeGenerationWarnTokens ||
+        return !Options.IsLargeGeneration(estimate.TotalInputTokens, estimate.Model) ||
                await Ui.Confirm.AskAsync("This is a large generation",
                    Format.LargeGeneration(estimate),
                    "Generate questions");

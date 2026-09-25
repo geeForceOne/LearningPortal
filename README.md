@@ -118,7 +118,8 @@ Optional settings, as environment variables:
 |---|---|---|
 | `LearningPortal__MaxUploadBytes` | `52428800` (50 MB) | Upload limit per file |
 | `LearningPortal__TopicTokenBudget` | `120000` | Topics up to this size are sent whole; larger ones section by section |
-| `LearningPortal__LargeGenerationWarnTokens` | `60000` | Ask before generations that send more than this |
+| `LearningPortal__LargeGenerationWarnCost` | `1.00` | Ask before a generation or analysis whose material would cost more than this many US dollars on the chosen model |
+| `LearningPortal__LargeGenerationWarnTokens` | `60000` | The same, in tokens, for a custom model ID with no known price |
 | `Storage__DataDirectory` | `/data` | Where the database, files and keys are kept |
 
 If you run it behind a reverse proxy under its own address, enter that address in

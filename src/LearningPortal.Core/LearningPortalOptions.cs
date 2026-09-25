@@ -1,3 +1,5 @@
+using LearningPortal.Core.Ai;
+
 namespace LearningPortal.Core;
 
 // Tunables shared by the Core services. Bound from configuration ("LearningPortal" section)
@@ -13,8 +15,16 @@ public sealed class LearningPortalOptions
     // generation works section by section.
     public int TopicTokenBudget { get; set; } = 120_000;
 
-    // Generations whose estimated input exceeds this ask the user to confirm first.
+    // Generations and analyses whose estimated input would cost more than this (US dollars, at
+    // the chosen model's price) ask the user to confirm first.
+    public decimal LargeGenerationWarnCost { get; set; } = 1.00m;
+
+    // The same guard for a custom model ID with no known price, measured in tokens instead.
     public int LargeGenerationWarnTokens { get; set; } = 60_000;
+
+    // Whether sending this much material to this model should be confirmed first.
+    public bool IsLargeGeneration(int inputTokens, AiModelInfo? model) =>
+        model is null ? inputTokens > LargeGenerationWarnTokens : model.InputCost(inputTokens) > LargeGenerationWarnCost;
 
     // Target size when a material has no usable headings and has to be split by length.
     public int SectionTargetTokens { get; set; } = 3_000;

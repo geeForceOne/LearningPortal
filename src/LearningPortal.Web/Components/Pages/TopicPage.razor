@@ -334,7 +334,7 @@ else
         var started = new List<AddedMaterial>();
         foreach (var (name, material) in added)
         {
-            if (material.TokenEstimate > Options.LargeGenerationWarnTokens)
+            if (Options.IsLargeGeneration(material.TokenEstimate, _model))
             {
                 var cost = Format.AnalysisCost(material.TokenEstimate, _model);
                 var go = await Ui.Confirm.AskAsync("This is a large file to analyse",
