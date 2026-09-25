@@ -17,6 +17,10 @@ public sealed class AppUser : IdentityUser
     // Optional; what the app calls the person. See ShownName for the fallback.
     public string? DisplayName { get; set; }
 
+    // The newest version whose "what's new" banner this user has closed (or the version running when
+    // they first signed in after the banner existed). Null until then.
+    public string? SeenVersion { get; set; }
+
     // The name shown in the UI: the display name, else the part of the email before the "@",
     // else the username (older accounts without an email).
     public string ShownName => ShownNameFor(DisplayName, Email, UserName);
@@ -70,6 +74,8 @@ public sealed class Topic
     public string? Description { get; set; }
     // The language questions, answers, explanations and grading feedback are written in.
     public string Language { get; set; } = "English";
+    // Set by the user. Only programming topics get code questions, in the share each exam asks for.
+    public bool IsProgramming { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
@@ -132,6 +138,9 @@ public sealed class Question
     public int? SourceSectionId { get; set; }
     public string? SourceLabel { get; set; }
     public bool IsUserAuthored { get; set; }
+    // True when the question works with code ("what does this print"); false for theory. The AI
+    // tags its own questions; the user's own questions count as code when they hold a code block.
+    public bool IsCode { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public Topic? Topic { get; set; }
@@ -161,6 +170,8 @@ public sealed class Exam
     public int ReusePercent { get; set; } = Services.ExamService.DefaultReusePercent;
     // Optional guidance from the user for every AI generation for this exam ("focus on XY").
     public string? Instructions { get; set; }
+    // Programming topics only: the share of questions that work with code (0-100); the rest are theory.
+    public int CodePercent { get; set; } = Services.ExamService.DefaultCodePercent;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 

@@ -755,6 +755,23 @@ a.row-title:hover { text-decoration: underline; text-decoration-color: var(--rul
 .notice-good { border-left-color: var(--right); background: var(--right-soft); }
 .key-safety { margin: 6px 0 0; }
 
+/* After an update: "Recall was updated to X. See what's new", until closed. */
+.whats-new {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: -12px 0 24px;
+    padding: 8px 8px 8px 14px;
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--marker);
+    border-radius: var(--r-md);
+    background: var(--marker-soft);
+    font-size: var(--t-sm);
+}
+.whats-new > svg { flex: none; color: var(--pencil); }
+.whats-new p { flex: 1; margin: 0; }
+.whats-new a { margin-left: 4px; font-weight: 700; }
+
 /* A link to pass on by hand: read-only field plus a copy button, stacked on narrow screens. */
 .link-copy { display: flex; gap: 8px; margin: 10px 0 6px; }
 .link-copy .input { flex: 1; min-width: 0; font-size: var(--t-xs); }
@@ -1152,26 +1169,18 @@ a.row-title:hover { text-decoration: underline; text-decoration-color: var(--rul
 .options.locked .option { cursor: default; }
 .options.locked .option:hover { border-color: var(--rule-strong); }
 
-/* Revealed: the right answers get the highlighter; picks that were wrong get a red edge. */
-.option.is-key {
-    border-color: transparent;
-    background: var(--marker);
-    color: var(--marker-ink);
-    border-radius: 12px 6px 14px 5px / 10px 14px 8px 12px;
-}
-
-/* The "picked" style above is more specific and would put the dark highlighter ink on a dark
-   background; a correct answer keeps the highlighter whether or not it was picked. */
-.option.is-key:has(input:checked) { border-color: transparent; background: var(--marker); }
-
-.option.is-key .option-box { border-color: var(--marker-ink); }
-.option.is-key:has(input:checked) .option-box { background: var(--marker-ink); }
-.option.is-key:has(input:checked) .option-box::after { background: var(--marker); }
-.option.is-key .option-mark { color: var(--marker-ink); }
+/* Revealed: right answers get a green edge and tint, picks that were wrong a red one. Both stay
+   dark in the dark theme, so text and inline code keep their normal colours. The ":has(checked)"
+   variants beat the neutral "picked" style above. */
+.option.is-key,
+.option.is-key:has(input:checked) { border-color: var(--right); background: var(--right-soft); }
+.option.is-key .option-mark { color: var(--right); }
+.option.is-key:has(input:checked) .option-box { border-color: var(--right); background: var(--right); }
 
 .option.is-wrong-pick,
 .option.is-wrong-pick:has(input:checked) { border-color: var(--wrong); background: var(--wrong-soft); }
 .option.is-wrong-pick .option-mark { color: var(--wrong); }
+.option.is-wrong-pick:has(input:checked) .option-box { border-color: var(--wrong); background: var(--wrong); }
 
 .answer-box { display: grid; gap: 6px; }
 .answer-box .textarea { min-height: 180px; font-family: var(--font-read); font-size: 1.04rem; background: var(--sheet); }

@@ -27,7 +27,7 @@ else
     </div>
 
     <div class="form-narrow">
-        <ExamSettingsForm Model="_values" BankCounts="_bank" OnChanged="StateHasChanged" />
+        <ExamSettingsForm Model="_values" BankCounts="_bank" Programming="_topic.Summary.IsProgramming" OnChanged="StateHasChanged" />
 
         <div class="actions" style="margin-top:28px">
             <button type="button" class="btn btn-primary btn-lg" disabled="@(IsBusy || !IsValid)" @onclick="CreateAsync">Create exam</button>
@@ -56,7 +56,7 @@ else
     [CascadingParameter] private AppUi Ui { get; set; } = default!;
 
     private TopicDetail? _topic;
-    private Dictionary<(QuestionType Type, Difficulty Difficulty), int>? _bank;
+    private Dictionary<(QuestionType Type, Difficulty Difficulty, bool IsCode), int>? _bank;
     private readonly ExamSettingsForm.Values _values = new();
     private string? _error;
     private GenerationCostBasis? _cost;
@@ -81,7 +81,7 @@ else
     }
 
     // Questions the AI still has to write: the requested count minus what the bank can supply.
-    private int ToGenerate() => ExamService.Plan(_values.ToSettings(), _bank!).Generated;
+    private int ToGenerate() => ExamService.Plan(_values.ToSettings(), _bank!, _topic!.Summary.IsProgramming).Generated;
 
     private async Task CreateAsync()
     {

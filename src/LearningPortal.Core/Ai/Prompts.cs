@@ -55,6 +55,7 @@ public static class Prompts
                 "type": "object",
                 "properties": {
                   "type": { "type": "string", "enum": ["multiple_choice", "written"] },
+                  "kind": { "type": "string", "enum": ["code", "theory"] },
                   "prompt": { "type": "string" },
                   "options": {
                     "type": "array",
@@ -72,7 +73,7 @@ public static class Prompts
                   "explanation": { "type": "string" },
                   "section_index": { "type": "integer" }
                 },
-                "required": ["type", "prompt", "options", "reference_answer", "explanation", "section_index"],
+                "required": ["type", "kind", "prompt", "options", "reference_answer", "explanation", "section_index"],
                 "additionalProperties": false
               }
             }
@@ -82,14 +83,14 @@ public static class Prompts
         }
         """);
 
-    public static string GenerationSystem(string language) => $"""
+    public static string GenerationSystem(string language, bool programming) => $"""
         You write exam questions that help a student learn their own study material.
 
         Rules:
         - Write every question, option, reference answer and explanation in {language}.
         - Ask only about what the material actually teaches. Don't rely on outside facts the
           material doesn't support. The examples you use may be your own: new scenarios, numbers or
-          code samples are welcome as long as they test what the material teaches.
+          samples are welcome as long as they test what the material teaches.
         - Every question must stand on its own. The student sees only the question, never the
           material, so don't point into it: no chapter, section or page numbers, and no phrases
           like "the material", "the text" or "as described above". State whatever context the
@@ -108,18 +109,33 @@ public static class Prompts
         - Difficulty: easy checks recall of a single fact or definition; medium asks to apply or
           connect ideas; hard asks to reason through a scenario, compare, or spot subtle
           distinctions.
-        - Programming material: when the material teaches a programming language, library or other
-          technical skill, make a good share of the questions (roughly a third to a half) work with
-          code, not only talk about it. Write short, self-contained code samples of your own that
-          exercise what the material teaches, even when the material shows little code itself: what
-          does this print or return, find and explain the bug, which snippet does X, what is the
-          value of a variable afterwards, or complete a short method. Keep samples short (about 3 to
-          20 lines), correct unless the point is to find a bug, and in the language the material uses.
+        {(programming ? ProgrammingRules : NoCodeRule)}
         - Formatting: plain text, with a little Markdown where it helps. Put code longer than a few
           words in a fenced code block tagged with its language (```csharp, ```python, ```sql, ...),
           and code names inside a sentence in backticks (`List<T>`). A multiple choice option may be
           a code block. You may use **bold** and simple lists. Don't use headings, tables, links or
           images.
+        """;
+
+    // The topic teaches programming: each request says how many questions are code and how many theory.
+    private const string ProgrammingRules = """
+        - Code and theory: this topic teaches programming. The request says exactly how many
+          questions work with code and how many are theory; keep to those numbers, in either
+          question type. Set kind to "code" or "theory" accordingly.
+        - Code questions work with code, not only talk about it. Write short, self-contained code
+          samples of your own that exercise what the material teaches, even when the material shows
+          little code itself: what does this print or return, find and explain the bug, which
+          snippet does X, what is the value of a variable afterwards, or complete a short method.
+          Keep samples short (about 3 to 20 lines), correct unless the point is to find a bug, and
+          in the language the material uses.
+        - Theory questions ask about the ideas without a code sample: what a concept is and why it
+          exists, when to use one approach over another, how two features compare, trade-offs,
+          pitfalls, and what happens behind the scenes. Name language elements in backticks where
+          needed, but put no code blocks in the question or its options.
+        """;
+
+    private const string NoCodeRule = """
+        - Don't write questions built around code samples. Set kind to "theory" for every question.
         """;
 
     public static string MaterialContext(IEnumerable<(Material Material, IReadOnlyList<MaterialSection> Sections)> materials)
@@ -145,13 +161,16 @@ public static class Prompts
         return sb.ToString();
     }
 
+    // code: how many of the questions work with code (programming topics); null for other topics.
     public static string GenerationPrompt(
-        int multipleChoice, int written, Difficulty difficulty, IReadOnlyCollection<string> avoidPrompts, string? focusHint,
+        int multipleChoice, int written, int? code, Difficulty difficulty, IReadOnlyCollection<string> avoidPrompts, string? focusHint,
         string? instructions, string language)
     {
         var sb = new StringBuilder();
         sb.Append($"Write {multipleChoice + written} new {difficulty.ToString().ToLowerInvariant()} questions: ");
         sb.AppendLine($"{multipleChoice} multiple choice and {written} written.");
+        if (code is { } c)
+            sb.AppendLine($"Of these, exactly {c} work with code (kind \"code\") and {multipleChoice + written - c} are theory questions (kind \"theory\").");
         if (focusHint is not null)
             sb.AppendLine(focusHint);
         if (string.IsNullOrWhiteSpace(instructions))

@@ -22,7 +22,8 @@ LearningPortal is a multi-user, Docker-hosted web app that turns a user's own st
 - **AI key.** Each user configures their own AI provider and API key. There is no shared or admin key.
 - **Multiple choice.** The AI decides per question whether it has one correct answer or several. The UI clearly shows which kind it is ("choose one" vs. "choose all that apply").
 - **Written grading.** The AI returns a score from 0 to 100% plus feedback on what was right and what was missing. The UI labels a score of 80% or more as *correct*, 1–79% as *partially correct*, and 0% as *incorrect*.
-- **Question bank reuse.** Each exam has a reuse percentage (default 20%): up to that share of its questions comes from the topic's bank (matching type and difficulty, least-used first), and the AI writes the rest. New questions must not repeat what the bank already asks. When a topic's bank is large compared to its material, the UI says new questions will increasingly overlap.
+- **Programming topics.** A topic can be marked as a programming topic (at creation or later). Its exams have a code share (default 40%): that many questions work with code, the rest are theory. Other topics get theory questions only. Each question is tagged code or theory. Changing the flag only affects newly generated questions and never regenerates on its own; changing an exam's share is a settings change that swaps just enough questions to match.
+- **Question bank reuse.** Each exam has a reuse percentage (default 20%): up to that share of its questions comes from the topic's bank (matching type, difficulty and code/theory, least-used first), and the AI writes the rest. New questions must not repeat what the bank already asks. When a topic's bank is large compared to its material, the UI says new questions will increasingly overlap.
 - **Repeating an exam.** A repeat uses the same questions, with the question order and the multiple-choice options shuffled.
 - **Amending an exam.** The user can:
   - edit its settings (name, count, type, difficulty) and regenerate
@@ -30,6 +31,7 @@ LearningPortal is a multi-user, Docker-hosted web app that turns a user's own st
   - manually edit a question, its answer, or its explanation
   - add their own questions
 - **Attempts.** There is no timer, but each attempt's duration is recorded. Every answer is saved as soon as it's given, so the user can leave and resume an unfinished attempt later.
+- **What's new.** After an update, each user sees a banner ("Recall was updated to X.Y.Z", linking to the release notes) until they close it. Users are never told about the version they first saw; local "dev" builds show nothing.
 - **Statistics.** The page shows:
   - score over time for each exam
   - a per-topic overview (average score, attempt count, last practiced)

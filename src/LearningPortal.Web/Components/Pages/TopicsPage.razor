@@ -89,7 +89,7 @@ else
         var input = await _dialog.AskAsync("New topic", "Create topic");
         if (input is null) return;
 
-        var id = await Topics.CreateAsync(await UserIdAsync(), input.Name, input.Description, input.Language, PageToken);
+        var id = await Topics.CreateAsync(await UserIdAsync(), input.Name, input.Description, input.Language, input.IsProgramming, PageToken);
         Nav.NavigateTo($"topics/{id}");
     }
 }

@@ -1,4 +1,5 @@
-@* Name, question count, type and difficulty: shared by "new exam" and "edit exam". *@
+@* Name, question count, type, difficulty and (programming topics) the code share: shared by
+   "new exam" and "edit exam". *@
 <div class="form">
     <label class="field">
         <span>Name</span>
@@ -52,6 +53,24 @@
         </span>
     </div>
 
+    @if (Programming)
+    {
+        var count = Math.Clamp(Model.QuestionCount, 0, ExamService.MaxQuestions);
+        var codeCount = ExamService.CodeCount(count, Model.CodePercent, programming: true);
+        <div class="field">
+            <label class="range-field">
+                <span>Code questions <strong>@Model.CodePercent%</strong></span>
+                <input type="range" class="range" min="0" max="100" step="10" aria-label="Share of questions that work with code"
+                       @bind="Model.CodePercent" @bind:event="oninput" @bind:after="OnChanged.InvokeAsync" />
+            </label>
+            <span class="field-hint">
+                <strong>@codeCount code</strong> · <strong>@(count - codeCount) theory</strong>.
+                Code questions work with a code sample (what does this print, find the bug, complete a method);
+                theory questions ask about concepts, when to use what, and trade-offs.
+            </span>
+        </div>
+    }
+
     <label class="field">
         <span>Instructions for the AI <span class="muted">(optional)</span></span>
         <textarea class="textarea" rows="3" maxlength="@ExamService.MaxInstructionsLength"
@@ -85,7 +104,7 @@
 
     @if (BankCounts is not null)
     {
-        var (fromBank, generate) = ExamService.Plan(Model.ToSettings() with { QuestionCount = Math.Clamp(Model.QuestionCount, 0, ExamService.MaxQuestions) }, BankCounts);
+        var (fromBank, generate) = ExamService.Plan(Model.ToSettings() with { QuestionCount = Math.Clamp(Model.QuestionCount, 0, ExamService.MaxQuestions) }, BankCounts, Programming);
         <p class="muted small" style="margin:0">
             @if (fromBank > 0)
             {
@@ -113,8 +132,9 @@
         public bool Reuse { get; set; } = true;
         public int ReusePercent { get; set; } = ExamService.DefaultReusePercent;
         public string? Instructions { get; set; }
+        public int CodePercent { get; set; } = ExamService.DefaultCodePercent;
 
-        public ExamSettings ToSettings() => new(Name, QuestionCount, Type, Difficulty, Reuse ? ReusePercent : 0, Instructions);
+        public ExamSettings ToSettings() => new(Name, QuestionCount, Type, Difficulty, Reuse ? ReusePercent : 0, Instructions, CodePercent);
 
         // A stored 0% shows as "don't reuse" with the slider ready at the default if it's switched back on.
         public void SetReusePercent(int percent)
@@ -135,6 +155,9 @@
     // Lets the parent re-render (e.g. a live cost estimate) as the settings change.
     [Parameter] public EventCallback OnChanged { get; set; }
 
-    // Existing bank questions per kind and difficulty, for the reuse hint. Null hides it.
-    [Parameter] public Dictionary<(QuestionType Type, Difficulty Difficulty), int>? BankCounts { get; set; }
+    // Existing bank questions per type, difficulty and code/theory, for the reuse hint. Null hides it.
+    [Parameter] public Dictionary<(QuestionType Type, Difficulty Difficulty, bool IsCode), int>? BankCounts { get; set; }
+
+    // The topic is a programming topic: show the code/theory share.
+    [Parameter] public bool Programming { get; set; }
 }

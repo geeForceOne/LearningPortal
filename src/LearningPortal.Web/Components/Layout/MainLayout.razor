@@ -62,6 +62,9 @@
     </header>
 
     <main class="main" @onclick="() => _menuOpen = false">
+        <AuthorizeView>
+            <WhatsNewBanner />
+        </AuthorizeView>
         <CascadingValue Value="_ui" IsFixed="true">
             @Body
         </CascadingValue>

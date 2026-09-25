@@ -28,6 +28,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<StatisticsService>();
         services.AddSingleton<UserActivityService>();
         services.AddSingleton<AdminStatisticsService>();
+        services.AddSingleton<WhatsNewService>();
         return services;
     }
 }

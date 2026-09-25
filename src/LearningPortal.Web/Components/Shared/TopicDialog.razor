@@ -19,6 +19,16 @@
                     </datalist>
                     <span class="field-hint">Questions, answers, explanations and grading feedback are written in this language.</span>
                 </label>
+                <div class="field">
+                    <label class="check">
+                        <input type="checkbox" @bind="_programming" />
+                        Programming topic
+                    </label>
+                    <span class="field-hint">
+                        Exams can then mix code questions (what does this print, find the bug) with theory, in a share
+                        you choose per exam. Changing this affects newly generated questions; regenerate an exam to apply it.
+                    </span>
+                </div>
                 <label class="field">
                     <span>Description <span class="muted" style="font-weight:400">(optional)</span></span>
                     <textarea class="textarea" rows="3" @bind="_description" @bind:event="oninput" maxlength="1000"></textarea>
@@ -33,7 +43,7 @@
 }
 
 @code {
-    public sealed record TopicInput(string Name, string Language, string? Description);
+    public sealed record TopicInput(string Name, string Language, string? Description, bool IsProgramming);
 
     private static readonly string[] CommonLanguages =
     [
@@ -49,6 +59,7 @@
     private string _name = "";
     private string _language = "";
     private string? _description;
+    private bool _programming;
     private ElementReference _nameInput;
     private TaskCompletionSource<TopicInput?>? _tcs;
 
@@ -59,6 +70,7 @@
         _name = initial?.Name ?? "";
         _language = initial?.Language ?? "English";
         _description = initial?.Description;
+        _programming = initial?.IsProgramming ?? false;
         _visible = true;
         _focusPending = true;
         _tcs = new TaskCompletionSource<TopicInput?>();
@@ -76,7 +88,7 @@
     private void Submit()
     {
         if (string.IsNullOrWhiteSpace(_name)) return;
-        Resolve(new TopicInput(_name.Trim(), string.IsNullOrWhiteSpace(_language) ? "English" : _language.Trim(), _description));
+        Resolve(new TopicInput(_name.Trim(), string.IsNullOrWhiteSpace(_language) ? "English" : _language.Trim(), _description, _programming));
     }
 
     private void Resolve(TopicInput? result)

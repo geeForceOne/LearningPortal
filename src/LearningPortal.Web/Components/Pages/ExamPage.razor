@@ -164,7 +164,7 @@ else
                 <h2>Settings</h2>
                 @if (_editing)
                 {
-                    <ExamSettingsForm Model="_values" />
+                    <ExamSettingsForm Model="_values" Programming="_detail.Topic.IsProgramming" />
                     <div class="actions" style="margin-top:20px">
                         <button type="button" class="btn btn-primary" disabled="@IsBusy" @onclick="SaveSettingsAsync">Save</button>
                         <button type="button" class="btn btn-ghost" @onclick="() => _editing = false">Cancel</button>
@@ -306,8 +306,8 @@ else
     {
         _error = null;
         var userId = await UserIdAsync();
-        var (mc, written) = await Exams.MissingAsync(userId, ExamId, PageToken);
-        if (!await ConfirmGenerationAsync(mc + written))
+        var missing = await Exams.MissingAsync(userId, ExamId, PageToken);
+        if (!await ConfirmGenerationAsync(missing.Total))
             return;
 
         FillResult? result = null;
@@ -335,6 +335,7 @@ else
         _values.Difficulty = e.Difficulty;
         _values.SetReusePercent(e.ReusePercent);
         _values.Instructions = e.Instructions;
+        _values.CodePercent = e.CodePercent;
         _editing = true;
     }
 
@@ -354,8 +355,7 @@ else
 
         _editing = false;
         await LoadAsync();
-        var (mc, written) = await Exams.MissingAsync(userId, ExamId, PageToken);
-        if (mc + written > 0)
+        if ((await Exams.MissingAsync(userId, ExamId, PageToken)).Total > 0)
             await FillAsync();
         else
             Ui.Toast.Success("Settings saved.");

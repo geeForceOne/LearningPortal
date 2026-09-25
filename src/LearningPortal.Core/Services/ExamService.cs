@@ -7,9 +7,19 @@ namespace LearningPortal.Core.Services;
 
 // ReusePercent: how much of the exam may come from the question bank; 0 means all new questions.
 // Instructions: optional guidance for the AI when it writes this exam's questions.
+// CodePercent: the share of code questions; only used when the topic is a programming topic.
 public sealed record ExamSettings(
     string Name, int QuestionCount, ExamType Type, Difficulty Difficulty,
-    int ReusePercent = ExamService.DefaultReusePercent, string? Instructions = null);
+    int ReusePercent = ExamService.DefaultReusePercent, string? Instructions = null,
+    int CodePercent = ExamService.DefaultCodePercent);
+
+// How many questions of each kind to write or take: by type (multiple choice / written) and,
+// independently, how many of them work with code. Theory is the rest.
+public readonly record struct QuestionMix(int MultipleChoice, int Written, int Code)
+{
+    public int Total => MultipleChoice + Written;
+    public int Theory => Total - Code;
+}
 
 public sealed record ExamDetail(Exam Exam, Topic Topic, IReadOnlyList<Question> Questions);
 
@@ -33,6 +43,9 @@ public sealed class ExamService(
     // A new exam takes at most this share from the bank and has the AI write the rest, so
     // practice stays mostly fresh while the bank still saves some cost.
     public const int DefaultReusePercent = 20;
+
+    // Programming topics: a new exam asks for this share of code questions and theory for the rest.
+    public const int DefaultCodePercent = 40;
 
     public async Task<ExamDetail> GetAsync(string userId, int examId, CancellationToken ct = default)
     {
@@ -65,27 +78,28 @@ public sealed class ExamService(
             Difficulty = settings.Difficulty,
             ReusePercent = settings.ReusePercent,
             Instructions = NullIfBlank(settings.Instructions),
+            CodePercent = settings.CodePercent,
         };
         db.Exams.Add(exam);
         await db.SaveChangesAsync(ct);
         return exam.Id;
     }
 
-    // How many questions the exam still needs, split by kind. Used for the pre-generation
-    // estimate and by FillAsync.
-    public async Task<(int MultipleChoice, int Written)> MissingAsync(string userId, int examId, CancellationToken ct = default)
+    // How many questions the exam still needs, by type and by code/theory. Used for the
+    // pre-generation estimate and by FillAsync.
+    public async Task<QuestionMix> MissingAsync(string userId, int examId, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var exam = await LoadForEditAsync(db, userId, examId, ct);
         return Missing(exam);
     }
 
-    // Tops the exam up to its question count: bank questions first (matching type and
-    // difficulty, least-used first), then AI generation for whatever is still missing.
+    // Tops the exam up to its question count: bank questions first (matching type, difficulty and
+    // code/theory, least-used first), then AI generation for whatever is still missing.
     public async Task<FillResult> FillAsync(string userId, int examId, IProgress<string>? progress, CancellationToken ct)
     {
-        int fromBank;
-        int mcNeeded, writtenNeeded, topicId;
+        int fromBank, topicId;
+        QuestionMix need;
         Difficulty difficulty;
         string? instructions;
 
@@ -95,38 +109,48 @@ public sealed class ExamService(
             topicId = exam.TopicId;
             difficulty = exam.Difficulty;
             instructions = exam.Instructions;
-            (mcNeeded, writtenNeeded) = Missing(exam);
+            need = Missing(exam);
+            var programming = exam.Topic!.IsProgramming;
 
             progress?.Report("Checking the question bank...");
             var inExam = exam.Questions.Select(eq => eq.QuestionId).ToHashSet();
             var bank = await db.Questions
-                .Where(q => q.TopicId == topicId && q.UserId == userId && q.Difficulty == difficulty)
-                .Select(q => new { q.Id, q.Type, Uses = db.ExamQuestions.Count(eq => eq.QuestionId == q.Id) })
+                .Where(q => q.TopicId == topicId && q.UserId == userId && q.Difficulty == difficulty && (programming || !q.IsCode))
+                .Select(q => new { q.Id, q.Type, q.IsCode, Uses = db.ExamQuestions.Count(eq => eq.QuestionId == q.Id) })
                 .ToListAsync(ct);
 
-            var candidates = bank.Where(q => !inExam.Contains(q.Id))
-                .OrderBy(q => q.Uses).ThenBy(_ => Random.Shared.Next())
-                .ToList();
-            var takeMc = candidates.Where(q => q.Type == QuestionType.MultipleChoice)
-                .Take(BankShare(mcNeeded, exam.ReusePercent)).Select(q => q.Id).ToList();
-            var takeWritten = candidates.Where(q => q.Type == QuestionType.Written)
-                .Take(BankShare(writtenNeeded, exam.ReusePercent)).Select(q => q.Id).ToList();
+            // Each question uses up one place of its type and one of its kind, so a reused
+            // question never pushes the exam past either share.
+            var mcCap = BankShare(need.MultipleChoice, exam.ReusePercent);
+            var writtenCap = BankShare(need.Written, exam.ReusePercent);
+            var codeCap = BankShare(need.Code, exam.ReusePercent);
+            var theoryCap = BankShare(need.Theory, exam.ReusePercent);
+            var take = new List<int>();
+            int takenMc = 0, takenWritten = 0, takenCode = 0;
+            foreach (var q in bank.Where(q => !inExam.Contains(q.Id)).OrderBy(q => q.Uses).ThenBy(_ => Random.Shared.Next()))
+            {
+                var isMc = q.Type == QuestionType.MultipleChoice;
+                if ((isMc ? mcCap : writtenCap) == 0 || (q.IsCode ? codeCap : theoryCap) == 0)
+                    continue;
+                take.Add(q.Id);
+                if (isMc) { mcCap--; takenMc++; } else { writtenCap--; takenWritten++; }
+                if (q.IsCode) { codeCap--; takenCode++; } else theoryCap--;
+            }
 
             var order = exam.Questions.Count == 0 ? 0 : exam.Questions.Max(eq => eq.Order) + 1;
-            foreach (var id in takeMc.Concat(takeWritten))
+            foreach (var id in take)
                 db.ExamQuestions.Add(new ExamQuestion { ExamId = examId, QuestionId = id, Order = order++ });
 
-            fromBank = takeMc.Count + takeWritten.Count;
-            mcNeeded -= takeMc.Count;
-            writtenNeeded -= takeWritten.Count;
+            fromBank = take.Count;
+            need = new QuestionMix(need.MultipleChoice - takenMc, need.Written - takenWritten, need.Code - takenCode);
             exam.UpdatedAt = DateTime.UtcNow;
             await db.SaveChangesAsync(ct);
         }
 
-        if (mcNeeded + writtenNeeded == 0)
+        if (need.Total == 0)
             return new FillResult(fromBank, 0, 0);
 
-        var generated = await generator.GenerateAsync(userId, topicId, mcNeeded, writtenNeeded, difficulty, instructions, progress, ct);
+        var generated = await generator.GenerateAsync(userId, topicId, need, difficulty, instructions, progress, ct);
 
         await using (var db = await dbFactory.CreateDbContextAsync(CancellationToken.None))
         {
@@ -136,17 +160,19 @@ public sealed class ExamService(
             await db.SaveChangesAsync(CancellationToken.None);
         }
 
-        return new FillResult(fromBank, generated.Count, mcNeeded + writtenNeeded - generated.Count);
+        return new FillResult(fromBank, generated.Count, need.Total - generated.Count);
     }
 
     // Applies new settings. Questions that no longer match the type or difficulty are dropped
     // from the exam (they stay in the bank), extras beyond the new count are trimmed; call
-    // FillAsync afterwards to top it up.
+    // FillAsync afterwards to top it up. The code/theory share is only enforced on existing
+    // questions when it was changed, so saving a new name doesn't swap (and pay for) questions.
     public async Task UpdateSettingsAsync(string userId, int examId, ExamSettings settings, CancellationToken ct = default)
     {
         Validate(settings);
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var exam = await LoadForEditAsync(db, userId, examId, ct);
+        var trimKind = exam.Topic!.IsProgramming && exam.CodePercent != settings.CodePercent;
 
         exam.Name = settings.Name.Trim();
         exam.QuestionCount = settings.QuestionCount;
@@ -154,19 +180,25 @@ public sealed class ExamService(
         exam.Difficulty = settings.Difficulty;
         exam.ReusePercent = settings.ReusePercent;
         exam.Instructions = NullIfBlank(settings.Instructions);
+        exam.CodePercent = settings.CodePercent;
         exam.UpdatedAt = DateTime.UtcNow;
 
-        var (mcTarget, writtenTarget) = Split(exam.QuestionCount, exam.Type);
-        var keptMc = 0;
-        var keptWritten = 0;
+        var target = Targets(exam);
+        int keptMc = 0, keptWritten = 0, keptCode = 0, keptTheory = 0;
         foreach (var eq in exam.Questions.OrderBy(eq => eq.Order).ToList())
         {
             var q = eq.Question!;
-            var keep = q.Difficulty == exam.Difficulty && (q.Type == QuestionType.MultipleChoice
-                ? keptMc++ < mcTarget
-                : keptWritten++ < writtenTarget);
+            var isMc = q.Type == QuestionType.MultipleChoice;
+            var keep = q.Difficulty == exam.Difficulty
+                       && (isMc ? keptMc < target.MultipleChoice : keptWritten < target.Written)
+                       && (!trimKind || (q.IsCode ? keptCode < target.Code : keptTheory < target.Theory));
             if (!keep)
+            {
                 db.ExamQuestions.Remove(eq);
+                continue;
+            }
+            if (isMc) keptMc++; else keptWritten++;
+            if (q.IsCode) keptCode++; else keptTheory++;
         }
 
         await db.SaveChangesAsync(ct);
@@ -178,17 +210,17 @@ public sealed class ExamService(
         int topicId;
         Difficulty difficulty;
         string? instructions;
-        int mc, written;
+        QuestionMix mix;
         await using (var db = await dbFactory.CreateDbContextAsync(ct))
         {
             var exam = await LoadForEditAsync(db, userId, examId, ct);
             topicId = exam.TopicId;
             difficulty = exam.Difficulty;
             instructions = exam.Instructions;
-            (mc, written) = Split(exam.QuestionCount, exam.Type);
+            mix = Targets(exam);
         }
 
-        var generated = await generator.GenerateAsync(userId, topicId, mc, written, difficulty, instructions, progress, ct);
+        var generated = await generator.GenerateAsync(userId, topicId, mix, difficulty, instructions, progress, ct);
         if (generated.Count == 0)
             throw new AiException("The AI didn't produce any usable questions. The exam wasn't changed.");
 
@@ -201,7 +233,7 @@ public sealed class ExamService(
             await db.SaveChangesAsync(CancellationToken.None);
         }
 
-        return new FillResult(0, generated.Count, mc + written - generated.Count);
+        return new FillResult(0, generated.Count, mix.Total - generated.Count);
     }
 
     public async Task RemoveQuestionAsync(string userId, int examId, int questionId, CancellationToken ct = default)
@@ -216,22 +248,25 @@ public sealed class ExamService(
         await db.SaveChangesAsync(ct);
     }
 
-    // Has the AI write one new question of the same kind and puts it in the old one's place.
+    // Has the AI write one new question of the same type (and code or theory) and puts it in the old one's place.
     public async Task ReplaceQuestionAsync(string userId, int examId, int questionId, IProgress<string>? progress, CancellationToken ct)
     {
         Question old;
         int topicId;
         string? instructions;
+        bool programming;
         await using (var db = await dbFactory.CreateDbContextAsync(ct))
         {
             var exam = await LoadForEditAsync(db, userId, examId, ct);
             topicId = exam.TopicId;
             instructions = exam.Instructions;
+            programming = exam.Topic!.IsProgramming;
             old = exam.Questions.FirstOrDefault(x => x.QuestionId == questionId)?.Question ?? throw new NotFoundException();
         }
 
         var isMc = old.Type == QuestionType.MultipleChoice;
-        var generated = await generator.GenerateAsync(userId, topicId, isMc ? 1 : 0, isMc ? 0 : 1, old.Difficulty, instructions, progress, ct);
+        var mix = new QuestionMix(isMc ? 1 : 0, isMc ? 0 : 1, old.IsCode && programming ? 1 : 0);
+        var generated = await generator.GenerateAsync(userId, topicId, mix, old.Difficulty, instructions, progress, ct);
         var replacement = generated.FirstOrDefault()
             ?? throw new AiException("The AI didn't produce a usable replacement. Try again.");
 
@@ -255,6 +290,9 @@ public sealed class ExamService(
 
         q.Prompt = draft.Prompt.Trim();
         q.Explanation = draft.Explanation.Trim();
+        // The AI's own tag stays on its questions; an own question follows what it now holds.
+        if (q.IsUserAuthored)
+            q.IsCode = LooksLikeCode(draft);
         if (q.Type == QuestionType.Written)
         {
             q.ReferenceAnswer = draft.ReferenceAnswer?.Trim();
@@ -287,6 +325,7 @@ public sealed class ExamService(
             Options = options,
             AllowsMultiple = options.Count(o => o.IsCorrect) > 1,
             IsUserAuthored = true,
+            IsCode = LooksLikeCode(draft),
             SourceLabel = "Written by you",
         };
         db.Questions.Add(q);
@@ -316,45 +355,89 @@ public sealed class ExamService(
         _ => ((count + 1) / 2, count / 2),
     };
 
+    // How many of an exam's questions work with code; always 0 outside programming topics.
+    public static int CodeCount(int count, int codePercent, bool programming) =>
+        programming ? (count * Math.Clamp(codePercent, 0, 100) + 50) / 100 : 0;
+
     // How many of the needed questions may come from the bank at this reuse percentage.
     public static int BankShare(int needed, int reusePercent) => (needed * Math.Clamp(reusePercent, 0, 100) + 50) / 100;
 
-    // Where a new exam's questions would come from, given the bank's contents per kind and difficulty.
-    // Mirrors FillAsync, so the form's hint and cost estimate match what actually happens.
-    public static (int FromBank, int Generated) Plan(ExamSettings s, IReadOnlyDictionary<(QuestionType Type, Difficulty Difficulty), int> bank)
+    // Where a new exam's questions would come from, given the bank's contents per type, difficulty
+    // and code/theory. Mirrors FillAsync, so the form's hint and cost estimate match what happens.
+    public static (int FromBank, int Generated) Plan(
+        ExamSettings s, IReadOnlyDictionary<(QuestionType Type, Difficulty Difficulty, bool IsCode), int> bank, bool programming)
     {
         var (mc, written) = Split(s.QuestionCount, s.Type);
-        var fromBank = Math.Min(BankShare(mc, s.ReusePercent), bank.GetValueOrDefault((QuestionType.MultipleChoice, s.Difficulty)))
-                       + Math.Min(BankShare(written, s.ReusePercent), bank.GetValueOrDefault((QuestionType.Written, s.Difficulty)));
-        return (fromBank, mc + written - fromBank);
+        var need = new QuestionMix(mc, written, CodeCount(s.QuestionCount, s.CodePercent, programming));
+        var typeCap = new Dictionary<QuestionType, int>
+        {
+            [QuestionType.MultipleChoice] = BankShare(need.MultipleChoice, s.ReusePercent),
+            [QuestionType.Written] = BankShare(need.Written, s.ReusePercent),
+        };
+        var kindCap = new Dictionary<bool, int>
+        {
+            [true] = BankShare(need.Code, s.ReusePercent),
+            [false] = BankShare(need.Theory, s.ReusePercent),
+        };
+
+        var fromBank = 0;
+        foreach (var isCode in new[] { true, false })
+        foreach (var type in new[] { QuestionType.MultipleChoice, QuestionType.Written })
+        {
+            var take = Math.Min(bank.GetValueOrDefault((type, s.Difficulty, isCode)), Math.Min(typeCap[type], kindCap[isCode]));
+            typeCap[type] -= take;
+            kindCap[isCode] -= take;
+            fromBank += take;
+        }
+        return (fromBank, need.Total - fromBank);
     }
 
-    private static (int MultipleChoice, int Written) Missing(Exam exam)
+    private static QuestionMix Targets(Exam exam)
     {
         var (mc, written) = Split(exam.QuestionCount, exam.Type);
-        var haveMc = exam.Questions.Count(eq => eq.Question!.Type == QuestionType.MultipleChoice);
-        var haveWritten = exam.Questions.Count(eq => eq.Question!.Type == QuestionType.Written);
-        var total = exam.QuestionCount - exam.Questions.Count;
+        return new QuestionMix(mc, written, CodeCount(exam.QuestionCount, exam.CodePercent, exam.Topic!.IsProgramming));
+    }
+
+    private static QuestionMix Missing(Exam exam)
+    {
+        var target = Targets(exam);
+        var questions = exam.Questions.Select(eq => eq.Question!).ToList();
+        var total = exam.QuestionCount - questions.Count;
         if (total <= 0)
-            return (0, 0);
+            return default;
 
         // Own questions can tip the mix; fill whichever kind is short, never beyond the total.
-        var needMc = Math.Max(0, mc - haveMc);
-        var needWritten = Math.Max(0, written - haveWritten);
-        while (needMc + needWritten > total)
+        var (needMc, needWritten) = Balance(
+            target.MultipleChoice - questions.Count(q => q.Type == QuestionType.MultipleChoice),
+            target.Written - questions.Count(q => q.Type == QuestionType.Written),
+            total, preferFirst: exam.Type != ExamType.Written);
+        var (needCode, _) = Balance(
+            target.Code - questions.Count(q => q.IsCode),
+            target.Theory - questions.Count(q => !q.IsCode),
+            total, preferFirst: false);
+        return new QuestionMix(needMc, needWritten, needCode);
+    }
+
+    // Two shortfalls squeezed or stretched to add up to exactly total.
+    private static (int First, int Second) Balance(int first, int second, int total, bool preferFirst)
+    {
+        first = Math.Max(0, first);
+        second = Math.Max(0, second);
+        while (first + second > total)
         {
-            if (needMc >= needWritten) needMc--; else needWritten--;
+            if (first >= second) first--; else second--;
         }
-        if (needMc + needWritten < total)
+        if (first + second < total)
         {
-            if (exam.Type == ExamType.Written) needWritten = total - needMc;
-            else needMc = total - needWritten;
+            if (preferFirst) first = total - second;
+            else second = total - first;
         }
-        return (needMc, needWritten);
+        return (first, second);
     }
 
     private static async Task<Exam> LoadForEditAsync(AppDbContext db, string userId, int examId, CancellationToken ct) =>
         await db.Exams
+            .Include(e => e.Topic)
             .Include(e => e.Questions).ThenInclude(eq => eq.Question)
             .FirstOrDefaultAsync(e => e.Id == examId && e.UserId == userId, ct) ?? throw new NotFoundException();
 
@@ -391,6 +474,10 @@ public sealed class ExamService(
                 throw new ArgumentException("At least one option has to be wrong.");
         }
     }
+
+    // A question the user wrote counts as a code question when it or an option holds a code block.
+    private static bool LooksLikeCode(QuestionDraft d) =>
+        d.Prompt.Contains("```") || d.Options.Any(o => o.Text.Contains("```"));
 
     private static List<QuestionOption> BuildOptions(QuestionDraft d) =>
         d.Options.Where(o => !string.IsNullOrWhiteSpace(o.Text))

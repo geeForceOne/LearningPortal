@@ -70,12 +70,13 @@ public sealed class QuestionGenerationService(
     }
 
     // Generates and stores new bank questions. May return fewer than asked if the AI keeps
-    // producing unusable questions; the caller reports the shortfall.
+    // producing unusable questions; the caller reports the shortfall. The code share of the mix
+    // only applies to programming topics; other topics get theory questions only.
     public async Task<List<Question>> GenerateAsync(
-        string userId, int topicId, int multipleChoice, int written, Difficulty difficulty, string? instructions,
+        string userId, int topicId, QuestionMix mix, Difficulty difficulty, string? instructions,
         IProgress<string>? progress, CancellationToken ct)
     {
-        if (multipleChoice + written <= 0)
+        if (mix.Total <= 0)
             return [];
 
         var client = AiClientFactory.Create(await settings.GetConnectionAsync(userId, ct));
@@ -83,6 +84,7 @@ public sealed class QuestionGenerationService(
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var topic = await db.Topics.AsNoTracking().FirstOrDefaultAsync(t => t.Id == topicId && t.UserId == userId, ct)
             ?? throw new NotFoundException();
+        var programming = topic.IsProgramming;
         var materials = await db.Materials.AsNoTracking()
             .Where(m => m.TopicId == topicId && m.UserId == userId)
             .Include(m => m.Sections)
@@ -115,9 +117,11 @@ public sealed class QuestionGenerationService(
 
         var created = new List<Question>();
         var skippedRepeats = 0;
-        var mcLeft = multipleChoice;
-        var writtenLeft = written;
-        var target = multipleChoice + written;
+        var mcLeft = mix.MultipleChoice;
+        var writtenLeft = mix.Written;
+        var codeLeft = programming ? Math.Clamp(mix.Code, 0, mix.Total) : 0;
+        var theoryLeft = mix.Total - codeLeft;
+        var target = mix.Total;
         var maxCalls = (int)Math.Ceiling(target / (double)options.QuestionsPerCall) + 2;
 
         for (var call = 0; call < maxCalls && mcLeft + writtenLeft > 0; call++)
@@ -127,6 +131,7 @@ public sealed class QuestionGenerationService(
             var batch = Math.Min(options.QuestionsPerCall, mcLeft + writtenLeft);
             var batchMc = (int)Math.Round(batch * (mcLeft / (double)(mcLeft + writtenLeft)));
             var batchWritten = batch - batchMc;
+            var batchCode = (int)Math.Round(batch * (codeLeft / (double)(codeLeft + theoryLeft)));
 
             string context;
             string? focus = null;
@@ -151,9 +156,10 @@ public sealed class QuestionGenerationService(
 
             var json = await client.CompleteJsonAsync(new AiRequest
             {
-                System = Prompts.GenerationSystem(topic.Language),
+                System = Prompts.GenerationSystem(topic.Language, programming),
                 Context = context,
-                Prompt = Prompts.GenerationPrompt(batchMc, batchWritten, difficulty, avoid, focus, instructions, topic.Language),
+                Prompt = Prompts.GenerationPrompt(
+                    batchMc, batchWritten, programming ? batchCode : null, difficulty, avoid, focus, instructions, topic.Language),
                 SchemaName = "exam_questions",
                 Schema = Prompts.QuestionsSchema,
                 CacheKey = $"topic-{topicId}",
@@ -161,8 +167,12 @@ public sealed class QuestionGenerationService(
 
             foreach (var q in ParseQuestions(json, difficulty, sectionById, materialById))
             {
+                if (!programming)
+                    q.IsCode = false;
                 // Keep to the requested mix; surplus of one kind is dropped rather than skewing the exam.
                 if (q.Type == QuestionType.MultipleChoice ? mcLeft <= 0 : writtenLeft <= 0)
+                    continue;
+                if (q.IsCode ? codeLeft <= 0 : theoryLeft <= 0)
                     continue;
                 // A repeat of a bank question (or of one from this run) is dropped; the spare
                 // calls above ask for a replacement.
@@ -180,6 +190,7 @@ public sealed class QuestionGenerationService(
                 if (q.SourceSectionId is { } sid)
                     coverage[sid] = coverage.GetValueOrDefault(sid) + 1;
                 if (q.Type == QuestionType.MultipleChoice) mcLeft--; else writtenLeft--;
+                if (q.IsCode) codeLeft--; else theoryLeft--;
             }
 
             // Save per batch so a later failure doesn't throw away questions already paid for.
@@ -290,7 +301,10 @@ public sealed class QuestionGenerationService(
             return null;
 
         var type = Str("type") == "written" ? QuestionType.Written : QuestionType.MultipleChoice;
-        var q = new Question { Type = type, Difficulty = difficulty, Prompt = prompt, Explanation = explanation };
+        var q = new Question
+        {
+            Type = type, Difficulty = difficulty, Prompt = prompt, Explanation = explanation, IsCode = Str("kind") == "code",
+        };
 
         if (type == QuestionType.Written)
         {

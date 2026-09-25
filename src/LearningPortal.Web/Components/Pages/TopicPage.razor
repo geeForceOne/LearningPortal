@@ -395,9 +395,9 @@ else
     private async Task EditAsync()
     {
         var t = _topic!.Summary;
-        var input = await _dialog.AskAsync("Edit topic", "Save", new TopicDialog.TopicInput(t.Name, t.Language, t.Description));
+        var input = await _dialog.AskAsync("Edit topic", "Save", new TopicDialog.TopicInput(t.Name, t.Language, t.Description, t.IsProgramming));
         if (input is null) return;
-        await Topics.UpdateAsync(await UserIdAsync(), TopicId, input.Name, input.Description, input.Language, PageToken);
+        await Topics.UpdateAsync(await UserIdAsync(), TopicId, input.Name, input.Description, input.Language, input.IsProgramming, PageToken);
         await LoadAsync();
     }
 

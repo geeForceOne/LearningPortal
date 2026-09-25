@@ -11,6 +11,7 @@ public sealed record TopicSummary(
     string Name,
     string? Description,
     string Language,
+    bool IsProgramming,
     int MaterialCount,
     int TokenTotal,
     int ExamCount,
@@ -62,7 +63,7 @@ public sealed class TopicService(IDbContextFactory<AppDbContext> dbFactory, Lear
             .Where(t => t.UserId == userId)
             .Select(t => new
             {
-                t.Id, t.Name, t.Description, t.Language, t.UpdatedAt,
+                t.Id, t.Name, t.Description, t.Language, t.IsProgramming, t.UpdatedAt,
                 MaterialCount = t.Materials.Count,
                 TokenTotal = t.Materials.Sum(m => (int?)m.TokenEstimate) ?? 0,
                 ExamCount = t.Exams.Count,
@@ -80,7 +81,7 @@ public sealed class TopicService(IDbContextFactory<AppDbContext> dbFactory, Lear
             {
                 var mine = attempts.Where(a => a.TopicId == t.Id).ToList();
                 return new TopicSummary(
-                    t.Id, t.Name, t.Description, t.Language, t.MaterialCount, t.TokenTotal, t.ExamCount, t.QuestionCount,
+                    t.Id, t.Name, t.Description, t.Language, t.IsProgramming, t.MaterialCount, t.TokenTotal, t.ExamCount, t.QuestionCount,
                     mine.Count,
                     mine.Count > 0 ? mine.Average(a => a.ScorePercent ?? 0) : null,
                     mine.Max(a => a.CompletedAt),
@@ -133,21 +134,22 @@ public sealed class TopicService(IDbContextFactory<AppDbContext> dbFactory, Lear
         return new TopicDetail(summary, materials, examSummaries, summary.QuestionCount, summary.TokenTotal > options.TopicTokenBudget);
     }
 
-    // How many bank questions exist per kind and difficulty, so exam settings can show how many
-    // will be reused and how many the AI still has to write.
-    public async Task<Dictionary<(QuestionType Type, Difficulty Difficulty), int>> BankCountsAsync(
+    // How many bank questions exist per type, difficulty and code/theory, so exam settings can show
+    // how many will be reused and how many the AI still has to write.
+    public async Task<Dictionary<(QuestionType Type, Difficulty Difficulty, bool IsCode), int>> BankCountsAsync(
         string userId, int topicId, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var counts = await db.Questions.AsNoTracking()
             .Where(q => q.UserId == userId && q.TopicId == topicId)
-            .GroupBy(q => new { q.Type, q.Difficulty })
-            .Select(g => new { g.Key.Type, g.Key.Difficulty, Count = g.Count() })
+            .GroupBy(q => new { q.Type, q.Difficulty, q.IsCode })
+            .Select(g => new { g.Key.Type, g.Key.Difficulty, g.Key.IsCode, Count = g.Count() })
             .ToListAsync(ct);
-        return counts.ToDictionary(c => (c.Type, c.Difficulty), c => c.Count);
+        return counts.ToDictionary(c => (c.Type, c.Difficulty, c.IsCode), c => c.Count);
     }
 
-    public async Task<int> CreateAsync(string userId, string name, string? description, string language, CancellationToken ct = default)
+    public async Task<int> CreateAsync(
+        string userId, string name, string? description, string language, bool isProgramming, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var topic = new Topic
@@ -156,19 +158,23 @@ public sealed class TopicService(IDbContextFactory<AppDbContext> dbFactory, Lear
             Name = name.Trim(),
             Description = string.IsNullOrWhiteSpace(description) ? null : description.Trim(),
             Language = string.IsNullOrWhiteSpace(language) ? "English" : language.Trim(),
+            IsProgramming = isProgramming,
         };
         db.Topics.Add(topic);
         await db.SaveChangesAsync(ct);
         return topic.Id;
     }
 
-    public async Task UpdateAsync(string userId, int topicId, string name, string? description, string language, CancellationToken ct = default)
+    // Changing IsProgramming only affects questions generated from now on; existing ones stay.
+    public async Task UpdateAsync(
+        string userId, int topicId, string name, string? description, string language, bool isProgramming, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var topic = await db.Topics.FirstOrDefaultAsync(t => t.Id == topicId && t.UserId == userId, ct) ?? throw new NotFoundException();
         topic.Name = name.Trim();
         topic.Description = string.IsNullOrWhiteSpace(description) ? null : description.Trim();
         topic.Language = string.IsNullOrWhiteSpace(language) ? "English" : language.Trim();
+        topic.IsProgramming = isProgramming;
         topic.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync(ct);
     }
