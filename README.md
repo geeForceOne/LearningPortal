@@ -1,16 +1,25 @@
 # Recall
 
-A self-hosted web app that turns your own study material into practice exams with AI, and
-explains every answer so you learn from it.
+![Recall](docs/images/recall-signin.png)
 
-Upload your notes, slides or scripts into a topic, and Recall writes multiple-choice and written
-questions about them, grades your written answers, and tracks how you improve over time.
+**Recall turns your own notes, slides and scripts into practice exams, and explains every answer
+so you actually learn from it.**
 
-![Answering a code question](docs/images/recall-take-exam.jpg)
+Bring a lecture PDF, a slide deck or a page of notes. Recall writes questions in your topic's
+language, grades your written answers with specific feedback, and shows where you're improving
+and what still trips you up. It runs on your own server, with your own AI key, so your material
+stays yours.
+
+- **Learn, don't just score.** Every answer comes with a thorough explanation and a link to the
+  part of your material it came from
+- **Built for technical subjects too.** Programming topics mix real code questions with theory
+- **Private by design.** Self-hosted, one account per person, nothing shared
+- **No surprise bills.** You see the expected cost before the AI writes anything
 
 ## Topics and material
 
-A topic holds any amount of study material:
+Everything starts with a topic: a course, a subject, an exam you're preparing for. It holds any
+amount of study material:
 
 - Upload **PDF, Word (.docx), PowerPoint (.pptx), LaTeX or Markdown** files, or paste text in
   directly. PowerPoint slides come in one section per slide, speaker notes included
@@ -28,8 +37,8 @@ A topic holds any amount of study material:
 
 ## Exams
 
-Create any number of exams per topic: pick a name, a question count, the type (multiple choice,
-written, or a mix) and the difficulty (easy, medium or hard). Optionally, give the AI
+Turn a topic into as many exams as you like: pick a name, a question count, the type (multiple
+choice, written, or a mix) and the difficulty (easy, medium or hard). Optionally, give the AI
 instructions such as "focus on dates and names". Exams in a programming topic also set how many
 questions work with code (40% by default); the rest are theory.
 
@@ -46,6 +55,8 @@ questions work with code (40% by default); the rest are theory.
 
 ![Creating an exam](docs/images/recall-new-exam.jpg)
 
+![Answering a code question](docs/images/recall-take-exam.jpg)
+
 Code shows up as code, with syntax colouring, in questions, options, answers and explanations.
 After each question, or at the end, you see what was right, what you picked, and why:
 
@@ -57,13 +68,15 @@ After each question, or at the end, you see what was right, what you picked, and
 
 ## Question bank
 
-Every generated question is kept in the topic's bank and can be reused by later exams, which
-costs nothing. Each exam chooses how much to reuse (20% by default), so practice stays mostly
-fresh. Reused questions match the exam's type, difficulty and code/theory mix. New questions are
-checked against the bank, and repeats are dropped. When a topic's bank gets close to what its
-material can support, Recall tells you.
+Nothing gets thrown away. Every generated question is kept in the topic's bank and can be reused
+by later exams, which costs nothing. Each exam chooses how much to reuse (20% by default), so
+practice stays mostly fresh. Reused questions match the exam's type, difficulty and code/theory
+mix. New questions are checked against the bank, and repeats are dropped. When a topic's bank
+gets close to what its material can support, Recall tells you.
 
 ## Statistics
+
+See what's sticking and what isn't:
 
 - Score over time for each exam
 - An overview per topic: average score, attempt count, last practised
@@ -107,8 +120,6 @@ Without email, the admin gets the same links on the Users page to pass on by han
 
 After an update, everyone sees a short "What's new" banner linking to the release notes, until
 they close it.
-
-![Sign in](docs/images/recall-signin.png)
 
 ## With Docker
 
@@ -169,24 +180,6 @@ docker run -d --name recall -p 8080:8080 -v recall-data:/data recall
 ```
 
 The repository's own `docker-compose.yml` does the same with `docker compose up -d --build`.
-
-## Publishing a new image
-
-First update `CHANGELOG.md`. The app shows that file on its release notes page (linked from the
-version number), and the GitHub release uses the same text. A `## Current version` heading is shown
-as the running version and the day its image was built, for example `1.0.0 - 2026-09-25`.
-
-Pushing a version tag builds the image on GitHub and publishes it as
-`ghcr.io/geeforceone/recall` (`latest`, plus the version), with that version number shown in the
-app:
-
-```
-git tag v1.0.0
-git push origin v1.0.0
-```
-
-It can also be started by hand under **Actions → Publish Docker image**. Ordinary pushes to `main`
-don't publish.
 
 ## Development
 
