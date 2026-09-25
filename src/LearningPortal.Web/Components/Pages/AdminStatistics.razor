@@ -1,0 +1,105 @@
+@page "/admin/statistics"
+@attribute [Authorize(Roles = Roles.Admin)]
+@inherits AppPage
+@inject AdminStatisticsService Stats
+
+<PageTitle>Admin statistics - @AppInfo.Name</PageTitle>
+
+<div class="page-head">
+    <div>
+        <h1>Admin statistics</h1>
+        <p class="page-sub">
+            How each account uses @AppInfo.Name. Only counts and dates: what people study stays private.
+        </p>
+    </div>
+</div>
+
+@if (_usage is null)
+{
+    <p class="page-loading">Loading...</p>
+}
+else
+{
+    <section class="section">
+        <div class="section-head"><h2>Users<span class="count">@_usage.Count</span></h2></div>
+        <p class="muted small">
+            Last login and last active were first recorded in this version, so older accounts show "Not recorded yet"
+            until they next use the app. Last active updates at most every @((int)UserActivityService.ActiveResolution.TotalMinutes) minutes.
+        </p>
+        <div class="table-wrap">
+            <table class="table usage-table">
+                <thead>
+                    <tr>
+                        @SortHeader("User", Column.Name)
+                        @SortHeader("Last login", Column.LastLogin)
+                        @SortHeader("Last active", Column.LastActive)
+                        @SortHeader("Topics", Column.Topics, numeric: true)
+                        @SortHeader("Exams", Column.Exams, numeric: true)
+                        @SortHeader("Bank questions", Column.Questions, numeric: true)
+                        @SortHeader("Attempts", Column.Attempts, numeric: true)
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var u in Sorted())
+                    {
+                        <tr @key="u.UserId">
+                            <td data-label="User">
+                                <span class="usage-name">@u.ShownName</span>
+                                <span class="muted small usage-email">@(u.Email ?? "No email address")</span>
+                            </td>
+                            <td data-label="Last login" class="nowrap" title="@When(u.LastLoginAt, exact: true)">@When(u.LastLoginAt)</td>
+                            <td data-label="Last active" class="nowrap" title="@When(u.LastActiveAt, exact: true)">@When(u.LastActiveAt)</td>
+                            <td data-label="Topics" class="num">@u.Topics</td>
+                            <td data-label="Exams" class="num">@u.Exams</td>
+                            <td data-label="Bank questions" class="num">@u.BankQuestions</td>
+                            <td data-label="Attempts" class="num">@u.Attempts</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+}
+
+@code {
+    private enum Column { Name, LastLogin, LastActive, Topics, Exams, Questions, Attempts }
+
+    private IReadOnlyList<UserUsage>? _usage;
+    private Column _sort = Column.LastActive;
+    private bool _descending = true;
+
+    protected override async Task OnInitializedAsync() => _usage = await Stats.GetUsageAsync(PageToken);
+
+    private IEnumerable<UserUsage> Sorted()
+    {
+        Func<UserUsage, object> key = _sort switch
+        {
+            Column.Name => u => u.ShownName.ToLowerInvariant(),
+            Column.LastLogin => u => u.LastLoginAt ?? DateTime.MinValue,
+            Column.LastActive => u => u.LastActiveAt ?? DateTime.MinValue,
+            Column.Topics => u => u.Topics,
+            Column.Exams => u => u.Exams,
+            Column.Questions => u => u.BankQuestions,
+            _ => u => u.Attempts,
+        };
+        return _descending ? _usage!.OrderByDescending(key) : _usage!.OrderBy(key);
+    }
+
+    // Clicking the current column flips the order; a new column starts with the most useful end
+    // first (A to Z for names, newest or largest first for the rest).
+    private void SortBy(Column column)
+    {
+        _descending = column == _sort ? !_descending : column != Column.Name;
+        _sort = column;
+    }
+
+    private RenderFragment SortHeader(string label, Column column, bool numeric = false) =>
+        @<th class="@(numeric ? "num" : "")" aria-sort="@(_sort != column ? "none" : _descending ? "descending" : "ascending")">
+            <button type="button" class="sort-button" @onclick="() => SortBy(column)">
+                @label<span class="sort-mark" aria-hidden="true">@(_sort != column ? "" : _descending ? " ▾" : " ▴")</span>
+            </button>
+        </th>;
+
+    private static string When(DateTime? utc, bool exact = false) =>
+        utc is null ? (exact ? "" : "Not recorded yet") : exact ? Format.Date(utc.Value) : Format.Ago(utc.Value);
+}

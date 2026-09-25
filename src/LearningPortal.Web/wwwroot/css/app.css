@@ -1401,6 +1401,42 @@ details.q-more[open] summary { margin-bottom: 8px; }
 
 .table .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 
+/* A sortable column header: the whole label is the button. */
+.sort-button {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+}
+.sort-button:hover { color: var(--ink); }
+.sort-mark { display: inline-block; min-width: 1em; }
+
+/* Admin usage table; on phones each user becomes a card with labelled values. */
+.usage-name { display: block; font-weight: 600; }
+.usage-email { display: block; overflow-wrap: anywhere; }
+
+@media (max-width: 600px) {
+    .usage-table thead { display: none; }
+    .usage-table, .usage-table tbody, .usage-table tr, .usage-table td { display: block; }
+    .usage-table tr {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 6px 16px;
+        padding: 14px 0;
+        border-bottom: 1px solid var(--rule);
+    }
+    .usage-table td, .usage-table td.num { padding: 0; border: 0; text-align: left; }
+    .usage-table td:first-child { grid-column: 1 / -1; }
+    .usage-table td:not(:first-child)::before {
+        content: attr(data-label);
+        display: block;
+        color: var(--pencil);
+        font-size: var(--t-xs);
+    }
+}
+
 /* Heat cell: the bar is the average score, coloured by grade band. */
 .meter { display: flex; align-items: center; gap: 10px; min-width: 140px; }
 .meter-track { flex: 1; height: 8px; border-radius: 4px; background: var(--sheet-2); overflow: hidden; }

@@ -4,6 +4,7 @@ using LearningPortal.Core.Models;
 using LearningPortal.Web.Components;
 using LearningPortal.Web.Services;
 using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.AspNetCore.Components.Server.Circuits;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -73,6 +74,7 @@ builder.Services.AddIdentityCore<AppUser>(options =>
 builder.Services.Configure<DataProtectionTokenProviderOptions>(o => o.TokenLifespan = AccountMailService.ResetLifespan);
 
 builder.Services.AddSingleton<UserAdminService>();
+builder.Services.AddScoped<CircuitHandler, ActivityCircuitHandler>();
 builder.Services.AddSingleton<AccountMailService>();
 builder.Services.AddSingleton<AnalysisQueue>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<AnalysisQueue>());

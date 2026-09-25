@@ -4,6 +4,7 @@
 @inject UserManager<AppUser> UserManager
 @inject NavigationManager Nav
 @inject UserAdminService Users
+@inject UserActivityService Activity
 
 <PageTitle>Set up - @AppInfo.Name</PageTitle>
 
@@ -97,6 +98,7 @@
 
         await UserManager.AddToRoleAsync(user, Roles.Admin);
         await SignInManager.SignInAsync(user, isPersistent: true);
+        await Activity.RecordLoginAsync(user.Id);
         Nav.NavigateTo("/settings", forceLoad: true);
     }
 

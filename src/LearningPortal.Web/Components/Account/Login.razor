@@ -3,6 +3,7 @@
 @inject SignInManager<AppUser> SignInManager
 @inject UserManager<AppUser> UserManager
 @inject NavigationManager Nav
+@inject UserActivityService Activity
 
 <PageTitle>Sign in - @AppInfo.Name</PageTitle>
 
@@ -63,6 +64,7 @@
             : await SignInManager.PasswordSignInAsync(user, Input.Password, Input.RememberMe, lockoutOnFailure: true);
         if (result.Succeeded)
         {
+            await Activity.RecordLoginAsync(user!.Id);
             Nav.NavigateTo(SafeReturnUrl(ReturnUrl), forceLoad: true);
             return;
         }
