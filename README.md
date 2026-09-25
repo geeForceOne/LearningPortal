@@ -6,7 +6,7 @@ explains every answer so you learn from it.
 Upload your notes, slides or scripts into a topic, and Recall writes multiple-choice and written
 questions about them, grades your written answers, and tracks how you improve over time.
 
-![Sign in](docs/images/recall-signin.png)
+![Answering a code question](docs/images/recall-take-exam.jpg)
 
 ## Topics and material
 
@@ -19,12 +19,19 @@ A topic holds any amount of study material:
 - The token count is shown on each material and topic, so you can see what the AI will read
 - A topic can be in any language. Questions, answers, explanations and grading use that
   language, while the app itself stays in English
+- Mark a topic as a **programming topic**, and its exams mix code questions (what does this
+  print, find the bug, complete a method) with theory
+
+![Your topics](docs/images/recall-topics.jpg)
+
+![A topic with its exams and material](docs/images/recall-topic.jpg)
 
 ## Exams
 
 Create any number of exams per topic: pick a name, a question count, the type (multiple choice,
 written, or a mix) and the difficulty (easy, medium or hard). Optionally, give the AI
-instructions such as "focus on dates and names".
+instructions such as "focus on dates and names". Exams in a programming topic also set how many
+questions work with code (40% by default); the rest are theory.
 
 - **Multiple choice** questions say clearly whether there's one right answer or several
 - **Written** answers are short (a few sentences, not an essay). The AI scores them from 0 to
@@ -37,12 +44,24 @@ instructions such as "focus on dates and names".
 - Amend an exam later: edit its settings, remove or replace a question, edit a question by hand,
   or add your own
 
+![Creating an exam](docs/images/recall-new-exam.jpg)
+
+Code shows up as code, with syntax colouring, in questions, options, answers and explanations.
+After each question, or at the end, you see what was right, what you picked, and why:
+
+![Results of an attempt](docs/images/recall-results.jpg)
+
+![A revealed multiple-choice answer](docs/images/recall-review-choice.jpg)
+
+![A written answer graded as partially correct](docs/images/recall-review-written.jpg)
+
 ## Question bank
 
 Every generated question is kept in the topic's bank and can be reused by later exams, which
 costs nothing. Each exam chooses how much to reuse (20% by default), so practice stays mostly
-fresh. New questions are checked against the bank, and repeats are dropped. When a topic's bank
-gets close to what its material can support, Recall tells you.
+fresh. Reused questions match the exam's type, difficulty and code/theory mix. New questions are
+checked against the bank, and repeats are dropped. When a topic's bank gets close to what its
+material can support, Recall tells you.
 
 ## Statistics
 
@@ -50,6 +69,16 @@ gets close to what its material can support, Recall tells you.
 - An overview per topic: average score, attempt count, last practised
 - Weak questions: the ones you get wrong most often
 - A breakdown by question type and difficulty
+
+![Statistics: score over time and per topic](docs/images/recall-statistics.jpg)
+
+![Statistics: by type and difficulty, and weak questions](docs/images/recall-statistics-weak.jpg)
+
+## On a phone
+
+Recall is made for a computer, but works on tablets and phones too.
+
+<img src="docs/images/recall-phone.jpg" alt="A code question on a phone" width="320">
 
 ## AI and costs
 
@@ -75,6 +104,11 @@ shortcuts for Gmail and Brevo). With email set up:
 - **Forgot password?** on the sign-in page sends a reset link
 
 Without email, the admin gets the same links on the Users page to pass on by hand.
+
+After an update, everyone sees a short "What's new" banner linking to the release notes, until
+they close it.
+
+![Sign in](docs/images/recall-signin.png)
 
 ## With Docker
 
@@ -140,7 +174,7 @@ The repository's own `docker-compose.yml` does the same with `docker compose up 
 
 First update `CHANGELOG.md`. The app shows that file on its release notes page (linked from the
 version number), and the GitHub release uses the same text. A `## Current version` heading is shown
-as the running version and the day its image was built, for example `1.3.0 - 2026-09-25`.
+as the running version and the day its image was built, for example `1.0.0 - 2026-09-25`.
 
 Pushing a version tag builds the image on GitHub and publishes it as
 `ghcr.io/geeforceone/recall` (`latest`, plus the version), with that version number shown in the
