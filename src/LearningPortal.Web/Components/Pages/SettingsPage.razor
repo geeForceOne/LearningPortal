@@ -22,6 +22,25 @@
 else
 {
     <div class="form form-narrow">
+        <div class="notice notice-warn" role="note">
+            <strong>@AppInfo.KeySafetyTitle</strong>
+            <p class="key-safety">@AppInfo.KeySafety</p>
+            @if (_provider == AiProvider.Claude)
+            {
+                <p class="key-safety">
+                    For Claude: set the monthly spend limit under Settings &rsaquo; Limits in the Claude Console, and choose an
+                    expiration when you <a href="https://platform.claude.com/settings/keys" target="_blank" rel="noopener noreferrer">create the key</a>.
+                </p>
+            }
+            else
+            {
+                <p class="key-safety">
+                    For OpenAI: set a monthly spend limit, enforced as a hard limit, under Limits in your organization or project
+                    settings, and choose an expiration when you <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer">create the key</a>.
+                </p>
+            }
+        </div>
+
         <div class="field">
             <span class="field-label" id="provider-label">AI provider</span>
             <div class="segmented" role="radiogroup" aria-labelledby="provider-label">

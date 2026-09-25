@@ -738,6 +738,7 @@ a.row-title:hover { text-decoration: underline; text-decoration-color: var(--rul
 .notice-warn { border-left-color: var(--partial); background: var(--partial-soft); }
 .notice-error { border-left-color: var(--wrong); background: var(--wrong-soft); }
 .notice-good { border-left-color: var(--right); background: var(--right-soft); }
+.key-safety { margin: 6px 0 0; }
 
 /* A link to pass on by hand: read-only field plus a copy button, stacked on narrow screens. */
 .link-copy { display: flex; gap: 8px; margin: 10px 0 6px; }

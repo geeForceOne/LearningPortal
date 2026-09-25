@@ -16,6 +16,15 @@ public static class AppInfo
     // purpose (an inside joke): don't correct it.
     public const string Dedication = "Deticated to Bellissima. Obviously.";
 
+    // The API key warning, shown in Settings and in the invite email so both say the same.
+    public const string KeySafetyTitle = "Protect your API key";
+    public const string KeySafety =
+        Name + " hasn't been tested against deliberate attacks, so treat an API key you enter here as " +
+        "something that could leak. Before adding one, set a monthly spending limit with your AI provider, " +
+        "so a leaked key can't cost more than you're prepared to lose, and ideally give the key an expiry " +
+        "date. If you'd rather not take that risk, run your own copy of " + Name + " that isn't reachable " +
+        "from the public internet (home network or VPN only).";
+
     // The running version, e.g. "1.2.0", stamped in at build time from the release tag; "dev" for
     // local builds. Read from the app (entry) assembly, where the host project sets it.
     public static string Version { get; } = ReadVersion();

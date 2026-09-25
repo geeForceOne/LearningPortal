@@ -13,7 +13,9 @@ public static class AccountEmails
         $"You sign in with your email address, {login}. Open the link below to choose your password and sign in.",
         "Choose your password",
         link,
-        $"The link works once and expires in {Describe(validFor)}. If it has expired, ask your administrator for a new one.");
+        $"The link works once and expires in {Describe(validFor)}. If it has expired, ask your administrator for a new one.",
+        warning: (AppInfo.KeySafetyTitle,
+            $"{AppInfo.Name} uses an AI provider (Claude or ChatGPT) with your own API key, billed to you. {AppInfo.KeySafety}"));
 
     public static EmailMessage PasswordReset(string login, string link, TimeSpan validFor) => Build(
         $"Reset your {AppInfo.Name} password",
@@ -30,9 +32,13 @@ public static class AccountEmails
             $"<p style=\"margin:0 0 16px\">Hello {Enc(shownName)},</p>" +
             "<p style=\"margin:0\">Invites and password reset links will arrive like this one.</p>"));
 
-    private static EmailMessage Build(string subject, string intro, string action, string button, string link, string footer)
+    // warning: an optional highlighted note, shown after the link and before the footer.
+    private static EmailMessage Build(string subject, string intro, string action, string button, string link, string footer,
+        (string Title, string Text)? warning = null)
     {
-        var text = $"{intro}\n\n{action}\n\n{link}\n\n{footer}\n";
+        var text = $"{intro}\n\n{action}\n\n{link}\n\n" +
+                   (warning is { } w ? $"{w.Title}: {w.Text}\n\n" : "") +
+                   $"{footer}\n";
         var body =
             $"<p style=\"margin:0 0 16px\">{Enc(intro)}</p>" +
             $"<p style=\"margin:0 0 24px\">{Enc(action)}</p>" +
@@ -40,6 +46,10 @@ public static class AccountEmails
             $"text-decoration:none;padding:12px 20px;border-radius:6px;font-weight:600\">{Enc(button)}</a></p>" +
             $"<p style=\"margin:0 0 16px;font-size:13px;color:#666666\">If the button doesn't work, copy this address into your browser:<br>" +
             $"<span style=\"word-break:break-all\">{Enc(link)}</span></p>" +
+            (warning is { } warn
+                ? "<div style=\"margin:0 0 16px;padding:12px 14px;border-left:3px solid #b7791f;background:#fdf6e7;border-radius:6px;font-size:14px\">" +
+                  $"<strong>{Enc(warn.Title)}</strong><br>{Enc(warn.Text)}</div>"
+                : "") +
             $"<p style=\"margin:0;font-size:13px;color:#666666\">{Enc(footer)}</p>";
         return new EmailMessage(subject, text, Html(subject, body));
     }
