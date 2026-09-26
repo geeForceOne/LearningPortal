@@ -60,9 +60,9 @@ public sealed record AiModelInfo(string Id, string Name, string Description, dec
 
 public static class AiModels
 {
-    // Most capable general-purpose defaults for each provider; users can change them in Settings.
-    public const string DefaultClaude = "claude-opus-5";
-    public const string DefaultOpenAi = "gpt-6-astra";
+    // Default model per provider; users can change them in Settings.
+    public const string DefaultClaude = "claude-opus-5-5";
+    public const string DefaultOpenAi = "gpt-6-sol";
 
     // Neither provider's API reports prices, so these are copied from their pricing pages.
     // Update the list and this date together.
