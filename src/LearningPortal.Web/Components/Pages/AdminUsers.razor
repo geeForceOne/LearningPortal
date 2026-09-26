@@ -244,6 +244,11 @@
 
     private async Task ToggleAdminAsync(UserRow u)
     {
+        // Granting admin is the risky direction; removing it is easy to undo, so it doesn't ask.
+        if (!u.IsAdmin && !await Ui.Confirm.AskAsync($"Make {u.ShownName} an admin?",
+                "They'll be able to create, edit and delete every account, including yours, and change the email settings.",
+                "Make admin", danger: true))
+            return;
         await Users.SetAdminAsync(u.Id, !u.IsAdmin);
         _users = await Users.ListAsync();
     }

@@ -8,9 +8,6 @@
 <div class="page-head">
     <div>
         <h1>Admin statistics</h1>
-        <p class="page-sub">
-            How each account uses @AppInfo.Name. Only counts and dates: what people study stays private.
-        </p>
     </div>
 </div>
 
@@ -23,8 +20,7 @@ else
     <section class="section">
         <div class="section-head"><h2>Users<span class="count">@_usage.Count</span></h2></div>
         <p class="muted small">
-            Last login and last active were first recorded in this version, so older accounts show "Not recorded yet"
-            until they next use the app. Last active updates at most every @((int)UserActivityService.ActiveResolution.TotalMinutes) minutes.
+            Last active updates at most every @((int)UserActivityService.ActiveResolution.TotalMinutes) minutes.
         </p>
         <div class="table-wrap">
             <table class="table usage-table">
