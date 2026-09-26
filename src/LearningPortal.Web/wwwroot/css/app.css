@@ -122,7 +122,9 @@
     scrollbar-color: var(--rule-strong) transparent;
 }
 
-html { -webkit-text-size-adjust: 100%; }
+/* Always reserve the scrollbar's space, so the centred layout doesn't jump sideways when a page
+   grows past the window height after loading. Overlay scrollbars (phones) are unaffected. */
+html { -webkit-text-size-adjust: 100%; scrollbar-gutter: stable; }
 
 body {
     margin: 0;
