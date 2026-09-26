@@ -21,6 +21,9 @@ public sealed class AppUser : IdentityUser
     // they first signed in after the banner existed). Null until then.
     public string? SeenVersion { get; set; }
 
+    // Admins only: email me when an invited person sets their password. Each admin decides for themselves.
+    public bool NotifyInviteAccepted { get; set; } = true;
+
     // The name shown in the UI: the display name, else the part of the email before the "@",
     // else the username (older accounts without an email).
     public string ShownName => ShownNameFor(DisplayName, Email, UserName);

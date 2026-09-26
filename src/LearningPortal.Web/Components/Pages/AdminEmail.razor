@@ -113,6 +113,21 @@ else
             <p class="muted small">@BusyMessage <button type="button" class="btn btn-ghost btn-sm" @onclick="CancelBusy">Cancel</button></p>
         }
     </div>
+
+    <section class="section">
+        <div class="section-head"><h2>Notifications</h2></div>
+        <div class="form form-narrow">
+            <label class="check">
+                <input type="checkbox" checked="@_notifyInviteAccepted" @onchange="e => SetNotifyAsync((bool)e.Value!)" />
+                Notify me when invited users join
+            </label>
+            <p class="muted small" style="margin-top:-8px">
+                @(_view.IsConfigured
+                    ? "You get an email when someone you or another admin invited sets their password. Only for you; other admins choose for themselves."
+                    : "Needs email to be on. Until then, nothing is sent.")
+            </p>
+        </div>
+    </section>
 }
 
 @code {
@@ -131,8 +146,21 @@ else
     private string? _providerHint;
     private bool _saving;
     private List<string> _errors = [];
+    private bool _notifyInviteAccepted;
 
-    protected override async Task OnInitializedAsync() => await LoadAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        _notifyInviteAccepted = await Mail.GetNotifyInviteAcceptedAsync(await UserIdAsync());
+        await LoadAsync();
+    }
+
+    // Saved straight away, like the other on/off preferences.
+    private async Task SetNotifyAsync(bool notify)
+    {
+        _notifyInviteAccepted = notify;
+        await Mail.SetNotifyInviteAcceptedAsync(await UserIdAsync(), notify);
+        Ui.Toast.Success(notify ? "You'll get an email when invited users join." : "No more emails when invited users join.");
+    }
 
     private async Task LoadAsync()
     {

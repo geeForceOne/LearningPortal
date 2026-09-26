@@ -25,6 +25,15 @@ public static class AccountEmails
         link,
         $"The link works once and expires in {Describe(validFor)}. If you didn't ask for this, ignore this email; your password stays the same.");
 
+    // To an admin, after someone they invited has set their password.
+    public static EmailMessage InviteAccepted(string newUserName, string newUserLogin, string usersLink) => Build(
+        $"{newUserName} joined {AppInfo.Name}",
+        $"{newUserName} ({newUserLogin}) accepted the invite and set up their {AppInfo.Name} account.",
+        "You can see and manage the account on the Users page.",
+        "Open Users",
+        usersLink,
+        "You get this email because \"Notify me when invited users join\" is on under Admin > Email settings.");
+
     public static EmailMessage Test(string shownName) => new(
         $"{AppInfo.Name} test email",
         $"Hello {shownName},\n\nEmail from {AppInfo.Name} works. Invites and password reset links will arrive like this one.\n",

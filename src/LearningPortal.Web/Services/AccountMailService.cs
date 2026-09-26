@@ -136,7 +136,7 @@ public sealed class AccountMailService(
     }
 
     public async Task<(AppUser? User, IReadOnlyList<string> Errors)> SetPasswordAsync(
-        string? userId, string? token, PasswordLinkKind kind, string password)
+        string? userId, string? token, PasswordLinkKind kind, string password, string requestBaseUrl)
     {
         await using var scope = scopes.CreateAsyncScope();
         var users = scope.ServiceProvider.GetRequiredService<UserManager<AppUser>>();
@@ -155,7 +155,59 @@ public sealed class AccountMailService(
         await users.ResetAccessFailedCountAsync(user);
         await users.SetLockoutEndDateAsync(user, null);
         _lastResetSent.TryRemove(user.Id, out _);
+
+        if (kind == PasswordLinkKind.Invite)
+            await NotifyInviteAcceptedAsync(users, user, requestBaseUrl);
         return (user, []);
+    }
+
+    public async Task<bool> GetNotifyInviteAcceptedAsync(string userId)
+    {
+        await using var scope = scopes.CreateAsyncScope();
+        var users = scope.ServiceProvider.GetRequiredService<UserManager<AppUser>>();
+        return await users.Users.Where(u => u.Id == userId).Select(u => u.NotifyInviteAccepted).FirstOrDefaultAsync();
+    }
+
+    // Written with ExecuteUpdate, so it never touches Identity's concurrency stamp.
+    public async Task SetNotifyInviteAcceptedAsync(string userId, bool notify)
+    {
+        await using var scope = scopes.CreateAsyncScope();
+        var users = scope.ServiceProvider.GetRequiredService<UserManager<AppUser>>();
+        await users.Users.Where(u => u.Id == userId)
+            .ExecuteUpdateAsync(s => s.SetProperty(u => u.NotifyInviteAccepted, notify));
+    }
+
+    // Tells every admin who wants it that an invited person has joined. Sent in the background,
+    // like the reset email, so a slow or broken mail server never holds up their first sign-in.
+    private async Task NotifyInviteAcceptedAsync(UserManager<AppUser> users, AppUser joined, string requestBaseUrl)
+    {
+        if (!await emailSettings.IsConfiguredAsync())
+            return;
+
+        var recipients = (await users.GetUsersInRoleAsync(Roles.Admin))
+            .Where(a => a.NotifyInviteAccepted && !string.IsNullOrEmpty(a.Email) && a.Id != joined.Id)
+            .Select(a => (Email: a.Email!, Name: a.ShownName))
+            .ToList();
+        if (recipients.Count == 0)
+            return;
+
+        var message = AccountEmails.InviteAccepted(joined.ShownName, joined.Email ?? joined.UserName ?? "",
+            $"{await BaseUrlAsync(requestBaseUrl)}/admin/users");
+        var joinedId = joined.Id;
+        _ = Task.Run(async () =>
+        {
+            foreach (var (email, name) in recipients)
+            {
+                try
+                {
+                    await sender.SendAsync(email, name, message, null, CancellationToken.None);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex, "Telling an admin that user {UserId} joined failed", joinedId);
+                }
+            }
+        });
     }
 
     // The admin-set public address when there is one; otherwise the address of the current request,
