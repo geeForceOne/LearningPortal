@@ -58,6 +58,8 @@ public sealed class UserSettings
     public string? AnalysisModel { get; set; }
     public AiProvider GenerationProvider { get; set; } = AiProvider.Claude;
     public string? GenerationModel { get; set; }
+
+    public Theme Theme { get; set; } = Theme.Dark;
 }
 
 // App-wide outgoing mail settings, edited by the admin. A single row (Id 1); no row or an empty

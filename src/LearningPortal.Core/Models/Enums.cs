@@ -6,6 +6,14 @@ public enum AiProvider
     OpenAi,
 }
 
+// The colour theme. System follows the device's light/dark setting.
+public enum Theme
+{
+    Dark,
+    Light,
+    System,
+}
+
 public enum MaterialKind
 {
     Pdf,

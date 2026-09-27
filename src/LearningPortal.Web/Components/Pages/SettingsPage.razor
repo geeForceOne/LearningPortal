@@ -1,6 +1,7 @@
 @page "/settings"
 @inherits AppPage
 @inject SettingsService Settings
+@inject IJSRuntime JS
 @using LearningPortal.Core.Security
 
 <PageTitle>Settings - @AppInfo.Name</PageTitle>
@@ -9,7 +10,7 @@
     <div>
         <h1>Settings</h1>
         <p class="page-sub">
-            Your AI keys, and which models outline your material, write your exams and grade them. You use
+            How Recall looks, your AI keys, and which models outline your material, write your exams and grade them. You use
             your own API keys: requests are billed to your account with each provider.
         </p>
     </div>
@@ -22,6 +23,22 @@
 else
 {
     <div class="form-narrow">
+        <section class="panel form">
+            <h2>Appearance</h2>
+            <div class="field">
+                <span class="field-label" id="theme-label">Theme</span>
+                <div class="segmented" role="radiogroup" aria-labelledby="theme-label">
+                    @foreach (var theme in Enum.GetValues<Theme>())
+                    {
+                        <label><input type="radio" name="theme" checked="@(_theme == theme)" @onchange="() => SetThemeAsync(theme)" /> @theme</label>
+                    }
+                </div>
+                <span class="field-hint">
+                    @(_theme == Theme.System ? "Follows your device's light or dark setting." : "Saved as soon as you pick it.")
+                </span>
+            </div>
+        </section>
+
         <section class="panel form">
             <h2>API keys</h2>
             <div class="notice notice-warn" role="note">
@@ -104,8 +121,20 @@ else
     private bool _removeClaude;
     private bool _removeOpenAi;
     private bool _saving;
+    private Theme _theme;
 
-    protected override async Task OnInitializedAsync() => await LoadAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        _theme = await Settings.GetThemeAsync(await UserIdAsync(), PageToken);
+        await LoadAsync();
+    }
+
+    private async Task SetThemeAsync(Theme theme)
+    {
+        _theme = theme;
+        await JS.InvokeVoidAsync("lpApplyTheme", theme.ToString().ToLowerInvariant());
+        await Settings.SetThemeAsync(await UserIdAsync(), theme, PageToken);
+    }
 
     private async Task LoadAsync()
     {

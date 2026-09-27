@@ -79,6 +79,28 @@ public sealed class SettingsService(IDbContextFactory<AppDbContext> dbFactory, S
         await db.SaveChangesAsync(ct);
     }
 
+    // Read on every full page load to render the theme, so it skips the key decryption in GetAsync.
+    public async Task<Theme> GetThemeAsync(string userId, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        return await db.UserSettings.AsNoTracking().Where(x => x.UserId == userId)
+            .Select(x => (Theme?)x.Theme).FirstOrDefaultAsync(ct) ?? Theme.Dark;
+    }
+
+    // Saved on its own, as soon as it's picked, separately from the AI settings.
+    public async Task SetThemeAsync(string userId, Theme theme, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var s = await db.UserSettings.FirstOrDefaultAsync(x => x.UserId == userId, ct);
+        if (s is null)
+        {
+            s = new UserSettings { UserId = userId };
+            db.UserSettings.Add(s);
+        }
+        s.Theme = theme;
+        await db.SaveChangesAsync(ct);
+    }
+
     // The decrypted connection for server-side AI calls. In advanced mode, choice (picked on the
     // upload or generation screen) overrides the task's default; in simple mode it's ignored.
     // Throws a user-facing error when the provider has no usable key.

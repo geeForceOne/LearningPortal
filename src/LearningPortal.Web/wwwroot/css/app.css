@@ -9,10 +9,13 @@
    Type: Atkinson Hyperlegible Next for the interface (built for legibility),
    Literata for anything you read to learn - questions, explanations, material.
 
-   Dark first; the light theme is cool white paper via prefers-color-scheme.
+   Dark first; the light theme is cool white paper. The user picks one in Settings, and <html
+   data-theme> carries it ("system" is resolved to light or dark in the page head).
 --------------------------------------------------------------------------- */
 
 :root {
+    color-scheme: dark;
+
     --paper: #141c22;
     --sheet: #1b252d;
     --sheet-2: #22303a;
@@ -75,44 +78,44 @@
     --tabbar-h: 0px;
 }
 
-@media (prefers-color-scheme: light) {
-    :root {
-        --paper: #f4f6f5;
-        --sheet: #ffffff;
-        --sheet-2: #eaeeec;
-        --rule: #d8dfdc;
-        --rule-strong: #b9c4c0;
-        --ink: #172127;
-        --ink-soft: #33424a;
-        --pencil: #5a6970;
+:root[data-theme="light"] {
+    color-scheme: light;
 
-        --marker: #ffe45c;
-        --marker-ink: #172127;
-        --marker-soft: rgba(255, 216, 0, 0.18);
+    --paper: #f4f6f5;
+    --sheet: #ffffff;
+    --sheet-2: #eaeeec;
+    --rule: #d8dfdc;
+    --rule-strong: #b9c4c0;
+    --ink: #172127;
+    --ink-soft: #33424a;
+    --pencil: #5a6970;
 
-        --brand: #6a58d6;
-        /* Deeper than the light-theme highlighter, which washes out on white. */
-        --brand-lit: #e0a800;
+    --marker: #ffe45c;
+    --marker-ink: #172127;
+    --marker-soft: rgba(255, 216, 0, 0.18);
 
-        --right: #1d7f47;
-        --right-soft: rgba(29, 127, 71, 0.1);
-        --partial: #a65f00;
-        --partial-soft: rgba(166, 95, 0, 0.1);
-        --wrong: #bf3a2e;
-        --wrong-soft: rgba(191, 58, 46, 0.09);
+    --brand: #6a58d6;
+    /* Deeper than the light-theme highlighter, which washes out on white. */
+    --brand-lit: #e0a800;
 
-        --syn-keyword: #5a45c9;
-        --syn-type: #245a9e;
-        --syn-string: #17677f;
-        --syn-number: #93306f;
-        --syn-comment: #5a6970;
+    --right: #1d7f47;
+    --right-soft: rgba(29, 127, 71, 0.1);
+    --partial: #a65f00;
+    --partial-soft: rgba(166, 95, 0, 0.1);
+    --wrong: #bf3a2e;
+    --wrong-soft: rgba(191, 58, 46, 0.09);
 
-        --btn-ink: #172127;
-        --btn-ink-text: #ffffff;
-        --focus: #1f6f95;
-        --overlay: rgba(23, 33, 39, 0.4);
-        --lift: 0 18px 50px rgba(23, 33, 39, 0.18);
-    }
+    --syn-keyword: #5a45c9;
+    --syn-type: #245a9e;
+    --syn-string: #17677f;
+    --syn-number: #93306f;
+    --syn-comment: #5a6970;
+
+    --btn-ink: #172127;
+    --btn-ink-text: #ffffff;
+    --focus: #1f6f95;
+    --overlay: rgba(23, 33, 39, 0.4);
+    --lift: 0 18px 50px rgba(23, 33, 39, 0.18);
 }
 
 *, *::before, *::after { box-sizing: border-box; }

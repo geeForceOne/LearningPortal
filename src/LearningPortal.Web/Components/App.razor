@@ -1,10 +1,24 @@
+@using System.Security.Claims
+
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="@ThemeAttr">
 
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="color-scheme" content="dark light" />
+    @* Before any paint: "system" becomes light or dark from the device, and follows it when it changes.
+       Settings calls lpApplyTheme to switch without a reload. *@
+    <script>
+        (function () {
+            var media = window.matchMedia("(prefers-color-scheme: light)"), pref;
+            window.lpApplyTheme = function (p) {
+                pref = p;
+                document.documentElement.dataset.theme = p === "system" ? (media.matches ? "light" : "dark") : p;
+            };
+            media.addEventListener("change", function () { if (pref === "system") window.lpApplyTheme(pref); });
+            window.lpApplyTheme(document.documentElement.dataset.theme);
+        })();
+    </script>
     <base href="/" />
     <ResourcePreloader />
     <link rel="preload" href="fonts/atkinsonhyperlegiblenext-2.woff2" as="font" type="font/woff2" crossorigin />
@@ -29,6 +43,20 @@
 @code {
     [CascadingParameter]
     private HttpContext HttpContext { get; set; } = default!;
+
+    [Inject]
+    private SettingsService Settings { get; set; } = default!;
+
+    // Signed-out pages (login, first-run setup) use the default.
+    private Theme _theme = Theme.Dark;
+
+    private string ThemeAttr => _theme.ToString().ToLowerInvariant();
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (HttpContext.User.FindFirstValue(ClaimTypes.NameIdentifier) is { } userId)
+            _theme = await Settings.GetThemeAsync(userId, HttpContext.RequestAborted);
+    }
 
     // Account pages (login, first-run setup, password change) render as plain server-side forms
     // because they set the auth cookie; everything else is interactive, without prerendering.
