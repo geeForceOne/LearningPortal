@@ -1,5 +1,11 @@
 # Release notes
 
+## 1.3.0 - 2026-09-27
+
+### New
+
+- Choose a Dark, Light or System theme in Settings. Dark is the default; System follows your device's light or dark setting.
+
 ## 1.2.0 - 2026-09-27
 
 ### New
