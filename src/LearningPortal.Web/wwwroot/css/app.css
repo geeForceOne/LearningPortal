@@ -648,6 +648,41 @@ a.row-title:hover { text-decoration: underline; text-decoration-color: var(--rul
 
 .input::placeholder, .textarea::placeholder { color: var(--pencil); opacity: 0.8; }
 
+/* An input with a small button inside its right edge (e.g. show/hide a typed key). */
+.input-with-action { position: relative; }
+.input-with-action .input { padding-right: 44px; }
+.input-with-action .btn {
+    position: absolute;
+    top: 50%;
+    right: 6px;
+    transform: translateY(-50%);
+}
+
+/* A model picker on one line with its label, for the upload and generation screens. */
+.model-inline {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 10px;
+}
+.model-inline .select { flex: 1 1 220px; width: auto; min-height: 36px; padding: 6px 10px; }
+.model-inline .field-error, .model-inline .field-hint { flex-basis: 100%; }
+
+/* Collapsible list of the topic's documents on the exam settings form. */
+.doc-picker summary { display: flex; align-items: baseline; gap: 8px; cursor: pointer; }
+.doc-picker summary::marker { content: ""; }
+.doc-picker summary::before {
+    content: "\25B8";
+    color: var(--pencil);
+    transition: transform 0.15s;
+}
+.doc-picker[open] summary::before { transform: rotate(90deg); }
+.doc-picker summary::-webkit-details-marker { display: none; }
+.doc-list { display: grid; gap: 8px; margin: 10px 0 6px 18px; }
+.doc-list .check { align-items: flex-start; }
+.doc-list .check input { flex: none; margin-top: 2px; }
+.doc-list .check .muted { margin-left: auto; padding-left: 12px; white-space: nowrap; }
+
 .field-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 18px; }
 
 /* Segmented choice: a row of radio buttons that look like one control. */

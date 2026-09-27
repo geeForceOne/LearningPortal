@@ -1,4 +1,5 @@
 using System.Threading.Channels;
+using LearningPortal.Core.Ai;
 using LearningPortal.Core.Services;
 
 namespace LearningPortal.Web.Services;
@@ -7,20 +8,21 @@ namespace LearningPortal.Web.Services;
 // leaves the page right after uploading. Pages subscribe to MaterialAnalyzed to refresh.
 public sealed class AnalysisQueue(MaterialService materials, ILogger<AnalysisQueue> logger) : BackgroundService
 {
-    private readonly Channel<(string UserId, int MaterialId)> _queue = Channel.CreateUnbounded<(string, int)>();
+    private readonly Channel<(string UserId, int MaterialId, AiChoice? Choice)> _queue = Channel.CreateUnbounded<(string, int, AiChoice?)>();
     private readonly HashSet<int> _pending = [];
     private readonly Lock _lock = new();
 
     public event Action<string, int>? MaterialAnalyzed;
 
-    public void Enqueue(string userId, int materialId)
+    // choice is the model picked on the upload screen (advanced mode); null uses the uploads default.
+    public void Enqueue(string userId, int materialId, AiChoice? choice = null)
     {
         lock (_lock)
         {
             if (!_pending.Add(materialId))
                 return;
         }
-        _queue.Writer.TryWrite((userId, materialId));
+        _queue.Writer.TryWrite((userId, materialId, choice));
     }
 
     public bool IsPending(int materialId)
@@ -31,11 +33,11 @@ public sealed class AnalysisQueue(MaterialService materials, ILogger<AnalysisQue
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        await foreach (var (userId, materialId) in _queue.Reader.ReadAllAsync(stoppingToken))
+        await foreach (var (userId, materialId, choice) in _queue.Reader.ReadAllAsync(stoppingToken))
         {
             try
             {
-                await materials.AnalyzeAsync(userId, materialId, null, stoppingToken);
+                await materials.AnalyzeAsync(userId, materialId, choice, null, stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {

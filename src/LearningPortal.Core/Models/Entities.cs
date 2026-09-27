@@ -42,14 +42,22 @@ public sealed class AppUser : IdentityUser
 }
 
 // One row per user. API keys are stored as Data Protection ciphertext, never in the clear.
+// A null model means that provider's default model.
 public sealed class UserSettings
 {
     public string UserId { get; set; } = "";
-    public AiProvider Provider { get; set; } = AiProvider.Claude;
     public string? ClaudeApiKeyProtected { get; set; }
-    public string? ClaudeModel { get; set; }
     public string? OpenAiApiKeyProtected { get; set; }
-    public string? OpenAiModel { get; set; }
+
+    // Advanced mode: separate defaults for outlining uploads and for questions and grading, and
+    // a model picker on the upload and generation screens. Simple mode: Provider/Model for everything.
+    public bool AdvancedModels { get; set; }
+    public AiProvider Provider { get; set; } = AiProvider.Claude;
+    public string? Model { get; set; }
+    public AiProvider AnalysisProvider { get; set; } = AiProvider.Claude;
+    public string? AnalysisModel { get; set; }
+    public AiProvider GenerationProvider { get; set; } = AiProvider.Claude;
+    public string? GenerationModel { get; set; }
 }
 
 // App-wide outgoing mail settings, edited by the admin. A single row (Id 1); no row or an empty
@@ -102,6 +110,8 @@ public sealed class Material
     public int TokenEstimate { get; set; }
     // The AI's short outline of the material (sections and key concepts), as plain text.
     public string? Outline { get; set; }
+    // The model ID that wrote the outline.
+    public string? OutlineModel { get; set; }
     public AnalysisStatus AnalysisStatus { get; set; } = AnalysisStatus.Pending;
     public string? AnalysisError { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
@@ -144,6 +154,8 @@ public sealed class Question
     // True when the question works with code ("what does this print"); false for theory. The AI
     // tags its own questions; the user's own questions count as code when they hold a code block.
     public bool IsCode { get; set; }
+    // The model ID that wrote the question; null for the user's own and for older questions.
+    public string? GeneratedByModel { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public Topic? Topic { get; set; }
@@ -175,6 +187,9 @@ public sealed class Exam
     public string? Instructions { get; set; }
     // Programming topics only: the share of questions that work with code (0-100); the rest are theory.
     public int CodePercent { get; set; } = Services.ExamService.DefaultCodePercent;
+    // Materials of the topic this exam leaves out: the AI doesn't write from them and bank questions
+    // from them aren't reused. Null or empty means every material, including ones added later.
+    public List<int>? ExcludedMaterialIds { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 

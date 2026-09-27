@@ -8,10 +8,11 @@ namespace LearningPortal.Core.Services;
 // ReusePercent: how much of the exam may come from the question bank; 0 means all new questions.
 // Instructions: optional guidance for the AI when it writes this exam's questions.
 // CodePercent: the share of code questions; only used when the topic is a programming topic.
+// ExcludedMaterialIds: the topic's materials this exam leaves out; empty means all of them.
 public sealed record ExamSettings(
     string Name, int QuestionCount, ExamType Type, Difficulty Difficulty,
     int ReusePercent = ExamService.DefaultReusePercent, string? Instructions = null,
-    int CodePercent = ExamService.DefaultCodePercent);
+    int CodePercent = ExamService.DefaultCodePercent, IReadOnlyCollection<int>? ExcludedMaterialIds = null);
 
 // How many questions of each kind to write or take: by type (multiple choice / written) and,
 // independently, how many of them work with code. Theory is the rest.
@@ -40,9 +41,12 @@ public sealed class ExamService(
     public const int MaxQuestions = 100;
     public const int MaxInstructionsLength = 500;
 
-    // A new exam takes at most this share from the bank and has the AI write the rest, so
-    // practice stays mostly fresh while the bank still saves some cost.
-    public const int DefaultReusePercent = 20;
+    // A new exam doesn't reuse bank questions unless the user turns it on; the AI writes them all.
+    public const int DefaultReusePercent = 0;
+
+    // Where the reuse slider starts when the user turns reuse on: mostly fresh practice, while
+    // the bank still saves some cost.
+    public const int SuggestedReusePercent = 20;
 
     // Programming topics: a new exam asks for this share of code questions and theory for the rest.
     public const int DefaultCodePercent = 40;
@@ -67,6 +71,7 @@ public sealed class ExamService(
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         if (!await db.Topics.AnyAsync(t => t.Id == topicId && t.UserId == userId, ct))
             throw new NotFoundException();
+        var excluded = await CheckExcludedAsync(db, userId, topicId, settings.ExcludedMaterialIds, ct);
 
         var exam = new Exam
         {
@@ -79,6 +84,7 @@ public sealed class ExamService(
             ReusePercent = settings.ReusePercent,
             Instructions = NullIfBlank(settings.Instructions),
             CodePercent = settings.CodePercent,
+            ExcludedMaterialIds = excluded,
         };
         db.Exams.Add(exam);
         await db.SaveChangesAsync(ct);
@@ -95,13 +101,15 @@ public sealed class ExamService(
     }
 
     // Tops the exam up to its question count: bank questions first (matching type, difficulty and
-    // code/theory, least-used first), then AI generation for whatever is still missing.
-    public async Task<FillResult> FillAsync(string userId, int examId, IProgress<string>? progress, CancellationToken ct)
+    // code/theory, least-used first), then AI generation for whatever is still missing. choice is
+    // the model picked on the screen (advanced mode); null uses the questions default.
+    public async Task<FillResult> FillAsync(string userId, int examId, AiChoice? choice, IProgress<string>? progress, CancellationToken ct)
     {
         int fromBank, topicId;
         QuestionMix need;
         Difficulty difficulty;
         string? instructions;
+        List<int> excluded;
 
         await using (var db = await dbFactory.CreateDbContextAsync(ct))
         {
@@ -109,6 +117,7 @@ public sealed class ExamService(
             topicId = exam.TopicId;
             difficulty = exam.Difficulty;
             instructions = exam.Instructions;
+            excluded = exam.ExcludedMaterialIds ?? [];
             need = Missing(exam);
             var programming = exam.Topic!.IsProgramming;
 
@@ -116,6 +125,7 @@ public sealed class ExamService(
             var inExam = exam.Questions.Select(eq => eq.QuestionId).ToHashSet();
             var bank = await db.Questions
                 .Where(q => q.TopicId == topicId && q.UserId == userId && q.Difficulty == difficulty && (programming || !q.IsCode))
+                .Where(q => q.SourceMaterialId == null || !excluded.Contains(q.SourceMaterialId.Value))
                 .Select(q => new { q.Id, q.Type, q.IsCode, Uses = db.ExamQuestions.Count(eq => eq.QuestionId == q.Id) })
                 .ToListAsync(ct);
 
@@ -150,7 +160,7 @@ public sealed class ExamService(
         if (need.Total == 0)
             return new FillResult(fromBank, 0, 0);
 
-        var generated = await generator.GenerateAsync(userId, topicId, need, difficulty, instructions, progress, ct);
+        var generated = await generator.GenerateAsync(userId, topicId, need, difficulty, instructions, excluded, choice, progress, ct);
 
         await using (var db = await dbFactory.CreateDbContextAsync(CancellationToken.None))
         {
@@ -167,12 +177,14 @@ public sealed class ExamService(
     // from the exam (they stay in the bank), extras beyond the new count are trimmed; call
     // FillAsync afterwards to top it up. The code/theory share is only enforced on existing
     // questions when it was changed, so saving a new name doesn't swap (and pay for) questions.
+    // Questions from materials the exam now leaves out are dropped too.
     public async Task UpdateSettingsAsync(string userId, int examId, ExamSettings settings, CancellationToken ct = default)
     {
         Validate(settings);
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var exam = await LoadForEditAsync(db, userId, examId, ct);
         var trimKind = exam.Topic!.IsProgramming && exam.CodePercent != settings.CodePercent;
+        var excluded = await CheckExcludedAsync(db, userId, exam.TopicId, settings.ExcludedMaterialIds, ct);
 
         exam.Name = settings.Name.Trim();
         exam.QuestionCount = settings.QuestionCount;
@@ -181,6 +193,7 @@ public sealed class ExamService(
         exam.ReusePercent = settings.ReusePercent;
         exam.Instructions = NullIfBlank(settings.Instructions);
         exam.CodePercent = settings.CodePercent;
+        exam.ExcludedMaterialIds = excluded;
         exam.UpdatedAt = DateTime.UtcNow;
 
         var target = Targets(exam);
@@ -190,6 +203,7 @@ public sealed class ExamService(
             var q = eq.Question!;
             var isMc = q.Type == QuestionType.MultipleChoice;
             var keep = q.Difficulty == exam.Difficulty
+                       && (q.SourceMaterialId is not { } source || excluded?.Contains(source) != true)
                        && (isMc ? keptMc < target.MultipleChoice : keptWritten < target.Written)
                        && (!trimKind || (q.IsCode ? keptCode < target.Code : keptTheory < target.Theory));
             if (!keep)
@@ -205,11 +219,12 @@ public sealed class ExamService(
     }
 
     // Swaps every question for newly generated ones. The old questions stay in the bank.
-    public async Task<FillResult> RegenerateAllAsync(string userId, int examId, IProgress<string>? progress, CancellationToken ct)
+    public async Task<FillResult> RegenerateAllAsync(string userId, int examId, AiChoice? choice, IProgress<string>? progress, CancellationToken ct)
     {
         int topicId;
         Difficulty difficulty;
         string? instructions;
+        List<int> excluded;
         QuestionMix mix;
         await using (var db = await dbFactory.CreateDbContextAsync(ct))
         {
@@ -217,10 +232,11 @@ public sealed class ExamService(
             topicId = exam.TopicId;
             difficulty = exam.Difficulty;
             instructions = exam.Instructions;
+            excluded = exam.ExcludedMaterialIds ?? [];
             mix = Targets(exam);
         }
 
-        var generated = await generator.GenerateAsync(userId, topicId, mix, difficulty, instructions, progress, ct);
+        var generated = await generator.GenerateAsync(userId, topicId, mix, difficulty, instructions, excluded, choice, progress, ct);
         if (generated.Count == 0)
             throw new AiException("The AI didn't produce any usable questions. The exam wasn't changed.");
 
@@ -249,24 +265,26 @@ public sealed class ExamService(
     }
 
     // Has the AI write one new question of the same type (and code or theory) and puts it in the old one's place.
-    public async Task ReplaceQuestionAsync(string userId, int examId, int questionId, IProgress<string>? progress, CancellationToken ct)
+    public async Task ReplaceQuestionAsync(string userId, int examId, int questionId, AiChoice? choice, IProgress<string>? progress, CancellationToken ct)
     {
         Question old;
         int topicId;
         string? instructions;
+        List<int> excluded;
         bool programming;
         await using (var db = await dbFactory.CreateDbContextAsync(ct))
         {
             var exam = await LoadForEditAsync(db, userId, examId, ct);
             topicId = exam.TopicId;
             instructions = exam.Instructions;
+            excluded = exam.ExcludedMaterialIds ?? [];
             programming = exam.Topic!.IsProgramming;
             old = exam.Questions.FirstOrDefault(x => x.QuestionId == questionId)?.Question ?? throw new NotFoundException();
         }
 
         var isMc = old.Type == QuestionType.MultipleChoice;
         var mix = new QuestionMix(isMc ? 1 : 0, isMc ? 0 : 1, old.IsCode && programming ? 1 : 0);
-        var generated = await generator.GenerateAsync(userId, topicId, mix, old.Difficulty, instructions, progress, ct);
+        var generated = await generator.GenerateAsync(userId, topicId, mix, old.Difficulty, instructions, excluded, choice, progress, ct);
         var replacement = generated.FirstOrDefault()
             ?? throw new AiException("The AI didn't produce a usable replacement. Try again.");
 
@@ -454,6 +472,25 @@ public sealed class ExamService(
     }
 
     private static string? NullIfBlank(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
+
+    // Keeps only the topic's own materials, stored as null when nothing is left out. At least one
+    // material has to stay in, or there'd be nothing to write questions from.
+    private static async Task<List<int>?> CheckExcludedAsync(
+        AppDbContext db, string userId, int topicId, IReadOnlyCollection<int>? requested, CancellationToken ct)
+    {
+        if (requested is not { Count: > 0 })
+            return null;
+        var materialIds = await db.Materials
+            .Where(m => m.TopicId == topicId && m.UserId == userId)
+            .Select(m => m.Id)
+            .ToListAsync(ct);
+        var excluded = materialIds.Where(requested.Contains).Order().ToList();
+        if (excluded.Count == 0)
+            return null;
+        if (excluded.Count == materialIds.Count)
+            throw new ArgumentException("Pick at least one material for the AI to write questions from.");
+        return excluded;
+    }
 
     private static void ValidateDraft(QuestionDraft d)
     {

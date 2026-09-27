@@ -47,6 +47,8 @@ public sealed record ExamSummary(
     DateTime? LastAttemptAt,
     int? UnfinishedAttemptId);
 
+public sealed record MaterialChoice(int Id, string Title, int TokenEstimate);
+
 public sealed record TopicDetail(
     TopicSummary Summary,
     IReadOnlyList<MaterialSummary> Materials,
@@ -136,16 +138,30 @@ public sealed class TopicService(IDbContextFactory<AppDbContext> dbFactory, Lear
 
     // How many bank questions exist per type, difficulty and code/theory, so exam settings can show
     // how many will be reused and how many the AI still has to write.
+    // Bank questions an exam could reuse: those from materials it leaves out don't count.
     public async Task<Dictionary<(QuestionType Type, Difficulty Difficulty, bool IsCode), int>> BankCountsAsync(
-        string userId, int topicId, CancellationToken ct = default)
+        string userId, int topicId, IReadOnlyCollection<int>? excludedMaterials = null, CancellationToken ct = default)
     {
+        var excluded = excludedMaterials?.ToList() ?? [];
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var counts = await db.Questions.AsNoTracking()
             .Where(q => q.UserId == userId && q.TopicId == topicId)
+            .Where(q => q.SourceMaterialId == null || !excluded.Contains(q.SourceMaterialId.Value))
             .GroupBy(q => new { q.Type, q.Difficulty, q.IsCode })
             .Select(g => new { g.Key.Type, g.Key.Difficulty, g.Key.IsCode, Count = g.Count() })
             .ToListAsync(ct);
         return counts.ToDictionary(c => (c.Type, c.Difficulty, c.IsCode), c => c.Count);
+    }
+
+    // The topic's materials for the exam's document picker, oldest first.
+    public async Task<IReadOnlyList<MaterialChoice>> MaterialChoicesAsync(string userId, int topicId, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        return await db.Materials.AsNoTracking()
+            .Where(m => m.TopicId == topicId && m.UserId == userId)
+            .OrderBy(m => m.CreatedAt)
+            .Select(m => new MaterialChoice(m.Id, m.Title, m.TokenEstimate))
+            .ToListAsync(ct);
     }
 
     public async Task<int> CreateAsync(

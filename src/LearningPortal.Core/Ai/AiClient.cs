@@ -13,6 +13,19 @@ public sealed class AiNotConfiguredException()
 // user's decrypted settings and never sent to the browser.
 public sealed record AiConnection(AiProvider Provider, string ApiKey, string Model);
 
+// A provider and model the user picked, without the key. Safe to show and pass around in the UI.
+public sealed record AiChoice(AiProvider Provider, string Model);
+
+// What an AI call is for. In advanced mode each task has its own default model; in simple mode
+// one model does everything.
+public enum AiTask
+{
+    // Outlining uploaded material.
+    Analysis,
+    // Writing and replacing questions, and grading written answers.
+    Generation,
+}
+
 public sealed record AiRequest
 {
     // Stable instructions. Kept free of per-request details so the prefix can be cached.
@@ -71,7 +84,21 @@ public static class AiModels
     public const string OpenAiPricingUrl = "https://developers.openai.com/api/docs/pricing";
 
     public static AiModelInfo? Find(AiProvider provider, string modelId) =>
-        (provider == AiProvider.Claude ? Claude : OpenAi).FirstOrDefault(m => m.Id == modelId);
+        For(provider).FirstOrDefault(m => m.Id == modelId);
+
+    public static AiModelInfo? Find(AiChoice choice) => Find(choice.Provider, choice.Model);
+
+    public static IReadOnlyList<AiModelInfo> For(AiProvider provider) => provider == AiProvider.Claude ? Claude : OpenAi;
+
+    public static string DefaultFor(AiProvider provider) => provider == AiProvider.Claude ? DefaultClaude : DefaultOpenAi;
+
+    public static string PricingUrlFor(AiProvider provider) => provider == AiProvider.Claude ? ClaudePricingUrl : OpenAiPricingUrl;
+
+    public static string ProviderName(AiProvider provider) => provider == AiProvider.Claude ? "Claude (Anthropic)" : "ChatGPT (OpenAI)";
+
+    // The model's display name, or the raw ID for a custom model. Used for "Written by ...".
+    public static string DisplayName(string modelId) =>
+        Claude.Concat(OpenAi).FirstOrDefault(m => m.Id == modelId)?.Name ?? modelId;
 
     public static readonly IReadOnlyList<AiModelInfo> Claude =
     [

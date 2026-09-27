@@ -7,8 +7,8 @@ using Microsoft.EntityFrameworkCore;
 
 namespace LearningPortal.Core.Services;
 
-// What generating for a topic depends on: its material size, the user's priced model, and how
-// many questions its bank already holds (for the saturation hint).
+// What generating for a topic depends on: its material size, the priced model that would write
+// the questions, and how many questions its bank already holds (for the saturation hint).
 public sealed record GenerationCostBasis(int TopicTokens, AiModelInfo? Model, int BankQuestions)
 {
     public bool BankSaturated => QuestionGenerationService.BankSaturated(BankQuestions, TopicTokens);
@@ -46,19 +46,28 @@ public sealed class QuestionGenerationService(
     // Upper bound for the material sent in one call when the topic exceeds the budget.
     private int SectionBudget => Math.Max(options.SectionTargetTokens * 2, options.TopicTokenBudget / 4);
 
-    public async Task<GenerationEstimate> EstimateAsync(string userId, int topicId, int questionCount, CancellationToken ct = default) =>
-        Estimate(await CostBasisAsync(userId, topicId, ct), questionCount);
+    public async Task<GenerationEstimate> EstimateAsync(
+        string userId, int topicId, int questionCount, IReadOnlyCollection<int>? excludedMaterials = null,
+        AiChoice? choice = null, CancellationToken ct = default) =>
+        Estimate(await CostBasisAsync(userId, topicId, excludedMaterials, choice, ct), questionCount);
 
     // What a generation estimate depends on besides the question count. Load it once per page and
-    // call Estimate as the count changes.
-    public async Task<GenerationCostBasis> CostBasisAsync(string userId, int topicId, CancellationToken ct = default)
+    // call Estimate as the count changes. Only the materials the exam uses count. choice is the
+    // model picked on the screen; null prices the questions default. A different pick later only
+    // needs `basis with { Model = ... }`.
+    public async Task<GenerationCostBasis> CostBasisAsync(
+        string userId, int topicId, IReadOnlyCollection<int>? excludedMaterials = null,
+        AiChoice? choice = null, CancellationToken ct = default)
     {
+        var excluded = excludedMaterials?.ToList() ?? [];
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var total = await db.MaterialSections
-            .Where(s => s.Material!.TopicId == topicId && s.Material.UserId == userId)
+            .Where(s => s.Material!.TopicId == topicId && s.Material.UserId == userId && !excluded.Contains(s.MaterialId))
             .SumAsync(s => (int?)s.TokenEstimate, ct) ?? 0;
-        var bank = await db.Questions.CountAsync(q => q.TopicId == topicId && q.UserId == userId, ct);
-        return new GenerationCostBasis(total, await settings.GetPricedModelAsync(userId, ct), bank);
+        var bank = await db.Questions.CountAsync(q => q.TopicId == topicId && q.UserId == userId
+            && (q.SourceMaterialId == null || !excluded.Contains(q.SourceMaterialId.Value)), ct);
+        var model = choice is not null ? AiModels.Find(choice) : await settings.GetPricedModelAsync(userId, AiTask.Generation, ct);
+        return new GenerationCostBasis(total, model, bank);
     }
 
     public GenerationEstimate Estimate(GenerationCostBasis basis, int questionCount)
@@ -71,29 +80,35 @@ public sealed class QuestionGenerationService(
 
     // Generates and stores new bank questions. May return fewer than asked if the AI keeps
     // producing unusable questions; the caller reports the shortfall. The code share of the mix
-    // only applies to programming topics; other topics get theory questions only.
+    // only applies to programming topics; other topics get theory questions only. Materials in
+    // excludedMaterials aren't sent. choice is the model picked on the screen (advanced mode);
+    // null uses the questions default.
     public async Task<List<Question>> GenerateAsync(
         string userId, int topicId, QuestionMix mix, Difficulty difficulty, string? instructions,
-        IProgress<string>? progress, CancellationToken ct)
+        IReadOnlyCollection<int> excludedMaterials, AiChoice? choice, IProgress<string>? progress, CancellationToken ct)
     {
         if (mix.Total <= 0)
             return [];
 
-        var client = AiClientFactory.Create(await settings.GetConnectionAsync(userId, ct));
+        var connection = await settings.GetConnectionAsync(userId, AiTask.Generation, choice, ct);
+        var client = AiClientFactory.Create(connection);
 
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var topic = await db.Topics.AsNoTracking().FirstOrDefaultAsync(t => t.Id == topicId && t.UserId == userId, ct)
             ?? throw new NotFoundException();
         var programming = topic.IsProgramming;
+        var excluded = excludedMaterials.ToList();
         var materials = await db.Materials.AsNoTracking()
-            .Where(m => m.TopicId == topicId && m.UserId == userId)
+            .Where(m => m.TopicId == topicId && m.UserId == userId && !excluded.Contains(m.Id))
             .Include(m => m.Sections)
             .OrderBy(m => m.CreatedAt)
             .ToListAsync(ct);
 
         var allSections = materials.SelectMany(m => m.Sections).ToList();
         if (allSections.Count == 0)
-            throw new AiException("This topic has no material yet. Add a file or paste some text first.");
+            throw new AiException(excluded.Count > 0
+                ? "None of the material this exam uses is left. Pick at least one in the exam's settings."
+                : "This topic has no material yet. Add a file or paste some text first.");
 
         var sectionById = allSections.ToDictionary(s => s.Id);
         var materialById = materials.ToDictionary(m => m.Id);
@@ -184,6 +199,7 @@ public sealed class QuestionGenerationService(
 
                 q.TopicId = topicId;
                 q.UserId = userId;
+                q.GeneratedByModel = connection.Model;
                 db.Questions.Add(q);
                 created.Add(q);
                 similarity.Add(q.Prompt);

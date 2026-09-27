@@ -3,6 +3,7 @@
 @inject TopicService Topics
 @inject ExamService Exams
 @inject QuestionGenerationService Generator
+@inject SettingsService Settings
 @inject LearningPortalOptions Options
 
 <PageTitle>New exam - @AppInfo.Name</PageTitle>
@@ -27,17 +28,24 @@ else
     </div>
 
     <div class="form-narrow">
-        <ExamSettingsForm Model="_values" BankCounts="_bank" Programming="_topic.Summary.IsProgramming" OnChanged="StateHasChanged" />
+        <ExamSettingsForm Model="_values" BankCounts="_bank" Programming="_topic.Summary.IsProgramming" Materials="_materials" OnChanged="OnChangedAsync" />
+
+        @if (_settings is { AdvancedModels: true })
+        {
+            <div style="margin-top:22px">
+                <AiModelSelect Label="Write with" @bind-Value="_writeWith" Available="_settings.HasKey" Inline="true" />
+            </div>
+        }
 
         <div class="actions" style="margin-top:28px">
             <button type="button" class="btn btn-primary btn-lg" disabled="@(IsBusy || !IsValid)" @onclick="CreateAsync">Create exam</button>
             <a class="btn btn-ghost btn-lg" href="topics/@TopicId">Cancel</a>
         </div>
-        @if (IsValid && _cost is not null && Format.CostHint(Generator.Estimate(_cost, ToGenerate())) is { } hint)
+        @if (IsValid && Basis is not null && Format.CostHint(Generator.Estimate(Basis, ToGenerate())) is { } hint)
         {
             <p class="muted small" style="margin-top:8px">The AI writes @Format.Plural(ToGenerate(), "new question", "new questions"): @hint.</p>
         }
-        <SaturationNotice Basis="_cost" Show="@(ToGenerate() > 0)" Style="margin-top:14px" />
+        <SaturationNotice Basis="Basis" Show="@(ToGenerate() > 0)" Style="margin-top:14px" />
 
         @if (IsBusy)
         {
@@ -60,6 +68,18 @@ else
     private readonly ExamSettingsForm.Values _values = new();
     private string? _error;
     private GenerationCostBasis? _cost;
+    private IReadOnlyList<MaterialChoice> _materials = [];
+    private SettingsView? _settings;
+    // The model that writes the questions; starts at the questions default.
+    private AiChoice _writeWith = default!;
+    // The documents _bank and _cost were loaded for, to reload them when the selection changes.
+    private string _loadedFor = "";
+
+    // The cost basis priced for the model picked here.
+    private GenerationCostBasis? Basis => _cost is null ? null : _cost with { Model = AiModels.Find(_writeWith) };
+
+    // Passed to generation only in advanced mode; in simple mode the one model does everything.
+    private AiChoice? Choice => _settings?.AdvancedModels == true ? _writeWith : null;
 
     private bool IsValid => !string.IsNullOrWhiteSpace(_values.Name) && _values.QuestionCount is >= 1 and <= ExamService.MaxQuestions;
 
@@ -75,9 +95,25 @@ else
             Nav.NavigateTo("not-found");
             return;
         }
-        _bank = await Topics.BankCountsAsync(userId, TopicId, PageToken);
-        _cost = await Generator.CostBasisAsync(userId, TopicId, PageToken);
+        _materials = await Topics.MaterialChoicesAsync(userId, TopicId, PageToken);
+        _settings = await Settings.GetAsync(userId, PageToken);
+        _writeWith = _settings.Default(AiTask.Generation);
+        await LoadBankAndCostAsync(userId);
         _values.Name = $"{_topic.Summary.Name} practice {_topic.Exams.Count + 1}";
+    }
+
+    // The bank questions and material an exam could use depend on its documents.
+    private async Task LoadBankAndCostAsync(string userId)
+    {
+        _loadedFor = string.Join(",", _values.Excluded.Order());
+        _bank = await Topics.BankCountsAsync(userId, TopicId, _values.Excluded, PageToken);
+        _cost = await Generator.CostBasisAsync(userId, TopicId, _values.Excluded, ct: PageToken);
+    }
+
+    private async Task OnChangedAsync()
+    {
+        if (_loadedFor != string.Join(",", _values.Excluded.Order()))
+            await LoadBankAndCostAsync(await UserIdAsync());
     }
 
     // Questions the AI still has to write: the requested count minus what the bank can supply.
@@ -90,7 +126,7 @@ else
 
         // Guardrail: users pay with their own keys, so a generation that sends a lot of material
         // is confirmed first.
-        var estimate = await Generator.EstimateAsync(userId, TopicId, ToGenerate(), PageToken);
+        var estimate = await Generator.EstimateAsync(userId, TopicId, ToGenerate(), _values.Excluded, _writeWith, PageToken);
         if (Options.IsLargeGeneration(estimate.TotalInputTokens, estimate.Model) &&
             !await Ui.Confirm.AskAsync("This is a large generation",
                 Format.LargeGeneration(estimate),
@@ -102,7 +138,7 @@ else
         await RunBusyAsync("Creating the exam...", async (progress, ct) =>
         {
             examId = await Exams.CreateAsync(userId, TopicId, _values.ToSettings(), ct);
-            result = await Exams.FillAsync(userId, examId.Value, progress, ct);
+            result = await Exams.FillAsync(userId, examId.Value, Choice, progress, ct);
         }, message => _error = message);
 
         if (examId is null)

@@ -3,6 +3,8 @@
 @inject ExamService Exams
 @inject AttemptService Attempts
 @inject QuestionGenerationService Generator
+@inject TopicService Topics
+@inject SettingsService Settings
 @inject LearningPortalOptions Options
 
 <PageTitle>@(_detail?.Exam.Name ?? "Exam") - @AppInfo.Name</PageTitle>
@@ -70,7 +72,7 @@ else
     }
 
     @* Above every way this page has the AI write questions: filling, "New questions", replacing one. *@
-    <SaturationNotice Basis="_cost" Show="@(!IsBusy)" Style="margin-bottom:24px"
+    <SaturationNotice Basis="Basis" Show="@(!IsBusy)" Style="margin-bottom:24px"
                       Advice="Before having the AI write more, add material to the topic, or raise this exam's reuse from the bank." />
 
     <div class="two-col">
@@ -146,6 +148,10 @@ else
                                 </details>
                                 <div class="q-foot">
                                     <SourceLink Question="q" />
+                                    @if (q.GeneratedByModel is { } by)
+                                    {
+                                        <span class="source-link">Written by @AiModels.DisplayName(by)</span>
+                                    }
                                 </div>
                             </div>
                             <div class="row-actions">
@@ -164,7 +170,7 @@ else
                 <h2>Settings</h2>
                 @if (_editing)
                 {
-                    <ExamSettingsForm Model="_values" Programming="_detail.Topic.IsProgramming" />
+                    <ExamSettingsForm Model="_values" Programming="_detail.Topic.IsProgramming" Materials="_materials" />
                     <div class="actions" style="margin-top:20px">
                         <button type="button" class="btn btn-primary" disabled="@IsBusy" @onclick="SaveSettingsAsync">Save</button>
                         <button type="button" class="btn btn-ghost" @onclick="() => _editing = false">Cancel</button>
@@ -181,7 +187,12 @@ else
                             <span>Questions <strong>@exam.QuestionCount</strong></span>
                             <span>Type <strong>@Format.Label(exam.Type)</strong></span>
                             <span>Difficulty <strong>@Format.Label(exam.Difficulty)</strong></span>
-                            <span>Reuse from bank <strong>@exam.ReusePercent%</strong></span>
+                            <span>Reuse from bank <strong>@(exam.ReusePercent > 0 ? $"{exam.ReusePercent}%" : "Off")</strong></span>
+                            @if (_materials.Count > 1)
+                            {
+                                var used = _materials.Count(m => exam.ExcludedMaterialIds?.Contains(m.Id) != true);
+                                <span>Material <strong>@(used == _materials.Count ? $"All {used}" : $"{used} of {_materials.Count}")</strong></span>
+                            }
                             @if (exam.Instructions is not null)
                             {
                                 <span style="overflow-wrap:anywhere">Instructions <strong style="white-space:pre-wrap">@exam.Instructions</strong></span>
@@ -195,6 +206,14 @@ else
                         {
                             <p class="muted small" style="margin:0">New questions: @newCost.</p>
                         }
+                    </div>
+                }
+                @if (_settings is { AdvancedModels: true })
+                {
+                    <div style="margin-top:16px">
+                        <AiModelSelect Label="Write with" @bind-Value="_writeWith" Available="_settings.HasKey" Inline="true">
+                            <Hint><span class="field-hint">Used when the AI adds, rewrites or replaces questions here.</span></Hint>
+                        </AiModelSelect>
                     </div>
                 }
             </div>
@@ -254,6 +273,16 @@ else
     private bool _editing;
     private GenerationCostBasis? _cost;
     private string? _error;
+    private IReadOnlyList<MaterialChoice> _materials = [];
+    private SettingsView? _settings;
+    // The model that writes questions here; starts at the questions default.
+    private AiChoice _writeWith = default!;
+
+    // The cost basis priced for the model picked here.
+    private GenerationCostBasis? Basis => _cost is null ? null : _cost with { Model = AiModels.Find(_writeWith) };
+
+    // Passed to generation only in advanced mode; in simple mode the one model does everything.
+    private AiChoice? Choice => _settings?.AdvancedModels == true ? _writeWith : null;
 
     protected override async Task OnParametersSetAsync() => await LoadAsync();
 
@@ -264,7 +293,13 @@ else
         {
             _detail = await Exams.GetAsync(userId, ExamId, PageToken);
             _attempts = await Attempts.ListForExamAsync(userId, ExamId, PageToken);
-            _cost = await Generator.CostBasisAsync(userId, _detail.Exam.TopicId, PageToken);
+            _cost = await Generator.CostBasisAsync(userId, _detail.Exam.TopicId, _detail.Exam.ExcludedMaterialIds, ct: PageToken);
+            _materials = await Topics.MaterialChoicesAsync(userId, _detail.Exam.TopicId, PageToken);
+            if (_settings is null)
+            {
+                _settings = await Settings.GetAsync(userId, PageToken);
+                _writeWith = _settings.Default(AiTask.Generation);
+            }
         }
         catch (NotFoundException)
         {
@@ -288,14 +323,15 @@ else
 
     // Tokens and cost of the AI writing this many questions, when it's enough to be worth showing.
     private string? CostHint(int questionCount) =>
-        _cost is null || questionCount <= 0 ? null : Format.CostHint(Generator.Estimate(_cost, questionCount));
+        Basis is not { } basis || questionCount <= 0 ? null : Format.CostHint(Generator.Estimate(basis, questionCount));
 
     // Confirms first when the generation would send an unusually large amount of material.
     private async Task<bool> ConfirmGenerationAsync(int questionCount)
     {
         if (questionCount <= 0)
             return true;
-        var estimate = await Generator.EstimateAsync(await UserIdAsync(), _detail!.Exam.TopicId, questionCount, PageToken);
+        var exam = _detail!.Exam;
+        var estimate = await Generator.EstimateAsync(await UserIdAsync(), exam.TopicId, questionCount, exam.ExcludedMaterialIds, _writeWith, PageToken);
         return !Options.IsLargeGeneration(estimate.TotalInputTokens, estimate.Model) ||
                await Ui.Confirm.AskAsync("This is a large generation",
                    Format.LargeGeneration(estimate),
@@ -312,7 +348,7 @@ else
 
         FillResult? result = null;
         await RunBusyAsync("Filling the exam...", async (progress, ct) =>
-            result = await Exams.FillAsync(userId, ExamId, progress, ct), m => _error = m);
+            result = await Exams.FillAsync(userId, ExamId, Choice, progress, ct), m => _error = m);
         ReportFill(result);
         await LoadAsync();
     }
@@ -336,6 +372,7 @@ else
         _values.SetReusePercent(e.ReusePercent);
         _values.Instructions = e.Instructions;
         _values.CodePercent = e.CodePercent;
+        _values.Excluded = [.. e.ExcludedMaterialIds ?? []];
         _editing = true;
     }
 
@@ -376,7 +413,7 @@ else
         _error = null;
         FillResult? result = null;
         await RunBusyAsync("Writing new questions...", async (progress, ct) =>
-            result = await Exams.RegenerateAllAsync(await UserIdAsync(), ExamId, progress, ct), m => _error = m);
+            result = await Exams.RegenerateAllAsync(await UserIdAsync(), ExamId, Choice, progress, ct), m => _error = m);
         ReportFill(result);
         await LoadAsync();
     }
@@ -385,7 +422,7 @@ else
     {
         _error = null;
         var ok = await RunBusyAsync("Writing a replacement question...", async (progress, ct) =>
-            await Exams.ReplaceQuestionAsync(await UserIdAsync(), ExamId, q.Id, progress, ct), m => _error = m);
+            await Exams.ReplaceQuestionAsync(await UserIdAsync(), ExamId, q.Id, Choice, progress, ct), m => _error = m);
         if (ok) Ui.Toast.Success("Question replaced. The old one stays in your question bank.");
         await LoadAsync();
     }

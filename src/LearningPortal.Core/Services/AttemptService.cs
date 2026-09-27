@@ -153,7 +153,7 @@ public sealed class AttemptService(
             ? await db.MaterialSections.Where(s => s.Id == sid).Select(s => s.Text).FirstOrDefaultAsync(ct)
             : null;
 
-        var client = AiClientFactory.Create(await settings.GetConnectionAsync(userId, ct));
+        var client = AiClientFactory.Create(await settings.GetConnectionAsync(userId, AiTask.Generation, ct: ct));
         var json = await client.CompleteJsonAsync(new AiRequest
         {
             System = Prompts.GradingSystem(language),

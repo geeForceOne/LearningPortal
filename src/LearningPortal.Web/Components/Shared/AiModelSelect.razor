@@ -1,0 +1,113 @@
+@* One dropdown for provider and model, grouped by provider, with prices. A provider without an API
+   key has its models disabled. In Settings (AllowCustom) it also takes a custom model ID and
+   explains the chosen model; Inline is the compact one-line version for the upload and
+   generation screens. *@
+<div class="field @(Inline ? "model-inline" : "")">
+    <label class="field-label" for="@_id">@Label</label>
+    <select id="@_id" class="select" value="@_selected" @onchange="OnSelect">
+        @foreach (var provider in Enum.GetValues<AiProvider>())
+        {
+            var available = Available(provider);
+            <optgroup label="@(AiModels.ProviderName(provider) + (available ? "" : " · no API key"))">
+                @foreach (var m in AiModels.For(provider))
+                {
+                    <option value="@Key(provider, m.Id)" disabled="@(!available)">@m.Name · @Price(m)</option>
+                }
+                @if (AllowCustom)
+                {
+                    <option value="@Key(provider, CustomId)" disabled="@(!available)">Custom model ID...</option>
+                }
+                else if (Value.Provider == provider && AiModels.Find(Value) is null)
+                {
+                    @* A custom model saved in Settings stays pickable here. *@
+                    <option value="@Key(provider, Value.Model)" disabled="@(!available)">@Value.Model</option>
+                }
+            </optgroup>
+        }
+    </select>
+
+    @if (AllowCustom && _custom)
+    {
+        <input class="input" style="margin-top:8px" value="@_customText" @oninput="OnCustomInput"
+               placeholder="Exact model ID, e.g. @AiModels.DefaultFor(Value.Provider)" spellcheck="false" autocomplete="off" aria-label="Custom model ID" />
+        <span class="field-hint">Leave empty for @AiModels.DefaultFor(Value.Provider). The model must exist for your API key.</span>
+    }
+
+    @* With no key at all the key fields say enough; the warning is for a pick without a key. *@
+    @if (!Available(Value.Provider) && Enum.GetValues<AiProvider>().Any(Available))
+    {
+        <span class="field-error">There's no @AiModels.ProviderName(Value.Provider) API key. Add one, or pick a model from another provider.</span>
+    }
+    else if (!Inline && AiModels.Find(Value) is { } model)
+    {
+        <span class="field-hint">@model.Description</span>
+    }
+    @Hint
+</div>
+
+@code {
+    private const string CustomId = "__custom";
+    private readonly string _id = "model-" + Guid.NewGuid().ToString("N")[..8];
+    private string _selected = "";
+    private bool _custom;
+    private string _customText = "";
+    private AiChoice? _last;
+
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter, EditorRequired] public AiChoice Value { get; set; } = default!;
+    [Parameter] public EventCallback<AiChoice> ValueChanged { get; set; }
+
+    // Whether a provider has a usable key; its models are disabled otherwise.
+    [Parameter, EditorRequired] public Func<AiProvider, bool> Available { get; set; } = _ => true;
+
+    [Parameter] public bool AllowCustom { get; set; }
+    [Parameter] public bool Inline { get; set; }
+    [Parameter] public RenderFragment? Hint { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        // Only re-derive the selection when the value changed from outside (e.g. after a reload),
+        // so typing a custom ID doesn't snap the dropdown back.
+        if (Value == _last) return;
+        _last = Value;
+
+        _custom = AllowCustom && AiModels.Find(Value) is null;
+        _customText = _custom && Value.Model != AiModels.DefaultFor(Value.Provider) ? Value.Model : "";
+        _selected = Key(Value.Provider, _custom ? CustomId : Value.Model);
+    }
+
+    private Task OnSelect(ChangeEventArgs e)
+    {
+        _selected = e.Value?.ToString() ?? "";
+        var (provider, model) = Parse(_selected);
+        _custom = model == CustomId;
+        if (_custom)
+            _customText = "";
+        return Emit(new AiChoice(provider, _custom ? AiModels.DefaultFor(provider) : model));
+    }
+
+    private Task OnCustomInput(ChangeEventArgs e)
+    {
+        _customText = e.Value?.ToString() ?? "";
+        var id = _customText.Trim();
+        return Emit(Value with { Model = id.Length == 0 ? AiModels.DefaultFor(Value.Provider) : id });
+    }
+
+    private Task Emit(AiChoice choice)
+    {
+        _last = choice;
+        return ValueChanged.InvokeAsync(choice);
+    }
+
+    private static string Key(AiProvider provider, string model) => $"{provider}|{model}";
+
+    private static (AiProvider, string) Parse(string key)
+    {
+        var bar = key.IndexOf('|');
+        return (Enum.Parse<AiProvider>(key[..bar]), key[(bar + 1)..]);
+    }
+
+    private static string Price(AiModelInfo m) => $"{Money(m.InputPrice)} / {Money(m.OutputPrice)}";
+
+    private static string Money(decimal d) => "$" + d.ToString(d % 1 == 0 ? "0" : "0.00", System.Globalization.CultureInfo.InvariantCulture);
+}

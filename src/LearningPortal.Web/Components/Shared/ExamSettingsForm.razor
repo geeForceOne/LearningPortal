@@ -1,5 +1,5 @@
-@* Name, question count, type, difficulty and (programming topics) the code share: shared by
-   "new exam" and "edit exam". *@
+@* Name, question count, type, difficulty, (programming topics) the code share and (topics with
+   several materials) which material to use: shared by "new exam" and "edit exam". *@
 <div class="form">
     <label class="field">
         <span>Name</span>
@@ -79,6 +79,33 @@
         <span class="field-hint">Used whenever the AI writes questions for this exam. @(Model.Instructions?.Length ?? 0) / @ExamService.MaxInstructionsLength characters</span>
     </label>
 
+    @if (Materials is { Count: > 1 })
+    {
+        var used = Materials.Count(m => !Model.Excluded.Contains(m.Id));
+        <details class="doc-picker">
+            <summary>
+                <span class="field-label">Material</span>
+                <span class="muted small">@(used == Materials.Count ? $"All {Materials.Count}" : $"{used} of {Materials.Count}")</span>
+            </summary>
+            <div class="doc-list">
+                @foreach (var m in Materials)
+                {
+                    var included = !Model.Excluded.Contains(m.Id);
+                    <label class="check" @key="m.Id">
+                        @* The last ticked material can't be unticked: there'd be nothing to write from. *@
+                        <input type="checkbox" checked="@included" disabled="@(included && used == 1)" @onchange="e => SetIncluded(m.Id, (bool)e.Value!)" />
+                        <span>@m.Title</span>
+                        <span class="muted small">@Format.Tokens(m.TokenEstimate)</span>
+                    </label>
+                }
+            </div>
+            <span class="field-hint">
+                The AI writes questions only from the ticked material, and only its questions are reused from the bank.
+                Material you add to the topic later is included.
+            </span>
+        </details>
+    }
+
     <div class="field">
         <label class="check">
             <input type="checkbox" checked="@Model.Reuse" @onchange="e => SetReuse((bool)e.Value!)" />
@@ -129,18 +156,21 @@
         public int QuestionCount { get; set; } = 10;
         public ExamType Type { get; set; } = ExamType.Mixed;
         public Difficulty Difficulty { get; set; } = Difficulty.Medium;
-        public bool Reuse { get; set; } = true;
-        public int ReusePercent { get; set; } = ExamService.DefaultReusePercent;
+        public bool Reuse { get; set; } = ExamService.DefaultReusePercent > 0;
+        public int ReusePercent { get; set; } = ExamService.SuggestedReusePercent;
         public string? Instructions { get; set; }
         public int CodePercent { get; set; } = ExamService.DefaultCodePercent;
+        // The topic's materials the exam leaves out.
+        public HashSet<int> Excluded { get; set; } = [];
 
-        public ExamSettings ToSettings() => new(Name, QuestionCount, Type, Difficulty, Reuse ? ReusePercent : 0, Instructions, CodePercent);
+        public ExamSettings ToSettings() =>
+            new(Name, QuestionCount, Type, Difficulty, Reuse ? ReusePercent : 0, Instructions, CodePercent, Excluded.ToList());
 
-        // A stored 0% shows as "don't reuse" with the slider ready at the default if it's switched back on.
+        // A stored 0% shows as "don't reuse" with the slider ready at the suggested share if it's switched on.
         public void SetReusePercent(int percent)
         {
             Reuse = percent > 0;
-            ReusePercent = percent > 0 ? percent : ExamService.DefaultReusePercent;
+            ReusePercent = percent > 0 ? percent : ExamService.SuggestedReusePercent;
         }
     }
 
@@ -151,6 +181,18 @@
         Model.Reuse = value;
         return OnChanged.InvokeAsync();
     }
+
+    private Task SetIncluded(int materialId, bool included)
+    {
+        if (included)
+            Model.Excluded.Remove(materialId);
+        else
+            Model.Excluded.Add(materialId);
+        return OnChanged.InvokeAsync();
+    }
+
+    // The topic's materials; the picker only shows when there are at least two.
+    [Parameter] public IReadOnlyList<MaterialChoice>? Materials { get; set; }
 
     // Lets the parent re-render (e.g. a live cost estimate) as the settings change.
     [Parameter] public EventCallback OnChanged { get; set; }

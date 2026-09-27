@@ -103,8 +103,9 @@ public sealed class MaterialService(
     }
 
     // The "analysis" step: a short AI outline of the material, stored for reuse. Failure is
-    // recorded on the material rather than thrown, so the upload itself still counts.
-    public async Task AnalyzeAsync(string userId, int materialId, IProgress<string>? progress, CancellationToken ct)
+    // recorded on the material rather than thrown, so the upload itself still counts. choice is
+    // the model picked on the upload screen (advanced mode); null uses the uploads default.
+    public async Task AnalyzeAsync(string userId, int materialId, AiChoice? choice, IProgress<string>? progress, CancellationToken ct)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var material = await db.Materials
@@ -114,7 +115,8 @@ public sealed class MaterialService(
 
         try
         {
-            var client = AiClientFactory.Create(await settings.GetConnectionAsync(userId, ct));
+            var connection = await settings.GetConnectionAsync(userId, AiTask.Analysis, choice, ct);
+            var client = AiClientFactory.Create(connection);
             var sections = material.Sections.OrderBy(s => s.Index).ToList();
             var batches = BatchByTokens(sections, options.TopicTokenBudget);
             var outlines = new List<string>();
@@ -139,6 +141,7 @@ public sealed class MaterialService(
             }
 
             material.Outline = string.Join("\n", outlines).Trim();
+            material.OutlineModel = connection.Model;
             material.AnalysisStatus = AnalysisStatus.Done;
             material.AnalysisError = null;
         }

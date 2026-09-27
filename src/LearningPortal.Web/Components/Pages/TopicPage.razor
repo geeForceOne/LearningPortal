@@ -182,6 +182,14 @@ else
         <aside>
             <div class="panel">
                 <h2>Add material</h2>
+                @if (_settings is { AdvancedModels: true })
+                {
+                    <div style="margin-bottom:14px">
+                        <AiModelSelect Label="Outline with" Value="_outlineWith" ValueChanged="SetOutlineModel" Available="_settings.HasKey" Inline="true">
+                            <Hint><span class="field-hint">Used for files and pasted text you add here.</span></Hint>
+                        </AiModelSelect>
+                    </div>
+                }
                 <label class="dropzone">
                     <Icon Name="upload" Size="22" />
                     <strong>Choose files</strong>
@@ -228,7 +236,13 @@ else
     private readonly HashSet<int> _openOutlines = [];
     private string _pasteTitle = "";
     private string _pasteText = "";
+    private SettingsView? _settings;
+    // The model that outlines what's added here; starts at the uploads default.
+    private AiChoice _outlineWith = default!;
     private AiModelInfo? _model;
+
+    // Passed to the analysis only in advanced mode; in simple mode the one model does everything.
+    private AiChoice? Choice => _settings?.AdvancedModels == true ? _outlineWith : null;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -243,7 +257,11 @@ else
         {
             var userId = await UserIdAsync();
             _topic = await Topics.GetAsync(userId, TopicId, PageToken);
-            _model = await Settings.GetPricedModelAsync(userId, PageToken);
+            if (_settings is null)
+            {
+                _settings = await Settings.GetAsync(userId, PageToken);
+                SetOutlineModel(_settings.Default(AiTask.Analysis));
+            }
             _notFound = false;
         }
         catch (NotFoundException)
@@ -273,6 +291,12 @@ else
         _ when Analysis.IsPending(m.Id) => @<span>Analysing...</span>,
         _ => @<span>Not analysed <button type="button" class="link-button" @onclick="() => Reanalyze(m.Id)">Analyse now</button>@CostHint(m.TokenEstimate)</span>,
     };
+
+    private void SetOutlineModel(AiChoice choice)
+    {
+        _outlineWith = choice;
+        _model = AiModels.Find(choice);
+    }
 
     private string CostHint(int tokens) => Format.CostHint(tokens, _model) is { } cost ? $" ({cost})" : "";
 
@@ -344,7 +368,7 @@ else
                 if (!go)
                     continue;
             }
-            Analysis.Enqueue(userId, material.Id);
+            Analysis.Enqueue(userId, material.Id, Choice);
             started.Add(material);
         }
 
@@ -362,7 +386,7 @@ else
 
     private async Task Reanalyze(int materialId)
     {
-        Analysis.Enqueue(await UserIdAsync(), materialId);
+        Analysis.Enqueue(await UserIdAsync(), materialId, Choice);
         StateHasChanged();
     }
 

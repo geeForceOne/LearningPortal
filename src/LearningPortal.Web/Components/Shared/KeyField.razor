@@ -1,5 +1,6 @@
 @using LearningPortal.Core.Security
-@* A secret input (API key, password) that never shows the stored value: it only says whether one is saved. *@
+@* A secret input (API key, password) that never shows the stored value: it only says whether one is saved.
+   The eye button only reveals what's typed into the box, which never left the browser. *@
 <div class="field">
     <label class="field-label" for="@_id">@Label</label>
 
@@ -25,15 +26,23 @@
     @* Browsers ignore autocomplete="off" on password inputs and fill in the saved Recall login.
        "new-password" stops that, and the data-* attributes tell 1Password, LastPass and Bitwarden
        to leave the field alone. *@
-    <input id="@_id" class="input" type="password" autocomplete="new-password" spellcheck="false"
-           data-1p-ignore data-lpignore="true" data-bwignore="true" data-form-type="other"
-           value="@Value" @oninput="e => ValueChanged.InvokeAsync(e.Value?.ToString() ?? string.Empty)"
-           placeholder="@(Status == SecretStatus.Set ? $"Leave empty to keep the saved {Noun}" : Placeholder)" />
+    <div class="input-with-action">
+        <input id="@_id" class="input" type="@(_reveal ? "text" : "password")" autocomplete="new-password" spellcheck="false"
+               data-1p-ignore data-lpignore="true" data-bwignore="true" data-form-type="other"
+               value="@Value" @oninput="e => ValueChanged.InvokeAsync(e.Value?.ToString() ?? string.Empty)"
+               placeholder="@(Status == SecretStatus.Set ? $"Leave empty to keep the saved {Noun}" : Placeholder)" />
+        <button type="button" class="btn btn-ghost btn-icon btn-sm" @onclick="() => _reveal = !_reveal"
+                title="@(_reveal ? $"Hide the {Noun}" : $"Show the {Noun} you typed")" aria-label="@(_reveal ? $"Hide the {Noun}" : $"Show the {Noun} you typed")"
+                aria-pressed="@(_reveal ? "true" : "false")" aria-controls="@_id">
+            <Icon Name="@(_reveal ? "eye-off" : "eye")" Size="16" />
+        </button>
+    </div>
     <span class="field-hint">@Hint It's stored encrypted and never shown again.</span>
 </div>
 
 @code {
     private readonly string _id = "key-" + Guid.NewGuid().ToString("N")[..8];
+    private bool _reveal;
 
     [Parameter, EditorRequired] public string Label { get; set; } = "";
     [Parameter] public SecretStatus Status { get; set; }

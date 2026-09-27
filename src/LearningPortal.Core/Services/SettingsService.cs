@@ -7,26 +7,32 @@ using Microsoft.EntityFrameworkCore;
 namespace LearningPortal.Core.Services;
 
 // What Settings shows. Deliberately carries no key material: only whether each key is set,
-// missing, or stored but unreadable.
+// missing, or stored but unreadable. Every choice has its model resolved (never blank).
 public sealed record SettingsView(
-    AiProvider Provider,
     SecretStatus ClaudeKey,
-    string ClaudeModel,
     SecretStatus OpenAiKey,
-    string OpenAiModel)
+    bool AdvancedModels,
+    AiChoice Simple,
+    AiChoice Analysis,
+    AiChoice Generation)
 {
-    public bool IsConfigured => Provider switch
-    {
-        AiProvider.Claude => ClaudeKey == SecretStatus.Set,
-        AiProvider.OpenAi => OpenAiKey == SecretStatus.Set,
-        _ => false,
-    };
+    public SecretStatus KeyStatus(AiProvider provider) => provider == AiProvider.Claude ? ClaudeKey : OpenAiKey;
+
+    public bool HasKey(AiProvider provider) => KeyStatus(provider) == SecretStatus.Set;
+
+    // The model a task uses unless the user picks another one for that action.
+    public AiChoice Default(AiTask task) =>
+        !AdvancedModels ? Simple : task == AiTask.Analysis ? Analysis : Generation;
+
+    public bool IsConfigured => HasKey(Default(AiTask.Analysis).Provider) && HasKey(Default(AiTask.Generation).Provider);
 }
 
+// A blank model in a choice means the provider's default.
 public sealed record SettingsUpdate(
-    AiProvider Provider,
-    string? ClaudeModel,
-    string? OpenAiModel,
+    bool AdvancedModels,
+    AiChoice Simple,
+    AiChoice Analysis,
+    AiChoice Generation,
     // null leaves the stored key unchanged; empty string removes it.
     string? NewClaudeKey,
     string? NewOpenAiKey);
@@ -38,19 +44,17 @@ public sealed class SettingsService(IDbContextFactory<AppDbContext> dbFactory, S
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var s = await db.UserSettings.AsNoTracking().FirstOrDefaultAsync(x => x.UserId == userId, ct) ?? new UserSettings();
         return new SettingsView(
-            s.Provider,
             protector.Read(s.ClaudeApiKeyProtected).Status,
-            string.IsNullOrWhiteSpace(s.ClaudeModel) ? AiModels.DefaultClaude : s.ClaudeModel,
             protector.Read(s.OpenAiApiKeyProtected).Status,
-            string.IsNullOrWhiteSpace(s.OpenAiModel) ? AiModels.DefaultOpenAi : s.OpenAiModel);
+            s.AdvancedModels,
+            Choice(s.Provider, s.Model),
+            Choice(s.AnalysisProvider, s.AnalysisModel),
+            Choice(s.GenerationProvider, s.GenerationModel));
     }
 
-    // The user's chosen model when it's in the priced list; null for a custom model ID.
-    public async Task<AiModelInfo?> GetPricedModelAsync(string userId, CancellationToken ct = default)
-    {
-        var view = await GetAsync(userId, ct);
-        return AiModels.Find(view.Provider, view.Provider == AiProvider.Claude ? view.ClaudeModel : view.OpenAiModel);
-    }
+    // The model a task would use, when it's in the priced list; null for a custom model ID.
+    public async Task<AiModelInfo?> GetPricedModelAsync(string userId, AiTask task, CancellationToken ct = default) =>
+        AiModels.Find((await GetAsync(userId, ct)).Default(task));
 
     public async Task SaveAsync(string userId, SettingsUpdate update, CancellationToken ct = default)
     {
@@ -62,9 +66,10 @@ public sealed class SettingsService(IDbContextFactory<AppDbContext> dbFactory, S
             db.UserSettings.Add(s);
         }
 
-        s.Provider = update.Provider;
-        s.ClaudeModel = NullIfBlank(update.ClaudeModel);
-        s.OpenAiModel = NullIfBlank(update.OpenAiModel);
+        s.AdvancedModels = update.AdvancedModels;
+        (s.Provider, s.Model) = (update.Simple.Provider, StoredModel(update.Simple));
+        (s.AnalysisProvider, s.AnalysisModel) = (update.Analysis.Provider, StoredModel(update.Analysis));
+        (s.GenerationProvider, s.GenerationModel) = (update.Generation.Provider, StoredModel(update.Generation));
 
         if (update.NewClaudeKey is not null)
             s.ClaudeApiKeyProtected = update.NewClaudeKey.Trim() is { Length: > 0 } k ? protector.Protect(k) : null;
@@ -74,26 +79,37 @@ public sealed class SettingsService(IDbContextFactory<AppDbContext> dbFactory, S
         await db.SaveChangesAsync(ct);
     }
 
-    // The decrypted connection for server-side AI calls. Throws a user-facing error when the
-    // selected provider has no usable key.
-    public async Task<AiConnection> GetConnectionAsync(string userId, CancellationToken ct = default)
+    // The decrypted connection for server-side AI calls. In advanced mode, choice (picked on the
+    // upload or generation screen) overrides the task's default; in simple mode it's ignored.
+    // Throws a user-facing error when the provider has no usable key.
+    public async Task<AiConnection> GetConnectionAsync(string userId, AiTask task, AiChoice? choice = null, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var s = await db.UserSettings.AsNoTracking().FirstOrDefaultAsync(x => x.UserId == userId, ct)
             ?? throw new AiNotConfiguredException();
 
-        var (stored, model, fallbackModel) = s.Provider == AiProvider.Claude
-            ? (s.ClaudeApiKeyProtected, s.ClaudeModel, AiModels.DefaultClaude)
-            : (s.OpenAiApiKeyProtected, s.OpenAiModel, AiModels.DefaultOpenAi);
+        var picked = s.AdvancedModels && choice is not null
+            ? Choice(choice.Provider, choice.Model)
+            : !s.AdvancedModels ? Choice(s.Provider, s.Model)
+            : task == AiTask.Analysis ? Choice(s.AnalysisProvider, s.AnalysisModel)
+            : Choice(s.GenerationProvider, s.GenerationModel);
 
-        var key = protector.Read(stored);
+        var key = protector.Read(picked.Provider == AiProvider.Claude ? s.ClaudeApiKeyProtected : s.OpenAiApiKeyProtected);
         return key.Status switch
         {
-            SecretStatus.Set => new AiConnection(s.Provider, key.Value!, string.IsNullOrWhiteSpace(model) ? fallbackModel : model),
-            SecretStatus.Unreadable => throw new AiException("Your saved API key can't be read anymore. Enter it again in Settings."),
-            _ => throw new AiNotConfiguredException(),
+            SecretStatus.Set => new AiConnection(picked.Provider, key.Value!, picked.Model),
+            SecretStatus.Unreadable => throw new AiException(
+                $"Your saved {AiModels.ProviderName(picked.Provider)} API key can't be read anymore. Enter it again in Settings."),
+            _ when s.ClaudeApiKeyProtected is null && s.OpenAiApiKeyProtected is null => throw new AiNotConfiguredException(),
+            _ => throw new AiException(
+                $"There's no {AiModels.ProviderName(picked.Provider)} API key. Add it in Settings, or pick a model from a provider you have a key for."),
         };
     }
 
-    private static string? NullIfBlank(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
+    private static AiChoice Choice(AiProvider provider, string? model) =>
+        new(provider, string.IsNullOrWhiteSpace(model) ? AiModels.DefaultFor(provider) : model.Trim());
+
+    // The provider's default is stored as null, so it follows future default changes.
+    private static string? StoredModel(AiChoice c) =>
+        string.IsNullOrWhiteSpace(c.Model) || c.Model.Trim() == AiModels.DefaultFor(c.Provider) ? null : c.Model.Trim();
 }

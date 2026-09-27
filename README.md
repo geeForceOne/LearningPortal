@@ -69,8 +69,8 @@ After each question, or at the end, you see what was right, what you picked, and
 ## Question bank
 
 Nothing gets thrown away. Every generated question is kept in the topic's bank and can be reused
-by later exams, which costs nothing. Each exam chooses how much to reuse (20% by default), so
-practice stays mostly fresh. Reused questions match the exam's type, difficulty and code/theory
+by later exams, which costs nothing. Reuse is off by default, so every exam gets freshly written
+questions; turn it on per exam and choose how much to reuse. Reused questions match the exam's type, difficulty and code/theory
 mix. New questions are checked against the bank, and repeats are dropped. When a topic's bank
 gets close to what its material can support, Recall tells you.
 
