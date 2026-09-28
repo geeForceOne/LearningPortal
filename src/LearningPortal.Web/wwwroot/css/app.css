@@ -669,6 +669,7 @@ a.row-title:hover { text-decoration: underline; text-decoration-color: var(--rul
     gap: 6px 10px;
 }
 .model-inline .select { flex: 1 1 220px; width: auto; min-height: 36px; padding: 6px 10px; }
+.model-inline .model-custom { flex: 1 1 180px; width: auto; min-height: 36px; padding: 6px 10px; }
 .model-inline .field-error, .model-inline .field-hint { flex-basis: 100%; }
 
 /* Collapsible list of the topic's documents on the exam settings form. */

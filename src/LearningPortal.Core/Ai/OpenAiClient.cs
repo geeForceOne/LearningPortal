@@ -82,7 +82,7 @@ public sealed class OpenAiClient(string apiKey, string model) : IAiClient
         {
             HttpStatusCode.Unauthorized => "The AI provider rejected your API key. Check it in Settings.",
             HttpStatusCode.TooManyRequests => "The AI provider is rate-limiting your key or your quota is used up. Wait and try again.",
-            HttpStatusCode.NotFound => $"The AI model \"{model}\" wasn't found. Check the model name in Settings.",
+            HttpStatusCode.NotFound => $"The AI model \"{model}\" wasn't found. Check the model ID.",
             _ => $"The AI request failed ({(int)status}): {detail ?? "no details given"}",
         };
     }

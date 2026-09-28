@@ -59,7 +59,7 @@ public sealed class ClaudeAiClient(string apiKey, string model) : IAiClient
         }
         catch (AnthropicNotFoundException)
         {
-            throw new AiException($"The AI model \"{model}\" wasn't found. Check the model name in Settings.");
+            throw new AiException($"The AI model \"{model}\" wasn't found. Check the model ID.");
         }
         catch (AnthropicApiException ex)
         {

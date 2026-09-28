@@ -66,7 +66,7 @@ else
             <button type="button" class="link-button" @onclick="FillAsync">Add the missing @(exam.QuestionCount - _detail.Questions.Count)</button>
             @if (CostHint(exam.QuestionCount - _detail.Questions.Count) is { } fillCost)
             {
-                <span class="muted">(if the AI writes them all: @fillCost)</span>
+                <span class="muted"> (if the AI writes them all: @fillCost)</span>
             }
         </div>
     }

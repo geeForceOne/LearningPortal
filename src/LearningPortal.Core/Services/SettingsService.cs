@@ -28,14 +28,11 @@ public sealed record SettingsView(
 }
 
 // A blank model in a choice means the provider's default.
-public sealed record SettingsUpdate(
+public sealed record ModelsUpdate(
     bool AdvancedModels,
     AiChoice Simple,
     AiChoice Analysis,
-    AiChoice Generation,
-    // null leaves the stored key unchanged; empty string removes it.
-    string? NewClaudeKey,
-    string? NewOpenAiKey);
+    AiChoice Generation);
 
 public sealed class SettingsService(IDbContextFactory<AppDbContext> dbFactory, SecretProtector protector)
 {
@@ -56,26 +53,26 @@ public sealed class SettingsService(IDbContextFactory<AppDbContext> dbFactory, S
     public async Task<AiModelInfo?> GetPricedModelAsync(string userId, AiTask task, CancellationToken ct = default) =>
         AiModels.Find((await GetAsync(userId, ct)).Default(task));
 
-    public async Task SaveAsync(string userId, SettingsUpdate update, CancellationToken ct = default)
+    // For each key, null leaves the stored key unchanged and an empty string removes it.
+    public async Task SaveKeysAsync(string userId, string? newClaudeKey, string? newOpenAiKey, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var s = await db.UserSettings.FirstOrDefaultAsync(x => x.UserId == userId, ct);
-        if (s is null)
-        {
-            s = new UserSettings { UserId = userId };
-            db.UserSettings.Add(s);
-        }
+        var s = await GetOrAddAsync(db, userId, ct);
+        if (newClaudeKey is not null)
+            s.ClaudeApiKeyProtected = newClaudeKey.Trim() is { Length: > 0 } k ? protector.Protect(k) : null;
+        if (newOpenAiKey is not null)
+            s.OpenAiApiKeyProtected = newOpenAiKey.Trim() is { Length: > 0 } k ? protector.Protect(k) : null;
+        await db.SaveChangesAsync(ct);
+    }
 
+    public async Task SaveModelsAsync(string userId, ModelsUpdate update, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var s = await GetOrAddAsync(db, userId, ct);
         s.AdvancedModels = update.AdvancedModels;
         (s.Provider, s.Model) = (update.Simple.Provider, StoredModel(update.Simple));
         (s.AnalysisProvider, s.AnalysisModel) = (update.Analysis.Provider, StoredModel(update.Analysis));
         (s.GenerationProvider, s.GenerationModel) = (update.Generation.Provider, StoredModel(update.Generation));
-
-        if (update.NewClaudeKey is not null)
-            s.ClaudeApiKeyProtected = update.NewClaudeKey.Trim() is { Length: > 0 } k ? protector.Protect(k) : null;
-        if (update.NewOpenAiKey is not null)
-            s.OpenAiApiKeyProtected = update.NewOpenAiKey.Trim() is { Length: > 0 } k ? protector.Protect(k) : null;
-
         await db.SaveChangesAsync(ct);
     }
 
@@ -91,14 +88,20 @@ public sealed class SettingsService(IDbContextFactory<AppDbContext> dbFactory, S
     public async Task SetThemeAsync(string userId, Theme theme, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var s = await GetOrAddAsync(db, userId, ct);
+        s.Theme = theme;
+        await db.SaveChangesAsync(ct);
+    }
+
+    private static async Task<UserSettings> GetOrAddAsync(AppDbContext db, string userId, CancellationToken ct)
+    {
         var s = await db.UserSettings.FirstOrDefaultAsync(x => x.UserId == userId, ct);
         if (s is null)
         {
             s = new UserSettings { UserId = userId };
             db.UserSettings.Add(s);
         }
-        s.Theme = theme;
-        await db.SaveChangesAsync(ct);
+        return s;
     }
 
     // The decrypted connection for server-side AI calls. In advanced mode, choice (picked on the

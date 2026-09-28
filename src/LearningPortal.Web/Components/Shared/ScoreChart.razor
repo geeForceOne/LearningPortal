@@ -1,12 +1,13 @@
 @* Score over time for one exam: one ink line on a fixed 0-100% axis, attempts evenly spaced,
    a dashed line at the 80% "correct" threshold, and the latest attempt highlighted and labelled.
-   Hovering (or focusing) a point shows its details in the caption line above the chart. *@
+   Hovering (or focusing) a point shows its details in the caption above the chart, which keeps
+   room for two lines so a wrapping caption can't push the chart out from under the pointer. *@
 
-<div class="chart-caption small muted" aria-live="polite" style="min-height:1.5em">
+<div class="chart-caption small muted" aria-live="polite" style="min-height:3em;display:flex;align-items:flex-end">
     @if (_hover is { } h)
     {
         var p = Points[h];
-        <span><strong style="color:var(--ink)">@Format.Percent(p.Score)</strong> on attempt @(h + 1), @Format.Date(p.CompletedAt), @Format.Duration(p.ActiveSeconds)</span>
+        <span><strong style="color:var(--ink)">@Format.Percent(p.Score)</strong> · attempt @(h + 1) · @ShortDate(p.CompletedAt) · @Format.Duration(p.ActiveSeconds)</span>
     }
     else
     {
@@ -74,6 +75,13 @@
     private double X(int i) => Points.Count <= 1 ? PadLeft + PlotWidth / 2 : PadLeft + PlotWidth * i / (Points.Count - 1);
 
     private double Y(double score) => PadTop + (Height - PadTop - PadBottom) * (1 - Math.Clamp(score, 0, 100) / 100);
+
+    // "23 Sep 21:59", with the year only when it isn't this year.
+    private static string ShortDate(DateTime utc)
+    {
+        var local = utc.ToLocalTime();
+        return local.ToString(local.Year == DateTime.Now.Year ? "d MMM HH:mm" : "d MMM yyyy HH:mm", System.Globalization.CultureInfo.InvariantCulture);
+    }
 
     private string PolylinePoints => string.Join(" ", Points.Select((p, i) =>
         FormattableString.Invariant($"{X(i):0.##},{Y(p.Score):0.##}")));

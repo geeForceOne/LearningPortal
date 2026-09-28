@@ -62,6 +62,10 @@ else
                       OnRemove="() => Remove(AiProvider.OpenAi)" Removing="_removeOpenAi" Placeholder="sk-...">
                 <Hint>Create one at <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer">platform.openai.com</a> under API keys.</Hint>
             </KeyField>
+
+            <div class="actions">
+                <button type="button" class="btn btn-primary" disabled="@(_savingKeys || !KeysChanged)" @onclick="SaveKeysAsync">Save API keys</button>
+            </div>
         </section>
 
         <section class="panel form">
@@ -100,11 +104,11 @@ else
                 <a href="@AiModels.ClaudePricingUrl" target="_blank" rel="noopener noreferrer">Claude</a>,
                 <a href="@AiModels.OpenAiPricingUrl" target="_blank" rel="noopener noreferrer">OpenAI</a>.
             </span>
-        </section>
 
-        <div class="actions" style="margin-top:20px">
-            <button type="button" class="btn btn-primary" disabled="@_saving" @onclick="SaveAsync">Save settings</button>
-        </div>
+            <div class="actions">
+                <button type="button" class="btn btn-primary" disabled="@_savingModels" @onclick="SaveModelsAsync">Save models</button>
+            </div>
+        </section>
     </div>
 }
 
@@ -120,13 +124,18 @@ else
     private string _openAiKey = "";
     private bool _removeClaude;
     private bool _removeOpenAi;
-    private bool _saving;
+    private bool _savingKeys;
+    private bool _savingModels;
     private Theme _theme;
 
     protected override async Task OnInitializedAsync()
     {
         _theme = await Settings.GetThemeAsync(await UserIdAsync(), PageToken);
-        await LoadAsync();
+        await LoadViewAsync();
+        _advanced = _view!.AdvancedModels;
+        _simple = _view.Simple;
+        _analysis = _view.Analysis;
+        _generation = _view.Generation;
     }
 
     private async Task SetThemeAsync(Theme theme)
@@ -136,78 +145,90 @@ else
         await Settings.SetThemeAsync(await UserIdAsync(), theme, PageToken);
     }
 
-    private async Task LoadAsync()
+    // Reloads the key status and clears the key boxes; the Models panel keeps what's on screen.
+    private async Task LoadViewAsync()
     {
         _view = await Settings.GetAsync(await UserIdAsync(), PageToken);
-        _advanced = _view.AdvancedModels;
-        _simple = _view.Simple;
-        _analysis = _view.Analysis;
-        _generation = _view.Generation;
         _claudeKey = "";
         _openAiKey = "";
         _removeClaude = false;
         _removeOpenAi = false;
     }
 
-    // A provider counts as available once a key is typed, so its models can be picked before saving.
-    private bool Available(AiProvider provider)
-    {
-        var (typed, removing) = provider == AiProvider.Claude ? (_claudeKey, _removeClaude) : (_openAiKey, _removeOpenAi);
-        return !string.IsNullOrWhiteSpace(typed) || (!removing && _view!.HasKey(provider));
-    }
+    // Only saved keys count: a key typed but not saved yet doesn't unlock its models.
+    private bool Available(AiProvider provider) => _view!.HasKey(provider);
+
+    private bool KeysChanged =>
+        _removeClaude || _removeOpenAi || !string.IsNullOrWhiteSpace(_claudeKey) || !string.IsNullOrWhiteSpace(_openAiKey);
 
     private void KeyTyped(AiProvider provider, string value)
     {
         if (provider == AiProvider.Claude) { _claudeKey = value; _removeClaude = false; }
         else { _openAiKey = value; _removeOpenAi = false; }
-        MoveOffUnavailable();
     }
 
     private void Remove(AiProvider provider)
     {
         if (provider == AiProvider.Claude) { _removeClaude = true; _claudeKey = ""; }
         else { _removeOpenAi = true; _openAiKey = ""; }
-        MoveOffUnavailable();
     }
 
     // A choice whose provider has no key switches to the other provider's default when that one has
     // a key, so someone with only an OpenAI key doesn't have to fix every dropdown by hand.
-    private void MoveOffUnavailable()
+    // Returns whether anything changed.
+    private bool MoveOffUnavailable()
     {
         AiChoice Fix(AiChoice c)
         {
             var other = c.Provider == AiProvider.Claude ? AiProvider.OpenAi : AiProvider.Claude;
             return !Available(c.Provider) && Available(other) ? new AiChoice(other, AiModels.DefaultFor(other)) : c;
         }
+        var before = (_simple, _analysis, _generation);
         _simple = Fix(_simple);
         _analysis = Fix(_analysis);
         _generation = Fix(_generation);
+        return (_simple, _analysis, _generation) != before;
     }
 
-    private async Task SaveAsync()
+    private async Task SaveKeysAsync()
     {
-        _saving = true;
+        _savingKeys = true;
         try
         {
             // A typed key replaces the stored one; an empty box leaves it alone; "Remove" clears it.
-            await Settings.SaveAsync(await UserIdAsync(), new SettingsUpdate(
-                _advanced,
-                _simple,
-                _analysis,
-                _generation,
+            await Settings.SaveKeysAsync(await UserIdAsync(),
                 _removeClaude ? "" : string.IsNullOrWhiteSpace(_claudeKey) ? null : _claudeKey,
-                _removeOpenAi ? "" : string.IsNullOrWhiteSpace(_openAiKey) ? null : _openAiKey), PageToken);
-            await LoadAsync();
+                _removeOpenAi ? "" : string.IsNullOrWhiteSpace(_openAiKey) ? null : _openAiKey, PageToken);
+            await LoadViewAsync();
 
-            var inUse = _advanced ? new[] { _analysis, _generation } : [_simple];
-            if (inUse.FirstOrDefault(c => !_view!.HasKey(c.Provider)) is { } missing)
-                Ui.Toast.Error($"Settings saved, but there's no {AiModels.ProviderName(missing.Provider)} API key for the model you picked.");
+            // The saved models only change when the user saves them, so a switch here needs a save.
+            if (MoveOffUnavailable())
+                Ui.Toast.Success("API keys saved. Models switched to a provider you have a key for: click Save models to keep it.");
             else
-                Ui.Toast.Success("Settings saved.");
+                Ui.Toast.Success("API keys saved.");
         }
         finally
         {
-            _saving = false;
+            _savingKeys = false;
+        }
+    }
+
+    private async Task SaveModelsAsync()
+    {
+        _savingModels = true;
+        try
+        {
+            await Settings.SaveModelsAsync(await UserIdAsync(), new ModelsUpdate(_advanced, _simple, _analysis, _generation), PageToken);
+
+            var inUse = _advanced ? new[] { _analysis, _generation } : [_simple];
+            if (inUse.FirstOrDefault(c => !Available(c.Provider)) is { } missing)
+                Ui.Toast.Error($"Models saved, but there's no {AiModels.ProviderName(missing.Provider)} API key for the model you picked.");
+            else
+                Ui.Toast.Success("Models saved.");
+        }
+        finally
+        {
+            _savingModels = false;
         }
     }
 }
