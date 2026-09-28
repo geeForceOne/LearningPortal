@@ -2,7 +2,7 @@
 @if (Message is not null)
 {
     <div class="busy" role="status" aria-live="polite">
-        <span class="spinner" aria-hidden="true"></span>
+        <BrandMark Size="22" Busy="true" />
         <span class="busy-text">@Message</span>
         @if (OnCancel.HasDelegate)
         {
