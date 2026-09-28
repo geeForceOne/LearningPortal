@@ -1,5 +1,20 @@
 # Release notes
 
+## 1.4.0 - 2026-09-28
+
+### New
+
+- In Advanced mode, the "Outline with" and "Write with" pickers take a custom model ID. It's used for that action only and doesn't change your default in Settings.
+
+### Improved
+
+- The "Outline with" and "Write with" pickers only list models from providers you have an API key for. Settings still shows them all.
+- API keys and models in Settings each have their own Save button. A newly saved key makes its models available right away.
+
+### Fixed
+
+- The "Score over time" chart on Statistics no longer flickers when you hover over a point.
+
 ## 1.3.0 - 2026-09-27
 
 ### New
