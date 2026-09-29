@@ -1,6 +1,7 @@
 @page "/statistics"
 @inherits AppPage
 @inject StatisticsService Stats
+@inject PracticeService Practice
 @inject TopicService Topics
 
 <PageTitle>Statistics - @AppInfo.Name</PageTitle>
@@ -138,6 +139,15 @@ else
             <h2>Weak questions</h2>
             <span class="muted small">Answered wrong or only partly right most often</span>
         </div>
+        @if (_practice.Count > 0)
+        {
+            <div class="practice-row">
+                @foreach (var (topicId, name, count) in _practice)
+                {
+                    <PracticeStart @key="topicId" TopicId="topicId" WeakCount="count" TopicName="@(_practice.Count > 1 ? name : null)" />
+                }
+            </div>
+        }
         @if (_report.WeakQuestions.Count == 0)
         {
             <div class="empty"><p>Nothing here yet: every question you've answered, you got right.</p></div>
@@ -177,12 +187,18 @@ else
 
     private StatisticsReport? _report;
     private IReadOnlyList<TopicSummary> _allTopics = [];
+    private List<(int TopicId, string Name, int Count)> _practice = [];
 
     protected override async Task OnParametersSetAsync()
     {
         var userId = await UserIdAsync();
         _allTopics = await Topics.ListAsync(userId, PageToken);
         _report = await Stats.GetAsync(userId, TopicFilter, PageToken);
+
+        // One practice per topic that has weak questions, in the order the list shows them.
+        _practice = [];
+        foreach (var t in _report.WeakQuestions.Select(w => (w.TopicId, w.TopicName)).Distinct())
+            _practice.Add((t.TopicId, t.TopicName, await Practice.CountWeakAsync(userId, t.TopicId, PageToken)));
     }
 
     private void OnFilterChanged(ChangeEventArgs e)

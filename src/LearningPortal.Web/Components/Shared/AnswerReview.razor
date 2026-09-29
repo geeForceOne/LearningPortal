@@ -1,5 +1,6 @@
 @* The revealed state of one question: the right answer highlighted, what you picked or wrote,
-   the grade, and the explanation you learn from. Used after "Reveal answer" and on results. *@
+   the grade, the explanation you learn from, and follow-up questions to the AI. Used after
+   "Reveal answer" and on results. *@
 
 @if (Q.Type == QuestionType.MultipleChoice)
 {
@@ -81,9 +82,16 @@ else
     <RichText Class="reading" Text="@Q.Explanation" />
 </div>
 
+@if (AttemptId is { } attemptId)
+{
+    <FollowUps AttemptId="attemptId" Answer="Answer" />
+}
+
 @code {
     [Parameter, EditorRequired] public AttemptAnswer Answer { get; set; } = default!;
     [Parameter] public EventCallback OnRetryGrade { get; set; }
+    // Set to offer follow-up questions to the AI about this answer.
+    [Parameter] public int? AttemptId { get; set; }
 
     private Question Q => Answer.Question!;
 

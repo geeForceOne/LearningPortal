@@ -68,7 +68,7 @@ public sealed class TopicService(IDbContextFactory<AppDbContext> dbFactory, Lear
                 t.Id, t.Name, t.Description, t.Language, t.IsProgramming, t.UpdatedAt,
                 MaterialCount = t.Materials.Count,
                 TokenTotal = t.Materials.Sum(m => (int?)m.TokenEstimate) ?? 0,
-                ExamCount = t.Exams.Count,
+                ExamCount = t.Exams.Count(e => !e.IsPractice),
                 QuestionCount = t.Questions.Count,
             })
             .ToListAsync(ct);
@@ -107,7 +107,7 @@ public sealed class TopicService(IDbContextFactory<AppDbContext> dbFactory, Lear
             .ToListAsync(ct);
 
         var exams = await db.Exams.AsNoTracking()
-            .Where(e => e.UserId == userId && e.TopicId == topicId)
+            .Where(e => e.UserId == userId && e.TopicId == topicId && !e.IsPractice)
             .Select(e => new
             {
                 e.Id, e.Name, e.QuestionCount, e.Type, e.Difficulty, e.CreatedAt,

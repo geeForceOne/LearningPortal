@@ -90,9 +90,12 @@ public sealed class AttemptService(
         var attempt = await db.Attempts.AsNoTracking()
             .Include(a => a.Exam!).ThenInclude(e => e.Topic)
             .Include(a => a.Answers).ThenInclude(x => x.Question!).ThenInclude(q => q.Options)
+            .Include(a => a.Answers).ThenInclude(x => x.FollowUps)
             .AsSplitQuery()
             .FirstOrDefaultAsync(a => a.Id == attemptId && a.UserId == userId, ct) ?? throw new NotFoundException();
 
+        foreach (var a in attempt.Answers)
+            a.FollowUps = a.FollowUps.OrderBy(f => f.Order).ToList();
         return new AttemptView(attempt, attempt.Exam!, attempt.Exam!.Topic!, attempt.Answers.OrderBy(a => a.Position).ToList());
     }
 
@@ -176,6 +179,62 @@ public sealed class AttemptService(
 
         await db.SaveChangesAsync(CancellationToken.None);
         return answer;
+    }
+
+    // Asks the AI a follow-up about a revealed answer. It sees the question, the answer given, the
+    // explanation, the question's source section and the earlier follow-ups, never the whole topic.
+    public async Task<FollowUp> AskFollowUpAsync(string userId, int attemptId, int answerId, string text, CancellationToken ct)
+    {
+        var asked = text.Trim();
+        if (asked.Length == 0)
+            throw new ArgumentException("Type your question first.");
+        if (asked.Length > FollowUp.MaxQuestionLength)
+            throw new ArgumentException($"Keep the question under {FollowUp.MaxQuestionLength} characters.");
+
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var (attempt, answer) = await LoadAnswerAsync(db, userId, attemptId, answerId, ct, allowFinished: true);
+        if (!answer.Revealed && attempt.CompletedAt is null)
+            throw new InvalidOperationException("Reveal the answer before asking about it.");
+        var earlier = await db.FollowUps.Where(f => f.AttemptAnswerId == answer.Id).OrderBy(f => f.Order).ToListAsync(ct);
+        if (earlier.Count >= FollowUp.MaxPerAnswer)
+            throw new InvalidOperationException($"You can ask up to {FollowUp.MaxPerAnswer} follow-up questions per answer.");
+
+        var question = answer.Question!;
+        var language = await db.Topics.Where(t => t.Id == question.TopicId).Select(t => t.Language).FirstAsync(ct);
+        var source = question.SourceSectionId is { } sid
+            ? await db.MaterialSections.Where(s => s.Id == sid).Select(s => s.Text).FirstOrDefaultAsync(ct)
+            : null;
+
+        var connection = await settings.GetConnectionAsync(userId, AiTask.Generation, ct: ct);
+        var json = await AiClientFactory.Create(connection).CompleteJsonAsync(new AiRequest
+        {
+            System = Prompts.FollowUpSystem(language),
+            Prompt = Prompts.FollowUpPrompt(question, answer, source, earlier.Select(f => (f.Question, f.Answer)), asked),
+            SchemaName = "follow_up",
+            Schema = Prompts.FollowUpSchema,
+            MaxTokens = 4_000,
+        }, ct);
+
+        string reply;
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            reply = doc.RootElement.GetProperty("answer").GetString() ?? "";
+        }
+        catch (Exception ex) when (ex is JsonException or KeyNotFoundException or InvalidOperationException)
+        {
+            throw new AiException("The AI's reply couldn't be read. Try asking again.");
+        }
+        if (string.IsNullOrWhiteSpace(reply))
+            throw new AiException("The AI returned an empty reply. Try asking again.");
+
+        var followUp = new FollowUp
+        {
+            AttemptAnswerId = answer.Id, Order = earlier.Count, Question = asked, Answer = reply.Trim(), Model = connection.Model,
+        };
+        db.FollowUps.Add(followUp);
+        await db.SaveChangesAsync(CancellationToken.None);
+        return followUp;
     }
 
     public async Task RevealAsync(string userId, int attemptId, int answerId, CancellationToken ct = default)

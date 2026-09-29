@@ -126,7 +126,7 @@ public sealed class ExamService(
             var bank = await db.Questions
                 .Where(q => q.TopicId == topicId && q.UserId == userId && q.Difficulty == difficulty && (programming || !q.IsCode))
                 .Where(q => q.SourceMaterialId == null || !excluded.Contains(q.SourceMaterialId.Value))
-                .Select(q => new { q.Id, q.Type, q.IsCode, Uses = db.ExamQuestions.Count(eq => eq.QuestionId == q.Id) })
+                .Select(q => new { q.Id, q.Type, q.IsCode, Uses = db.ExamQuestions.Count(eq => eq.QuestionId == q.Id && !eq.Exam!.IsPractice) })
                 .ToListAsync(ct);
 
             // Each question uses up one place of its type and one of its kind, so a reused
@@ -457,7 +457,7 @@ public sealed class ExamService(
         await db.Exams
             .Include(e => e.Topic)
             .Include(e => e.Questions).ThenInclude(eq => eq.Question)
-            .FirstOrDefaultAsync(e => e.Id == examId && e.UserId == userId, ct) ?? throw new NotFoundException();
+            .FirstOrDefaultAsync(e => e.Id == examId && e.UserId == userId && !e.IsPractice, ct) ?? throw new NotFoundException();
 
     private static void Validate(ExamSettings s)
     {

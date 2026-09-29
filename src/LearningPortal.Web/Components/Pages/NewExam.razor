@@ -49,7 +49,7 @@ else
 
         @if (IsBusy)
         {
-            <div style="margin-top:20px"><BusyBar Message="@BusyMessage" OnCancel="CancelBusy" /></div>
+            <div style="margin-top:20px"><BusyBar Message="@BusyMessage" OnCancel="CancelBusy" KeepOpen="BusyKeepsPageOpen" /></div>
             <p class="muted small" style="margin-top:8px">Writing questions can take a minute or two. Questions finished so far are kept even if you cancel.</p>
         }
         @if (_error is not null)
@@ -139,7 +139,7 @@ else
         {
             examId = await Exams.CreateAsync(userId, TopicId, _values.ToSettings(), ct);
             result = await Exams.FillAsync(userId, examId.Value, Choice, progress, ct);
-        }, message => _error = message);
+        }, message => _error = message, keepPageOpen: true);
 
         if (examId is null)
             return;

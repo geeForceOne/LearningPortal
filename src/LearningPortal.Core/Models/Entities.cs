@@ -192,6 +192,9 @@ public sealed class Exam
     // Materials of the topic this exam leaves out: the AI doesn't write from them and bank questions
     // from them aren't reused. Null or empty means every material, including ones added later.
     public List<int>? ExcludedMaterialIds { get; set; }
+    // The topic's "Weak questions" practice: one per topic, its questions rebuilt from the ones most
+    // often answered wrong each time it's started. Not listed with the topic's exams or edited.
+    public bool IsPractice { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
@@ -247,6 +250,7 @@ public sealed class AttemptAnswer
 
     public Attempt? Attempt { get; set; }
     public Question? Question { get; set; }
+    public List<FollowUp> FollowUps { get; set; } = [];
 
     public bool IsAnswered => AnsweredAt is not null;
 
@@ -259,4 +263,22 @@ public sealed class AttemptAnswer
         string.IsNullOrWhiteSpace(csv)
             ? []
             : csv.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(int.Parse).ToList();
+}
+
+// A question the user asked the AI about a revealed answer ("why isn't B right?"), and its reply.
+// Kept with the attempt's answer so it's still there when the attempt is reviewed.
+public sealed class FollowUp
+{
+    public const int MaxPerAnswer = 3;
+    public const int MaxQuestionLength = 500;
+
+    public int Id { get; set; }
+    public int AttemptAnswerId { get; set; }
+    public int Order { get; set; }
+    public string Question { get; set; } = "";
+    public string Answer { get; set; } = "";
+    public string? Model { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    public AttemptAnswer? AttemptAnswer { get; set; }
 }

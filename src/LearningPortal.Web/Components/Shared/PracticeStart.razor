@@ -1,0 +1,58 @@
+@* Starts a topic's "Weak questions" practice: its questions answered wrong most often, 10 by
+   default. No AI is involved, so it costs nothing. *@
+@using System.Security.Claims
+@inject PracticeService Practice
+@inject NavigationManager Nav
+
+<div class="practice-start">
+    <button type="button" class="btn btn-secondary btn-sm" disabled="@_starting" @onclick="StartAsync">
+        <Icon Name="redo" Size="14" /> Practice weak questions@(TopicName is null ? "" : $" in {TopicName}")
+    </button>
+    <label class="practice-size">
+        <input type="number" class="input" min="1" max="@PracticeService.MaxSize" @bind="_size" aria-label="How many questions" />
+        <span>of @WeakCount</span>
+    </label>
+</div>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+    [CascadingParameter] private AppUi Ui { get; set; } = default!;
+
+    [Parameter, EditorRequired] public int TopicId { get; set; }
+    [Parameter, EditorRequired] public int WeakCount { get; set; }
+    // Shown in the button when the page lists several topics.
+    [Parameter] public string? TopicName { get; set; }
+
+    private int _size = PracticeService.DefaultSize;
+    private bool _starting;
+
+    private int? _countShown;
+
+    // Only when the count changes, so a number the user typed survives a re-render of the page.
+    protected override void OnParametersSet()
+    {
+        if (_countShown == WeakCount) return;
+        _countShown = WeakCount;
+        _size = Math.Min(PracticeService.DefaultSize, Math.Max(1, WeakCount));
+    }
+
+    private async Task StartAsync()
+    {
+        _starting = true;
+        try
+        {
+            var state = AuthState is null ? null : await AuthState;
+            var userId = state?.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? throw new InvalidOperationException("Not signed in.");
+            var attemptId = await Practice.StartAsync(userId, TopicId, Math.Clamp(_size, 1, PracticeService.MaxSize));
+            Nav.NavigateTo($"attempts/{attemptId}");
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or NotFoundException)
+        {
+            Ui.Toast.Error(ex.Message);
+        }
+        finally
+        {
+            _starting = false;
+        }
+    }
+}

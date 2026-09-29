@@ -31,6 +31,40 @@ public sealed record StatisticsReport(
 
 public sealed class StatisticsService(IDbContextFactory<AppDbContext> dbFactory, TopicService topics)
 {
+    private sealed record GradedAnswer(
+        int QuestionId, int Score, string Prompt, QuestionType Type, Difficulty Difficulty,
+        int TopicId, string TopicName, string? SourceLabel);
+
+    // A topic's questions answered wrong or only partly right, weakest first: the highest share of
+    // misses, then the most misses, then the lowest average score.
+    public async Task<IReadOnlyList<WeakQuestion>> GetWeakQuestionsAsync(string userId, int topicId, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        return RankWeak(await GradedAnswersAsync(db, userId, topicId, ct)).ToList();
+    }
+
+    private static Task<List<GradedAnswer>> GradedAnswersAsync(AppDbContext db, string userId, int? topicId, CancellationToken ct) =>
+        db.AttemptAnswers.AsNoTracking()
+            .Where(a => a.Attempt!.UserId == userId && a.Attempt.CompletedAt != null && a.Score != null
+                && (topicId == null || a.Question!.TopicId == topicId))
+            .Select(a => new GradedAnswer(
+                a.QuestionId, a.Score!.Value, a.Question!.Prompt, a.Question.Type, a.Question.Difficulty,
+                a.Question.TopicId, a.Question.Topic!.Name, a.Question.SourceLabel))
+            .ToListAsync(ct);
+
+    private static IEnumerable<WeakQuestion> RankWeak(IEnumerable<GradedAnswer> answers) => answers
+        .GroupBy(a => a.QuestionId)
+        .Select(g =>
+        {
+            var f = g.First();
+            return new WeakQuestion(f.QuestionId, f.TopicId, f.TopicName, f.Prompt, f.Type, f.Difficulty,
+                g.Count(), g.Count(a => VerdictRules.FromScore(a.Score) != Verdict.Correct), g.Average(a => a.Score), f.SourceLabel);
+        })
+        .Where(w => w.Missed > 0)
+        .OrderByDescending(w => w.Missed / (double)w.Answered)
+        .ThenByDescending(w => w.Missed)
+        .ThenBy(w => w.AverageScore);
+
     public async Task<StatisticsReport> GetAsync(string userId, int? topicId = null, CancellationToken ct = default)
     {
         var topicList = (await topics.ListAsync(userId, ct))
@@ -59,30 +93,8 @@ public sealed class StatisticsService(IDbContextFactory<AppDbContext> dbFactory,
             .OrderByDescending(e => e.Points[^1].CompletedAt)
             .ToList();
 
-        var answers = await db.AttemptAnswers.AsNoTracking()
-            .Where(a => a.Attempt!.UserId == userId && a.Attempt.CompletedAt != null && a.Score != null
-                && (topicId == null || a.Question!.TopicId == topicId))
-            .Select(a => new
-            {
-                a.QuestionId, Score = a.Score!.Value, a.Question!.Prompt, a.Question.Type, a.Question.Difficulty,
-                a.Question.TopicId, TopicName = a.Question.Topic!.Name, a.Question.SourceLabel,
-            })
-            .ToListAsync(ct);
-
-        var weak = answers
-            .GroupBy(a => a.QuestionId)
-            .Select(g =>
-            {
-                var f = g.First();
-                return new WeakQuestion(f.QuestionId, f.TopicId, f.TopicName, f.Prompt, f.Type, f.Difficulty,
-                    g.Count(), g.Count(a => VerdictRules.FromScore(a.Score) != Verdict.Correct), g.Average(a => a.Score), f.SourceLabel);
-            })
-            .Where(w => w.Missed > 0)
-            .OrderByDescending(w => w.Missed / (double)w.Answered)
-            .ThenByDescending(w => w.Missed)
-            .ThenBy(w => w.AverageScore)
-            .Take(15)
-            .ToList();
+        var answers = await GradedAnswersAsync(db, userId, topicId, ct);
+        var weak = RankWeak(answers).Take(15).ToList();
 
         var breakdown = answers
             .GroupBy(a => (a.Type, a.Difficulty))

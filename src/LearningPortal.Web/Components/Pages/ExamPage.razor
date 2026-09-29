@@ -52,7 +52,7 @@ else
 
     @if (IsBusy)
     {
-        <div style="margin-bottom:20px"><BusyBar Message="@BusyMessage" OnCancel="CancelBusy" /></div>
+        <div style="margin-bottom:20px"><BusyBar Message="@BusyMessage" OnCancel="CancelBusy" KeepOpen="BusyKeepsPageOpen" /></div>
     }
     @if (_error is not null)
     {
@@ -292,6 +292,12 @@ else
         try
         {
             _detail = await Exams.GetAsync(userId, ExamId, PageToken);
+            // The weak-questions practice isn't edited like an exam; it's started from its topic.
+            if (_detail.Exam.IsPractice)
+            {
+                Nav.NavigateTo($"topics/{_detail.Exam.TopicId}", replace: true);
+                return;
+            }
             _attempts = await Attempts.ListForExamAsync(userId, ExamId, PageToken);
             _cost = await Generator.CostBasisAsync(userId, _detail.Exam.TopicId, _detail.Exam.ExcludedMaterialIds, ct: PageToken);
             _materials = await Topics.MaterialChoicesAsync(userId, _detail.Exam.TopicId, PageToken);
@@ -348,7 +354,7 @@ else
 
         FillResult? result = null;
         await RunBusyAsync("Filling the exam...", async (progress, ct) =>
-            result = await Exams.FillAsync(userId, ExamId, Choice, progress, ct), m => _error = m);
+            result = await Exams.FillAsync(userId, ExamId, Choice, progress, ct), m => _error = m, keepPageOpen: true);
         ReportFill(result);
         await LoadAsync();
     }
@@ -413,7 +419,7 @@ else
         _error = null;
         FillResult? result = null;
         await RunBusyAsync("Writing new questions...", async (progress, ct) =>
-            result = await Exams.RegenerateAllAsync(await UserIdAsync(), ExamId, Choice, progress, ct), m => _error = m);
+            result = await Exams.RegenerateAllAsync(await UserIdAsync(), ExamId, Choice, progress, ct), m => _error = m, keepPageOpen: true);
         ReportFill(result);
         await LoadAsync();
     }
@@ -422,7 +428,7 @@ else
     {
         _error = null;
         var ok = await RunBusyAsync("Writing a replacement question...", async (progress, ct) =>
-            await Exams.ReplaceQuestionAsync(await UserIdAsync(), ExamId, q.Id, Choice, progress, ct), m => _error = m);
+            await Exams.ReplaceQuestionAsync(await UserIdAsync(), ExamId, q.Id, Choice, progress, ct), m => _error = m, keepPageOpen: true);
         if (ok) Ui.Toast.Success("Question replaced. The old one stays in your question bank.");
         await LoadAsync();
     }

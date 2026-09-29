@@ -5,6 +5,7 @@
 @inject AnalysisQueue Analysis
 @inject SettingsService Settings
 @inject LearningPortalOptions Options
+@inject PracticeService Practice
 
 <PageTitle>@(_topic?.Summary.Name ?? "Topic") - @AppInfo.Name</PageTitle>
 
@@ -126,6 +127,14 @@ else
                         }
                     </ul>
                 }
+
+                @if (_weakCount > 0)
+                {
+                    <div class="practice-row">
+                        <span class="muted small">@Format.Plural(_weakCount, "question", "questions") here you've answered wrong or only partly right.</span>
+                        <PracticeStart TopicId="TopicId" WeakCount="_weakCount" />
+                    </div>
+                }
             </section>
 
             <section class="section">
@@ -240,6 +249,7 @@ else
     // The model that outlines what's added here; starts at the uploads default.
     private AiChoice _outlineWith = default!;
     private AiModelInfo? _model;
+    private int _weakCount;
 
     // Passed to the analysis only in advanced mode; in simple mode the one model does everything.
     private AiChoice? Choice => _settings?.AdvancedModels == true ? _outlineWith : null;
@@ -257,6 +267,7 @@ else
         {
             var userId = await UserIdAsync();
             _topic = await Topics.GetAsync(userId, TopicId, PageToken);
+            _weakCount = await Practice.CountWeakAsync(userId, TopicId, PageToken);
             if (_settings is null)
             {
                 _settings = await Settings.GetAsync(userId, PageToken);

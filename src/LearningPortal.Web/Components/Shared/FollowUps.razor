@@ -1,0 +1,92 @@
+@* Follow-up questions to the AI about one revealed answer ("why isn't B right?"), up to
+   FollowUp.MaxPerAnswer. They're saved with the attempt, so they show again on the results. *@
+@using System.Security.Claims
+@using LearningPortal.Core.Ai
+@inject AttemptService Attempts
+
+<div class="follow-ups">
+    @foreach (var f in Answer.FollowUps)
+    {
+        <div class="follow-up" @key="f.Id">
+            <p class="follow-up-q"><span class="follow-up-who">You asked</span> @f.Question</p>
+            <RichText Class="reading" Text="@f.Answer" />
+        </div>
+    }
+
+    @if (Answer.FollowUps.Count < FollowUp.MaxPerAnswer)
+    {
+        var left = FollowUp.MaxPerAnswer - Answer.FollowUps.Count;
+        if (!_open)
+        {
+            <button type="button" class="link-button follow-up-open" @onclick="() => _open = true">
+                @(Answer.FollowUps.Count == 0 ? "Ask the AI a follow-up question" : $"Ask another follow-up ({left} left)")
+            </button>
+        }
+        else
+        {
+            <div class="follow-up-form">
+                <label class="field-label" for="@_id">Your follow-up question</label>
+                <textarea id="@_id" class="textarea" rows="2" maxlength="@FollowUp.MaxQuestionLength" @bind="_text" @bind:event="oninput"
+                          disabled="@_asking" placeholder="For example: why isn't the second option right?"></textarea>
+                @if (_error is not null)
+                {
+                    <div class="notice notice-error">@_error</div>
+                }
+                @if (_asking)
+                {
+                    <BusyBar Message="The AI is answering..." />
+                }
+                else
+                {
+                    <div class="actions">
+                        <button type="button" class="btn btn-primary btn-sm" disabled="@string.IsNullOrWhiteSpace(_text)" @onclick="AskAsync">Ask</button>
+                        <button type="button" class="btn btn-ghost btn-sm" @onclick="Close">Cancel</button>
+                        <span class="muted small">@(left == 1 ? "Last follow-up for this question." : $"Up to {left} more for this question.")</span>
+                    </div>
+                }
+            </div>
+        }
+    }
+</div>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    [Parameter, EditorRequired] public int AttemptId { get; set; }
+    [Parameter, EditorRequired] public AttemptAnswer Answer { get; set; } = default!;
+
+    private readonly string _id = "follow-up-" + Guid.NewGuid().ToString("N")[..8];
+    private bool _open;
+    private bool _asking;
+    private string _text = "";
+    private string? _error;
+
+    private void Close()
+    {
+        _open = false;
+        _text = "";
+        _error = null;
+    }
+
+    private async Task AskAsync()
+    {
+        _asking = true;
+        _error = null;
+        try
+        {
+            var state = AuthState is null ? null : await AuthState;
+            var userId = state?.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? throw new InvalidOperationException("Not signed in.");
+            var followUp = await Attempts.AskFollowUpAsync(userId, AttemptId, Answer.Id, _text, CancellationToken.None);
+            Answer.FollowUps.Add(followUp);
+            Close();
+        }
+        catch (Exception ex) when (ex is AiException or ArgumentException or InvalidOperationException or NotFoundException)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _asking = false;
+        }
+    }
+}

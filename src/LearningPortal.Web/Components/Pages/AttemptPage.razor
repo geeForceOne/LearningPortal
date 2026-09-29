@@ -1,6 +1,7 @@
 @page "/attempts/{AttemptId:int}"
 @inherits AppPage
 @inject AttemptService Attempts
+@inject PracticeService Practice
 @inject IJSRuntime JS
 
 <PageTitle>@(_view?.Exam.Name ?? "Exam") - @AppInfo.Name</PageTitle>
@@ -203,6 +204,39 @@ else
         Nav.NavigateTo($"attempts/{id}");
     }
 
+    // The practice has no exam page of its own; its topic is where it's started.
+    private string ExamHref => _view!.Exam.IsPractice ? $"topics/{_view.Topic.Id}" : $"exams/{_view.Exam.Id}";
+
+    private async Task PracticeAgainAsync()
+    {
+        try
+        {
+            var id = await Practice.StartAsync(await UserIdAsync(), _view!.Topic.Id, _view.Answers.Count, PageToken);
+            Nav.NavigateTo($"attempts/{id}");
+        }
+        catch (InvalidOperationException ex)
+        {
+            Ui.Toast.Error(ex.Message);
+        }
+    }
+
+    private async Task SaveAsExamAsync()
+    {
+        var name = await Ui.Prompt.AskAsync("Save as exam", "Exam name",
+            $"{PracticeService.ExamName}, {DateTime.Now.ToString("d MMM", System.Globalization.CultureInfo.InvariantCulture)}", "Save");
+        if (name is null)
+            return;
+        try
+        {
+            var examId = await Practice.SaveAsExamAsync(await UserIdAsync(), AttemptId, name, PageToken);
+            Nav.NavigateTo($"exams/{examId}");
+        }
+        catch (ArgumentException ex)
+        {
+            Ui.Toast.Error(ex.Message);
+        }
+    }
+
     private async Task ScrollTopAsync()
     {
         try { await JS.InvokeVoidAsync("learningPortal.scrollToTop"); } catch (JSException) { }
@@ -235,7 +269,7 @@ else
         var a = Current;
         <div class="exam">
             <div class="exam-top">
-                <a href="exams/@_view!.Exam.Id" class="muted" style="text-decoration:none">&larr; @_view.Exam.Name</a>
+                <a href="@ExamHref" class="muted" style="text-decoration:none">&larr; @_view!.Exam.Name</a>
                 <span>@_view.AnsweredCount of @_view.Answers.Count answered</span>
             </div>
 
@@ -258,7 +292,7 @@ else
 
             @if (a.IsAnswered && a.Revealed)
             {
-                <AnswerReview Answer="a" OnRetryGrade="() => RetryGradeAsync(a.Id)" />
+                <AnswerReview Answer="a" OnRetryGrade="() => RetryGradeAsync(a.Id)" AttemptId="AttemptId" />
             }
             else if (a.IsAnswered)
             {
@@ -374,7 +408,14 @@ else
         <nav class="crumbs" aria-label="Breadcrumb">
             <a href="">Topics</a><span class="sep">/</span>
             <a href="topics/@_view.Topic.Id">@_view.Topic.Name</a><span class="sep">/</span>
-            <a href="exams/@_view.Exam.Id">@_view.Exam.Name</a>
+            @if (_view.Exam.IsPractice)
+            {
+                <span>@_view.Exam.Name</span>
+            }
+            else
+            {
+                <a href="exams/@_view.Exam.Id">@_view.Exam.Name</a>
+            }
         </nav>
 
         <div class="exam" style="max-width:760px">
@@ -388,12 +429,25 @@ else
                 </div>
             </div>
 
-            <div class="actions" style="margin:20px 0 10px">
-                <button type="button" class="btn btn-primary" @onclick="TakeAgainAsync"><Icon Name="redo" /> Take again</button>
-                <a class="btn btn-secondary" href="exams/@_view.Exam.Id">Back to exam</a>
-                <a class="btn btn-ghost" href="statistics?topic=@_view.Topic.Id">Statistics</a>
-            </div>
-            <p class="muted small">Taking it again shuffles the questions and the answer options.</p>
+            @if (_view.Exam.IsPractice)
+            {
+                <div class="actions" style="margin:20px 0 10px">
+                    <button type="button" class="btn btn-primary" @onclick="PracticeAgainAsync"><Icon Name="redo" /> Practice again</button>
+                    <button type="button" class="btn btn-secondary" @onclick="SaveAsExamAsync"><Icon Name="plus" /> Save as exam</button>
+                    <a class="btn btn-ghost" href="topics/@_view.Topic.Id">Back to topic</a>
+                    <a class="btn btn-ghost" href="statistics?topic=@_view.Topic.Id">Statistics</a>
+                </div>
+                <p class="muted small">Practising again picks your weakest questions as they are then. "Save as exam" keeps these questions as an exam you can repeat and edit.</p>
+            }
+            else
+            {
+                <div class="actions" style="margin:20px 0 10px">
+                    <button type="button" class="btn btn-primary" @onclick="TakeAgainAsync"><Icon Name="redo" /> Take again</button>
+                    <a class="btn btn-secondary" href="exams/@_view.Exam.Id">Back to exam</a>
+                    <a class="btn btn-ghost" href="statistics?topic=@_view.Topic.Id">Statistics</a>
+                </div>
+                <p class="muted small">Taking it again shuffles the questions and the answer options.</p>
+            }
 
             @for (var i = 0; i < answers.Count; i++)
             {
@@ -407,7 +461,7 @@ else
                         }
                     </div>
                     <div class="prompt" role="heading" aria-level="2"><RichText Text="@item.Question.Prompt" /></div>
-                    <AnswerReview Answer="item" />
+                    <AnswerReview Answer="item" AttemptId="AttemptId" />
                 </article>
             }
         </div>

@@ -47,6 +47,8 @@ questions work with code (40% by default); the rest are theory.
   100% and explains what was right and what was missing
 - Reveal each answer right away or wait until the end. Every answer comes with a thorough
   explanation and a link to the part of the material it came from
+- Still unsure? **Ask the AI a follow-up** about a revealed answer ("why isn't B right?"), up to
+  three per question. The replies are saved with the attempt
 - There's no timer, but every attempt's duration is recorded. Answers are saved as you go, so you
   can leave and resume an attempt later
 - Repeat an exam as often as you like, with the question order and the options shuffled
@@ -80,7 +82,8 @@ See what's sticking and what isn't:
 
 - Score over time for each exam
 - An overview per topic: average score, attempt count, last practised
-- Weak questions: the ones you get wrong most often
+- Weak questions: the ones you get wrong most often, with **Practice weak questions** to drill
+  exactly those (10 by default, no AI cost). Keep a practice run as an exam if it's useful
 - A breakdown by question type and difficulty
 
 ![Statistics: score over time and per topic](docs/images/recall-statistics.jpg)

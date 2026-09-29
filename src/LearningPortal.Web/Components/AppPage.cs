@@ -24,6 +24,10 @@ public abstract class AppPage : ComponentBase, IDisposable
     protected string? BusyMessage { get; private set; }
     protected bool IsBusy => BusyMessage is not null;
 
+    // True while the AI writes questions: the busy bar then asks the user to keep the page open,
+    // since leaving cancels the work.
+    protected bool BusyKeepsPageOpen { get; private set; }
+
     // Cancelled when the user leaves the page.
     protected CancellationToken PageToken => _pageCts.Token;
 
@@ -43,10 +47,12 @@ public abstract class AppPage : ComponentBase, IDisposable
     protected async Task<bool> RunBusyAsync(
         string initialMessage,
         Func<IProgress<string>, CancellationToken, Task> work,
-        Action<string> onError)
+        Action<string> onError,
+        bool keepPageOpen = false)
     {
         _busyCts = CancellationTokenSource.CreateLinkedTokenSource(_pageCts.Token);
         BusyMessage = initialMessage;
+        BusyKeepsPageOpen = keepPageOpen;
         StateHasChanged();
 
         var progress = new Progress<string>(message =>
@@ -74,6 +80,7 @@ public abstract class AppPage : ComponentBase, IDisposable
         finally
         {
             BusyMessage = null;
+            BusyKeepsPageOpen = false;
             _busyCts?.Dispose();
             _busyCts = null;
             StateHasChanged();

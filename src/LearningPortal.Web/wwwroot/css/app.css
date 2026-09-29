@@ -773,6 +773,29 @@ a.row-title:hover { text-decoration: underline; text-decoration-color: var(--rul
 
 /* The logo stands in for a spinner; wwwroot/js/brand-motion.js moves its dot. */
 .busy .brand-mark { flex: none; }
+.busy-note { display: block; margin-top: 2px; color: var(--pencil); font-size: var(--t-xs); }
+
+/* "Practice weak questions": a button with how many questions to take. */
+.practice-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin-top: 14px; }
+.practice-start { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.practice-size { display: inline-flex; align-items: center; gap: 6px; font-size: var(--t-sm); color: var(--pencil); }
+.practice-size .input { width: 4.5em; min-height: 32px; padding: 4px 8px; }
+
+/* Follow-up questions to the AI under a revealed answer. */
+.follow-ups { display: grid; gap: 12px; margin-top: 16px; }
+.follow-up { border-left: 3px solid var(--rule-strong); padding-left: 12px; }
+.follow-up-q { margin: 0 0 6px; font-weight: 700; }
+.follow-up-who {
+    margin-right: 6px;
+    color: var(--pencil);
+    font-size: var(--t-xs);
+    font-weight: 400;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+.follow-up-open { justify-self: start; }
+.follow-up-form { display: grid; gap: 8px; }
+.follow-up-form .actions { align-items: center; }
 
 .notice {
     padding: 12px 14px;
