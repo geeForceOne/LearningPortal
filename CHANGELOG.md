@@ -1,5 +1,22 @@
 # Release notes
 
+## 1.6.0 - 2026-09-29
+
+### New
+
+- Questions are now written in the background. You can leave the page or close the browser while the AI writes them; they're there when you come back, and the topic page shows which exam is still being written.
+- Concept map: each topic's material, section by section, coloured by how well you do on its questions. Pick a section to practise it.
+- Explain it back: pick a concept from your material (or "Surprise me") and explain it in your own words. The AI asks one or two questions like a curious student, then tells you what you explained well and what was missing.
+- Gap finder: the AI lists what a course on your topic usually covers that your material doesn't, and can write a short study note for each gap. These come from the AI's general knowledge, so they're clearly marked and can be wrong.
+
+### Improved
+
+- Claude Sonnet 5.5 is now in the model list, at the same price as Sonnet 5.
+
+### Fixed
+
+- Minor fixes and updates.
+
 ## 1.5.0 - 2026-09-29
 
 ### New
