@@ -105,7 +105,8 @@ public static class AiModels
         new("claude-fable-5-1", "Claude Fable 5.1", "Anthropic's most capable model. Best for very dense or technical material, at a premium price.", 10m, 50m),
         new("claude-opus-5-5", "Claude Opus 5.5", "Newest Opus: top quality at a lower price than Opus 5.", 4m, 20m),
         new("claude-opus-5", "Claude Opus 5", "Highly capable all-rounder for writing and grading questions.", 5m, 25m),
-        new("claude-sonnet-5", "Claude Sonnet 5", "Strong quality at a much lower price. A good everyday choice.", 2m, 10m),
+        new("claude-sonnet-5-5", "Claude Sonnet 5.5", "Newest Sonnet: strong quality at a much lower price. A good everyday choice.", 2m, 10m),
+        new("claude-sonnet-5", "Claude Sonnet 5", "Previous Sonnet, same price as Sonnet 5.5. Kept for anyone who picked it.", 2m, 10m),
         new("claude-haiku-4-5", "Claude Haiku 4.5", "Fastest and cheapest. Fine for easy recall questions; weaker on hard ones.", 1m, 5m),
     ];
 

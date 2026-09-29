@@ -104,6 +104,9 @@ public sealed class Material
     public string UserId { get; set; } = "";
     public string Title { get; set; } = "";
     public MaterialKind Kind { get; set; }
+    // A study note the AI wrote for a gap the gap finder found (from general knowledge, not the
+    // user's sources), so the UI can say it may contain mistakes.
+    public bool IsAiWritten { get; set; }
     public string? OriginalFileName { get; set; }
     // Relative to the configured files root; null for pasted text.
     public string? StoredFilePath { get; set; }
@@ -281,4 +284,38 @@ public sealed class FollowUp
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public AttemptAnswer? AttemptAnswer { get; set; }
+}
+
+// "Explain it back": the user explains one concept from their material in their own words, the AI
+// asks one or two questions about it like a curious student, and then says what was right and what
+// was missing. Kept per topic so earlier explanations can be looked at again.
+public sealed class ExplainSession
+{
+    public const int MaxConceptLength = 300;
+    public const int MaxExplanationLength = 2_500;
+    public const int MaxReplyLength = 1_000;
+
+    public int Id { get; set; }
+    public string UserId { get; set; } = "";
+    public int TopicId { get; set; }
+    // The section the concept comes from; its text is what the AI checks the explanation against.
+    public int? SectionId { get; set; }
+    public string Concept { get; set; } = "";
+    public string? Explanation { get; set; }
+    // The AI's questions and the user's replies, as JSON string arrays.
+    public string? QuestionsJson { get; set; }
+    public string? RepliesJson { get; set; }
+    public int? Score { get; set; }
+    public string? Feedback { get; set; }
+    public string? Model { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime? CompletedAt { get; set; }
+
+    public Topic? Topic { get; set; }
+
+    public IReadOnlyList<string> Questions => Parse(QuestionsJson);
+    public IReadOnlyList<string> Replies => Parse(RepliesJson);
+
+    private static List<string> Parse(string? json) =>
+        string.IsNullOrWhiteSpace(json) ? [] : System.Text.Json.JsonSerializer.Deserialize<List<string>>(json) ?? [];
 }

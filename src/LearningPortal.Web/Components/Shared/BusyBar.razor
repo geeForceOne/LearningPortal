@@ -1,15 +1,14 @@
-@* Status line for a long-running AI operation, with a way out. With KeepOpen (while the AI writes
-   questions) it also says the work takes a while and stops when the page is left, and asks before
-   the user navigates away or closes the tab. *@
+@* Status line for a long-running AI operation, with a way out. Large (while the AI writes
+   questions, which takes minutes) shows the larger, detailed logo; Note adds a second line. *@
 @if (Message is not null)
 {
     <div class="busy" role="status" aria-live="polite">
-        <BrandMark Size="22" Busy="true" />
+        <BrandMark Size="@(Large ? 48 : 22)" Busy="true" />
         <span class="busy-text">
             @Message
-            @if (KeepOpen)
+            @if (Note is not null)
             {
-                <span class="busy-note">This can take a few minutes. Keep this page open: leaving stops the AI. Questions it has already finished are kept.</span>
+                <span class="busy-note">@Note</span>
             }
         </span>
         @if (OnCancel.HasDelegate)
@@ -17,24 +16,11 @@
             <button type="button" class="btn btn-ghost btn-sm" @onclick="OnCancel">Cancel</button>
         }
     </div>
-    @if (KeepOpen)
-    {
-        <NavigationLock ConfirmExternalNavigation="true" OnBeforeInternalNavigation="ConfirmLeaveAsync" />
-    }
 }
 
 @code {
-    [CascadingParameter] private AppUi Ui { get; set; } = default!;
-
     [Parameter] public string? Message { get; set; }
     [Parameter] public EventCallback OnCancel { get; set; }
-    [Parameter] public bool KeepOpen { get; set; }
-
-    private async Task ConfirmLeaveAsync(LocationChangingContext context)
-    {
-        if (!await Ui.Confirm.AskAsync("Leave this page?",
-                "The AI is still writing questions. Leaving stops it; the questions it has already finished are kept.",
-                "Leave", danger: true))
-            context.PreventNavigation();
-    }
+    [Parameter] public string? Note { get; set; }
+    [Parameter] public bool Large { get; set; }
 }

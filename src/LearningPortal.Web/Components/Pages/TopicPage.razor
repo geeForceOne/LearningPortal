@@ -6,6 +6,7 @@
 @inject SettingsService Settings
 @inject LearningPortalOptions Options
 @inject PracticeService Practice
+@inject QuestionWriter Writer
 
 <PageTitle>@(_topic?.Summary.Name ?? "Topic") - @AppInfo.Name</PageTitle>
 
@@ -106,6 +107,10 @@ else
                                         {
                                             <span>@Format.Plural(e.AttemptCount, "attempt", "attempts")</span>
                                         }
+                                        @if (_userId is not null && Writer.IsWriting(_userId, e.Id))
+                                        {
+                                            <span class="tag">AI is writing questions</span>
+                                        }
                                     </div>
                                 </div>
                                 <div class="row-aside">
@@ -140,6 +145,14 @@ else
             <section class="section">
                 <div class="section-head">
                     <h2>Material<span class="count">@_topic.Materials.Count</span></h2>
+                    @if (_topic.Materials.Count > 0)
+                    {
+                        <div class="actions">
+                            <a class="btn btn-ghost btn-sm" href="topics/@TopicId/explain"><Icon Name="text" Size="14" /> Explain it back</a>
+                            <a class="btn btn-ghost btn-sm" href="topics/@TopicId/map"><Icon Name="chart" Size="14" /> Concept map</a>
+                            <a class="btn btn-ghost btn-sm" href="topics/@TopicId/gaps"><Icon Name="book" Size="14" /> Find gaps</a>
+                        </div>
+                    }
                 </div>
 
                 @if (_topic.Materials.Count == 0)
@@ -158,6 +171,10 @@ else
                                     <a class="row-title" href="materials/@m.Id">@m.Title</a>
                                     <div class="row-meta">
                                         <span>@Format.Label(m.Kind)</span>
+                                        @if (m.IsAiWritten)
+                                        {
+                                            <span class="tag tag-ai" title="A study note the AI wrote from general knowledge. Check it against a trusted source.">Written by the AI · may contain mistakes</span>
+                                        }
                                         @if (m.OriginalFileName is not null)
                                         {
                                             <span>@Format.Bytes(m.SizeBytes)</span>
@@ -250,6 +267,7 @@ else
     private AiChoice _outlineWith = default!;
     private AiModelInfo? _model;
     private int _weakCount;
+    private string? _userId;
 
     // Passed to the analysis only in advanced mode; in simple mode the one model does everything.
     private AiChoice? Choice => _settings?.AdvancedModels == true ? _outlineWith : null;
@@ -258,6 +276,8 @@ else
     {
         Analysis.MaterialAnalyzed -= OnMaterialAnalyzed;
         Analysis.MaterialAnalyzed += OnMaterialAnalyzed;
+        Writer.Changed -= OnWriterChanged;
+        Writer.Changed += OnWriterChanged;
         await LoadAsync();
     }
 
@@ -266,6 +286,7 @@ else
         try
         {
             var userId = await UserIdAsync();
+            _userId = userId;
             _topic = await Topics.GetAsync(userId, TopicId, PageToken);
             _weakCount = await Practice.CountWeakAsync(userId, TopicId, PageToken);
             if (_settings is null)
@@ -279,6 +300,17 @@ else
         {
             _notFound = true;
         }
+    }
+
+    // An exam here started or stopped having questions written: refresh its row.
+    private void OnWriterChanged(int examId)
+    {
+        if (_topic?.Exams.Any(e => e.Id == examId) != true) return;
+        _ = InvokeAsync(async () =>
+        {
+            await LoadAsync();
+            StateHasChanged();
+        });
     }
 
     private void OnMaterialAnalyzed(string userId, int materialId)
@@ -451,6 +483,7 @@ else
     public override void Dispose()
     {
         Analysis.MaterialAnalyzed -= OnMaterialAnalyzed;
+        Writer.Changed -= OnWriterChanged;
         base.Dispose();
     }
 }

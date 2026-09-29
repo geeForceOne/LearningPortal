@@ -54,6 +54,8 @@ questions work with code (40% by default); the rest are theory.
 - Repeat an exam as often as you like, with the question order and the options shuffled
 - Amend an exam later: edit its settings, remove or replace a question, edit a question by hand,
   or add your own
+- Questions are written in the background: leave the page or close the browser, and they're there
+  when you come back
 
 ![Creating an exam](docs/images/recall-new-exam.jpg)
 
@@ -67,6 +69,17 @@ After each question, or at the end, you see what was right, what you picked, and
 ![A revealed multiple-choice answer](docs/images/recall-review-choice.jpg)
 
 ![A written answer graded as partially correct](docs/images/recall-review-written.jpg)
+
+## More ways to learn
+
+- **Explain it back:** pick a concept from your material (or let Recall pick one you're weak in) and
+  explain it in your own words. The AI asks one or two questions like a curious student, then tells
+  you what you explained well and what was missing
+- **Concept map:** your material's sections as tiles, coloured by how well you do on their
+  questions. Pick a weak one to practise it
+- **Gap finder:** the AI lists what a course on your topic usually covers that your material
+  doesn't, and can write a short study note for each gap. These come from the AI's general
+  knowledge and are clearly marked as such, since they can be wrong
 
 ## Question bank
 

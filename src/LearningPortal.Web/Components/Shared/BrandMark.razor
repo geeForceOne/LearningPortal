@@ -2,12 +2,12 @@
    yellow. Below 40 px a simpler network with fewer, bolder nodes is drawn, since the
    full one blurs into a dotted blob at header and favicon sizes. wwwroot/favicon.svg is the
    simple network with fixed colours; keep the two in step.
-   wwwroot/js/brand-motion.js animates the yellow dot: once when the header logo is hovered or
-   focused, and in a loop while Busy. It reads the network from the data attributes below and
+   wwwroot/js/brand-motion.js animates the yellow dot: once when the header or sign-in logo is
+   hovered or focused, once when a PlayOnLoad logo appears, and in a loop while Busy. It reads the network from the data attributes below and
    only changes attributes of existing elements, so Blazor's rendering isn't disturbed. *@
 @{ var net = Size >= 40 ? Full : Simple; }
 <svg class="brand-mark" width="@Size" height="@Size" viewBox="0 0 64 64" aria-hidden="true"
-     data-rim="@string.Join(",", net.Rim)" data-entry="@net.Entry" data-motion="@(Busy ? "loop" : null)">
+     data-rim="@string.Join(",", net.Rim)" data-entry="@net.Entry" data-motion="@(Busy ? "loop" : PlayOnLoad ? "once" : null)">
     <g transform="@net.Transform">
         <g stroke="var(--brand)" stroke-width="@net.Line" stroke-opacity=".75" stroke-linecap="round">
             @foreach (var (a, b) in net.Edges)
@@ -54,4 +54,7 @@
 
     // Loops the animation, for the busy indicator.
     [Parameter] public bool Busy { get; set; }
+
+    // Plays one motion shortly after the logo appears, for the sign-in page.
+    [Parameter] public bool PlayOnLoad { get; set; }
 }

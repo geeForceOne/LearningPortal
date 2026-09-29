@@ -1,24 +1,31 @@
 @if (_visible)
 {
-    <div class="modal-backdrop" @onclick="() => Resolve(null)">
-        <div class="modal" role="dialog" aria-modal="true" aria-labelledby="topic-dialog-title" @onclick:stopPropagation="true">
+    <div class="modal-backdrop">
+        <div class="modal" role="dialog" aria-modal="true" aria-labelledby="topic-dialog-title">
             <h2 id="topic-dialog-title">@_title</h2>
             <form class="form" @onsubmit="Submit" @onsubmit:preventDefault="true">
                 <label class="field">
                     <span>Name</span>
                     <input class="input" @bind="_name" @bind:event="oninput" @ref="_nameInput" maxlength="200" placeholder="e.g. Cell biology" />
                 </label>
-                <label class="field">
-                    <span>Language</span>
-                    <input class="input" @bind="_language" @bind:event="oninput" list="topic-languages" maxlength="80" />
-                    <datalist id="topic-languages">
-                        @foreach (var l in CommonLanguages)
+                <div class="field">
+                    <label class="field-label" for="topic-language">Language</label>
+                    @* A plain list, not a datalist: a datalist only suggests what matches the text already in
+                       the box, so with "English" filled in it hid every other language. *@
+                    <select id="topic-language" class="select" value="@_languagePick" @onchange="PickLanguage">
+                        @foreach (var l in LanguageChoices)
                         {
-                            <option value="@l"></option>
+                            <option value="@l">@l</option>
                         }
-                    </datalist>
+                        <option value="@OtherLanguage">Other language...</option>
+                    </select>
+                    @if (_languagePick == OtherLanguage)
+                    {
+                        <input class="input" style="margin-top:8px" @bind="_language" @bind:event="oninput" maxlength="80"
+                               placeholder="e.g. Latin" aria-label="Other language" />
+                    }
                     <span class="field-hint">Questions, answers, explanations and grading feedback are written in this language.</span>
-                </label>
+                </div>
                 <div class="field">
                     <label class="check">
                         <input type="checkbox" @bind="_programming" />
@@ -45,12 +52,23 @@
 @code {
     public sealed record TopicInput(string Name, string Language, string? Description, bool IsProgramming);
 
+    private const string OtherLanguage = "__other";
+
     private static readonly string[] CommonLanguages =
     [
-        "English", "German", "French", "Spanish", "Italian", "Portuguese", "Dutch", "Polish", "Swedish",
-        "Danish", "Norwegian", "Finnish", "Czech", "Greek", "Turkish", "Russian", "Ukrainian",
-        "Chinese", "Japanese", "Korean", "Arabic", "Hebrew", "Hindi",
+        "Arabic", "Chinese", "Czech", "Danish", "Dutch", "English", "Finnish", "French", "German", "Greek",
+        "Hebrew", "Hindi", "Hungarian", "Indonesian", "Italian", "Japanese", "Korean", "Norwegian", "Polish",
+        "Portuguese", "Romanian", "Russian", "Spanish", "Swedish", "Turkish", "Ukrainian", "Vietnamese",
     ];
+
+    // The common languages, plus a topic's own language when it isn't one of them (set earlier by
+    // typing), so editing the topic shows it rather than "Other".
+    private string[] LanguageChoices => _saved is { } saved && !IsCommon(saved)
+        ? [.. CommonLanguages, saved]
+        : CommonLanguages;
+
+    private string _languagePick = "English";
+    private string? _saved;
 
     private bool _visible;
     private bool _focusPending;
@@ -69,6 +87,8 @@
         _okLabel = okLabel;
         _name = initial?.Name ?? "";
         _language = initial?.Language ?? "English";
+        _saved = initial?.Language;
+        _languagePick = CommonLanguages.FirstOrDefault(l => l.Equals(_language, StringComparison.OrdinalIgnoreCase)) ?? _language;
         _description = initial?.Description;
         _programming = initial?.IsProgramming ?? false;
         _visible = true;
@@ -83,6 +103,14 @@
         if (!_focusPending) return;
         _focusPending = false;
         try { await _nameInput.FocusAsync(); } catch (JSException) { }
+    }
+
+    private static bool IsCommon(string language) => CommonLanguages.Any(l => l.Equals(language, StringComparison.OrdinalIgnoreCase));
+
+    private void PickLanguage(ChangeEventArgs e)
+    {
+        _languagePick = e.Value?.ToString() ?? "English";
+        _language = _languagePick == OtherLanguage ? "" : _languagePick;
     }
 
     private void Submit()

@@ -781,6 +781,57 @@ a.row-title:hover { text-decoration: underline; text-decoration-color: var(--rul
 .practice-size { display: inline-flex; align-items: center; gap: 6px; font-size: var(--t-sm); color: var(--pencil); }
 .practice-size .input { width: 4.5em; min-height: 32px; padding: 4px 8px; }
 
+/* Concept map: a topic's sections as tiles, coloured by how well their questions go. */
+.map-legend { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-bottom: 8px; font-size: var(--t-sm); color: var(--pencil); }
+.map-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.map-swatch { display: inline-block; width: 14px; height: 14px; border-radius: 3px; border: 1px solid var(--rule-strong); }
+.map-tiles { display: flex; flex-wrap: wrap; gap: 8px; }
+.map-tile {
+    flex: 1 1 150px;
+    min-width: 0;
+    display: grid;
+    gap: 4px;
+    align-content: start;
+    min-height: 76px;
+    padding: 10px 12px;
+    border: 1px solid var(--rule-strong);
+    border-radius: var(--r-md);
+    background: var(--sheet);
+    color: var(--ink);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+.map-tile:hover { border-color: var(--pencil); }
+.map-tile.is-selected { outline: 2px solid var(--focus); outline-offset: 2px; }
+.map-tile-name { font-weight: 700; overflow-wrap: anywhere; }
+.map-tile-facts { font-size: var(--t-xs); color: var(--ink-soft); }
+.is-solid { background: var(--right-soft); border-color: var(--right); }
+.is-shaky { background: var(--partial-soft); border-color: var(--partial); }
+.is-weak { background: var(--wrong-soft); border-color: var(--wrong); }
+.is-new { background: var(--sheet-2); }
+.is-empty { background: transparent; border-style: dashed; }
+.map-tile.is-empty .map-tile-name { color: var(--pencil); }
+.map-detail {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px 16px;
+    margin-top: 10px;
+    padding: 12px 14px;
+    border: 1px solid var(--rule);
+    border-radius: var(--r-md);
+    background: var(--sheet);
+}
+
+.tag-ai { border-color: var(--partial); color: var(--partial); }
+
+/* Explain it back. */
+.concept-pick { text-align: left; font-weight: 700; color: var(--ink); }
+.explain-student { display: grid; gap: 12px; margin-top: 18px; }
+.explain-student .follow-up { display: grid; gap: 8px; }
+
 /* Follow-up questions to the AI under a revealed answer. */
 .follow-ups { display: grid; gap: 12px; margin-top: 16px; }
 .follow-up { border-left: 3px solid var(--rule-strong); padding-left: 12px; }

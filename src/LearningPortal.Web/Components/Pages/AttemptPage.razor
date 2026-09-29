@@ -223,7 +223,7 @@ else
     private async Task SaveAsExamAsync()
     {
         var name = await Ui.Prompt.AskAsync("Save as exam", "Exam name",
-            $"{PracticeService.ExamName}, {DateTime.Now.ToString("d MMM", System.Globalization.CultureInfo.InvariantCulture)}", "Save");
+            $"{_view!.Exam.Name}, {DateTime.Now.ToString("d MMM", System.Globalization.CultureInfo.InvariantCulture)}", "Save");
         if (name is null)
             return;
         try

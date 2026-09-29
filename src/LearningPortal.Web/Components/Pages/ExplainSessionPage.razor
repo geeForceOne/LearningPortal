@@ -1,0 +1,155 @@
+@page "/explain/{SessionId:int}"
+@inherits AppPage
+@inject ExplainService Explain
+
+<PageTitle>Explain it back - @AppInfo.Name</PageTitle>
+
+@if (_session is null)
+{
+    <p class="page-loading">Loading...</p>
+}
+else
+{
+    <nav class="crumbs" aria-label="Breadcrumb">
+        <a href="">Topics</a><span class="sep">/</span>
+        <a href="topics/@_session.TopicId">@_session.Topic!.Name</a><span class="sep">/</span>
+        <a href="topics/@_session.TopicId/explain">Explain it back</a>
+    </nav>
+
+    <div class="exam" style="max-width:760px">
+        <p class="question-number" style="margin-bottom:6px">Explain this in your own words</p>
+        <div class="prompt" role="heading" aria-level="1">@_session.Concept</div>
+
+        @if (_session.Explanation is null)
+        {
+            <div class="answer-box">
+                <label for="explanation" class="kind-hint" style="margin-bottom:4px">Your explanation, as if to someone new to the subject</label>
+                <textarea id="explanation" class="textarea" maxlength="@ExplainSession.MaxExplanationLength" @bind="_explanation" @bind:event="oninput"
+                          disabled="@IsBusy" placeholder="What is it, why does it matter, how does it work? A few sentences to a short paragraph is plenty."></textarea>
+                <div class="answer-foot">
+                    <span>Explain it without looking at your notes.</span>
+                    <span>@_explanation.Length / @ExplainSession.MaxExplanationLength characters</span>
+                </div>
+            </div>
+            <div class="exam-actions">
+                <button type="button" class="btn btn-primary btn-lg" disabled="@(IsBusy || string.IsNullOrWhiteSpace(_explanation))" @onclick="ExplainAsync">Explain</button>
+            </div>
+        }
+        else
+        {
+            <div class="your-answer">
+                <h3 class="small muted" style="margin-bottom:6px">Your explanation</h3>
+                <div class="reading">@_session.Explanation</div>
+            </div>
+
+            <div class="explain-student">
+                <h3 class="small muted">The student asks</h3>
+                @for (var i = 0; i < _session.Questions.Count; i++)
+                {
+                    var index = i;
+                    <div class="follow-up" @key="index">
+                        <RichText Class="reading" Text="@_session.Questions[index]" />
+                        @if (_session.CompletedAt is null)
+                        {
+                            <textarea class="textarea" rows="3" maxlength="@ExplainSession.MaxReplyLength" aria-label="Your reply to question @(index + 1)"
+                                      value="@_replies[index]" @oninput="e => _replies[index] = e.Value?.ToString() ?? string.Empty" disabled="@IsBusy"
+                                      placeholder="Your reply. It's fine to say you don't know."></textarea>
+                        }
+                        else
+                        {
+                            <p class="follow-up-q" style="margin-top:6px"><span class="follow-up-who">You replied</span> @(Reply(index) is { Length: > 0 } r ? r : "(no reply)")</p>
+                        }
+                    </div>
+                }
+            </div>
+
+            @if (_session.CompletedAt is null)
+            {
+                <div class="exam-actions">
+                    <button type="button" class="btn btn-primary btn-lg" disabled="@IsBusy" @onclick="ReplyAsync">Send replies</button>
+                </div>
+            }
+            else
+            {
+                <div class="result-line" style="margin-top:20px">
+                    <VerdictLabel Score="_session.Score ?? 0" ShowScore="true" />
+                </div>
+                <div class="explain">
+                    <h3>How you did</h3>
+                    <RichText Class="reading" Text="@_session.Feedback" />
+                </div>
+                <div class="actions" style="margin-top:20px">
+                    <button type="button" class="btn btn-primary" disabled="@_starting" @onclick="AgainAsync"><Icon Name="redo" /> Explain it again</button>
+                    <a class="btn btn-secondary" href="topics/@_session.TopicId/explain">Explain another</a>
+                </div>
+            }
+        }
+
+        @if (_error is not null)
+        {
+            <div class="notice notice-error" style="margin-top:16px">@_error</div>
+        }
+        @if (IsBusy)
+        {
+            <div style="margin-top:16px"><BusyBar Message="@BusyMessage" /></div>
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public int SessionId { get; set; }
+
+    private ExplainSession? _session;
+    private string _explanation = "";
+    private string[] _replies = [];
+    private string? _error;
+    private bool _starting;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            _session = await Explain.GetAsync(await UserIdAsync(), SessionId, PageToken);
+            _replies = new string[_session.Questions.Count];
+            Array.Fill(_replies, "");
+            _explanation = "";
+            _error = null;
+        }
+        catch (NotFoundException)
+        {
+            Nav.NavigateTo("not-found");
+        }
+    }
+
+    private string? Reply(int index) => index < _session!.Replies.Count ? _session.Replies[index] : null;
+
+    private async Task ExplainAsync()
+    {
+        _error = null;
+        var userId = await UserIdAsync();
+        if (await RunBusyAsync("The student is reading your explanation...", async (_, ct) =>
+                await Explain.ExplainAsync(userId, SessionId, _explanation, ct), m => _error = m))
+        {
+            _session = await Explain.GetAsync(userId, SessionId, PageToken);
+            _replies = new string[_session.Questions.Count];
+            Array.Fill(_replies, "");
+        }
+    }
+
+    private async Task ReplyAsync()
+    {
+        _error = null;
+        var userId = await UserIdAsync();
+        if (await RunBusyAsync("Assessing your explanation...", async (_, ct) =>
+                await Explain.ReplyAsync(userId, SessionId, _replies, ct), m => _error = m))
+            _session = await Explain.GetAsync(userId, SessionId, PageToken);
+    }
+
+    private async Task AgainAsync()
+    {
+        _starting = true;
+        var id = await Explain.StartAsync(await UserIdAsync(), _session!.TopicId, _session.SectionId ?? 0, _session.Concept, PageToken);
+        Nav.NavigateTo($"explain/{id}");
+        _starting = false;
+    }
+}

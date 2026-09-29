@@ -27,6 +27,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<AttemptService>();
         services.AddSingleton<StatisticsService>();
         services.AddSingleton<PracticeService>();
+        services.AddSingleton<ExplainService>();
+        services.AddSingleton<GapService>();
         services.AddSingleton<UserActivityService>();
         services.AddSingleton<AdminStatisticsService>();
         services.AddSingleton<WhatsNewService>();

@@ -1,0 +1,160 @@
+@page "/topics/{TopicId:int}/map"
+@inherits AppPage
+@inject TopicService Topics
+@inject StatisticsService Stats
+@inject PracticeService Practice
+
+<PageTitle>Concept map - @AppInfo.Name</PageTitle>
+
+@if (_notFound)
+{
+    <div class="empty"><p>That topic doesn't exist or isn't yours.</p><a class="btn btn-secondary" href="">Go to your topics</a></div>
+}
+else if (_topic is null || _map is null)
+{
+    <p class="page-loading">Loading...</p>
+}
+else
+{
+    <nav class="crumbs" aria-label="Breadcrumb">
+        <a href="">Topics</a><span class="sep">/</span>
+        <a href="topics/@TopicId">@_topic.Summary.Name</a>
+    </nav>
+    <div class="page-head">
+        <div>
+            <h1>Concept map</h1>
+            <p class="page-sub">
+                Each tile is a section of your material, sized by how much text it has and coloured by how well you do
+                on the questions written from it. Pick a section to practise it.
+            </p>
+        </div>
+    </div>
+
+    <div class="map-legend" aria-label="Legend">
+        <span><i class="map-swatch is-solid"></i> Solid (80% or more)</span>
+        <span><i class="map-swatch is-shaky"></i> Shaky (50-79%)</span>
+        <span><i class="map-swatch is-weak"></i> Weak (under 50%)</span>
+        <span><i class="map-swatch is-new"></i> Not practised yet</span>
+        <span><i class="map-swatch is-empty"></i> No questions yet</span>
+    </div>
+
+    @if (_map.Count == 0)
+    {
+        <div class="empty"><p>Add material to this topic and its sections show up here.</p></div>
+    }
+
+    @foreach (var material in _map)
+    {
+        <section class="section" @key="material.MaterialId">
+            <div class="section-head"><h2>@material.Title</h2></div>
+            <div class="map-tiles">
+                @foreach (var s in material.Sections)
+                {
+                    var section = s;
+                    <button type="button" class="map-tile @State(section) @(_selected?.SectionId == section.SectionId ? "is-selected" : "")"
+                            style="flex-grow:@Weight(section)" aria-pressed="@(_selected?.SectionId == section.SectionId)"
+                            @onclick="() => Select(section)">
+                        <span class="map-tile-name">@Name(section)</span>
+                        <span class="map-tile-facts">@Facts(section)</span>
+                    </button>
+                }
+            </div>
+
+            @if (_selected is { } sel && material.Sections.Any(x => x.SectionId == sel.SectionId))
+            {
+                <div class="map-detail">
+                    <div>
+                        <strong>@Name(sel)</strong>
+                        <p class="muted small" style="margin:2px 0 0">@Detail(sel)</p>
+                    </div>
+                    @if (sel.QuestionCount > 0)
+                    {
+                        <div class="practice-start">
+                            <button type="button" class="btn btn-primary btn-sm" disabled="@_starting" @onclick="PractiseAsync">
+                                <Icon Name="redo" Size="14" /> Practise this section
+                            </button>
+                            <label class="practice-size">
+                                <input type="number" class="input" min="1" max="@MaxSize(sel)" @bind="_size" aria-label="How many questions" />
+                                <span>of @sel.QuestionCount</span>
+                            </label>
+                        </div>
+                    }
+                </div>
+            }
+        </section>
+    }
+}
+
+@code {
+    [Parameter] public int TopicId { get; set; }
+    [CascadingParameter] private AppUi Ui { get; set; } = default!;
+
+    private TopicDetail? _topic;
+    private IReadOnlyList<MaterialMap>? _map;
+    private SectionScore? _selected;
+    private int _size = PracticeService.DefaultSize;
+    private bool _starting;
+    private bool _notFound;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            var userId = await UserIdAsync();
+            _topic = await Topics.GetAsync(userId, TopicId, PageToken);
+            _map = await Stats.GetSectionMapAsync(userId, TopicId, PageToken);
+        }
+        catch (NotFoundException)
+        {
+            _notFound = true;
+        }
+    }
+
+    private void Select(SectionScore section)
+    {
+        _selected = _selected?.SectionId == section.SectionId ? null : section;
+        if (_selected is not null)
+            _size = Math.Min(PracticeService.DefaultSize, MaxSize(_selected));
+    }
+
+    private async Task PractiseAsync()
+    {
+        _starting = true;
+        try
+        {
+            var id = await Practice.StartSectionAsync(await UserIdAsync(), TopicId, _selected!.SectionId, Math.Clamp(_size, 1, MaxSize(_selected)), PageToken);
+            Nav.NavigateTo($"attempts/{id}");
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or NotFoundException)
+        {
+            Ui.Toast.Error(ex.Message);
+        }
+        finally
+        {
+            _starting = false;
+        }
+    }
+
+    private static int MaxSize(SectionScore s) => Math.Clamp(s.QuestionCount, 1, PracticeService.MaxSize);
+
+    private static string Name(SectionScore s) => string.IsNullOrWhiteSpace(s.Heading) ? $"Part {s.Index + 1}" : s.Heading;
+
+    private static string State(SectionScore s) => s.QuestionCount == 0 ? "is-empty"
+        : s.AverageScore is not { } avg ? "is-new"
+        : avg >= VerdictRules.CorrectThreshold ? "is-solid"
+        : avg >= 50 ? "is-shaky"
+        : "is-weak";
+
+    // Bigger sections get wider tiles, within limits so tiny ones stay readable and big ones don't swamp the rest.
+    private static string Weight(SectionScore s) =>
+        Math.Clamp(s.TokenEstimate / 500.0, 1, 6).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+
+    private static string Facts(SectionScore s) => s.QuestionCount == 0 ? "No questions yet"
+        : s.AverageScore is { } avg ? $"{Format.Percent(avg)} · missed {s.Missed} of {s.Answered}"
+        : $"{Format.Plural(s.QuestionCount, "question", "questions")}, not practised";
+
+    private static string Detail(SectionScore s) => s.QuestionCount == 0
+        ? "No questions have been written from this section yet. New exams spread their questions across the sections covered least."
+        : $"{Format.Plural(s.QuestionCount, "question", "questions")} from this section" +
+          (s.Answered > 0 ? $", answered {s.Answered} times, average {Format.Percent(s.AverageScore)}." : ", none answered yet.");
+}

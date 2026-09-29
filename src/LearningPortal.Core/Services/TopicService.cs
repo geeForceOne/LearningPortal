@@ -32,7 +32,8 @@ public sealed record MaterialSummary(
     AnalysisStatus AnalysisStatus,
     string? AnalysisError,
     string? Outline,
-    DateTime CreatedAt);
+    DateTime CreatedAt,
+    bool IsAiWritten = false);
 
 public sealed record ExamSummary(
     int Id,
@@ -103,7 +104,7 @@ public sealed class TopicService(IDbContextFactory<AppDbContext> dbFactory, Lear
             .OrderBy(m => m.CreatedAt)
             .Select(m => new MaterialSummary(
                 m.Id, m.Title, m.Kind, m.OriginalFileName, m.SizeBytes, m.TokenEstimate, m.Sections.Count,
-                m.AnalysisStatus, m.AnalysisError, m.Outline, m.CreatedAt))
+                m.AnalysisStatus, m.AnalysisError, m.Outline, m.CreatedAt, m.IsAiWritten))
             .ToListAsync(ct);
 
         var exams = await db.Exams.AsNoTracking()

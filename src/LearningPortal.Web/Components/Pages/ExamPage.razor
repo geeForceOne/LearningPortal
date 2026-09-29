@@ -6,6 +6,7 @@
 @inject TopicService Topics
 @inject SettingsService Settings
 @inject LearningPortalOptions Options
+@inject QuestionWriter Writer
 
 <PageTitle>@(_detail?.Exam.Name ?? "Exam") - @AppInfo.Name</PageTitle>
 
@@ -38,11 +39,11 @@ else
                 @if (openAttempt is not null)
                 {
                     <a class="btn btn-primary btn-lg" href="attempts/@openAttempt.Id"><Icon Name="play" /> Resume (@openAttempt.Answered of @openAttempt.Total answered)</a>
-                    <button type="button" class="btn btn-secondary btn-lg" disabled="@IsBusy" @onclick="StartOverAsync">Start over</button>
+                    <button type="button" class="btn btn-secondary btn-lg" disabled="@Busy" @onclick="StartOverAsync">Start over</button>
                 }
                 else
                 {
-                    <button type="button" class="btn btn-primary btn-lg" disabled="@IsBusy" @onclick="StartAsync">
+                    <button type="button" class="btn btn-primary btn-lg" disabled="@Busy" @onclick="StartAsync">
                         <Icon Name="play" /> @(_attempts.Count > 0 ? "Take again" : "Start exam")
                     </button>
                 }
@@ -50,16 +51,23 @@ else
         </div>
     </div>
 
-    @if (IsBusy)
+    @if (Writing)
     {
-        <div style="margin-bottom:20px"><BusyBar Message="@BusyMessage" OnCancel="CancelBusy" KeepOpen="BusyKeepsPageOpen" /></div>
+        <div style="margin-bottom:20px">
+            <BusyBar Message="@_job!.Message" OnCancel="CancelWritingAsync" Large="true"
+                     Note="This can take a few minutes. You can leave this page: the AI keeps writing, and the questions will be here when you come back." />
+        </div>
+    }
+    else if (IsBusy)
+    {
+        <div style="margin-bottom:20px"><BusyBar Message="@BusyMessage" OnCancel="CancelBusy" /></div>
     }
     @if (_error is not null)
     {
         <div class="notice notice-error" style="margin-bottom:20px">@_error</div>
     }
 
-    @if (_detail.Questions.Count < exam.QuestionCount && !IsBusy)
+    @if (_detail.Questions.Count < exam.QuestionCount && !Busy)
     {
         <div class="notice notice-warn" style="margin-bottom:24px">
             This exam has @_detail.Questions.Count of @exam.QuestionCount questions.
@@ -72,14 +80,14 @@ else
     }
 
     @* Above every way this page has the AI write questions: filling, "New questions", replacing one. *@
-    <SaturationNotice Basis="Basis" Show="@(!IsBusy)" Style="margin-bottom:24px"
+    <SaturationNotice Basis="Basis" Show="@(!Busy)" Style="margin-bottom:24px"
                       Advice="Before having the AI write more, add material to the topic, or raise this exam's reuse from the bank." />
 
     <div class="two-col">
         <section>
             <div class="section-head">
                 <h2>Questions<span class="count">@_detail.Questions.Count</span></h2>
-                <button type="button" class="btn btn-ghost btn-sm" disabled="@IsBusy" @onclick="AddOwnAsync"><Icon Name="plus" Size="14" /> Add your own</button>
+                <button type="button" class="btn btn-ghost btn-sm" disabled="@Busy" @onclick="AddOwnAsync"><Icon Name="plus" Size="14" /> Add your own</button>
             </div>
 
             @if (_detail.Questions.Count > 0 && CostHint(1) is { } replaceCost)
@@ -155,9 +163,9 @@ else
                                 </div>
                             </div>
                             <div class="row-actions">
-                                <button type="button" class="btn btn-ghost btn-icon btn-sm" title="Edit" aria-label="Edit question @number" disabled="@IsBusy" @onclick="() => EditAsync(q)"><Icon Name="edit" Size="16" /></button>
-                                <button type="button" class="btn btn-ghost btn-icon btn-sm" title="@("Replace with a new AI question" + (CostHint(1) is { } c ? $" ({c})" : ""))" aria-label="Replace question @number" disabled="@IsBusy" @onclick="() => ReplaceAsync(q)"><Icon Name="swap" Size="16" /></button>
-                                <button type="button" class="btn btn-ghost btn-icon btn-sm" title="Remove from exam" aria-label="Remove question @number" disabled="@IsBusy" @onclick="() => RemoveAsync(q)"><Icon Name="trash" Size="16" /></button>
+                                <button type="button" class="btn btn-ghost btn-icon btn-sm" title="Edit" aria-label="Edit question @number" disabled="@Busy" @onclick="() => EditAsync(q)"><Icon Name="edit" Size="16" /></button>
+                                <button type="button" class="btn btn-ghost btn-icon btn-sm" title="@("Replace with a new AI question" + (CostHint(1) is { } c ? $" ({c})" : ""))" aria-label="Replace question @number" disabled="@Busy" @onclick="() => ReplaceAsync(q)"><Icon Name="swap" Size="16" /></button>
+                                <button type="button" class="btn btn-ghost btn-icon btn-sm" title="Remove from exam" aria-label="Remove question @number" disabled="@Busy" @onclick="() => RemoveAsync(q)"><Icon Name="trash" Size="16" /></button>
                             </div>
                         </div>
                     </li>
@@ -172,7 +180,7 @@ else
                 {
                     <ExamSettingsForm Model="_values" Programming="_detail.Topic.IsProgramming" Materials="_materials" />
                     <div class="actions" style="margin-top:20px">
-                        <button type="button" class="btn btn-primary" disabled="@IsBusy" @onclick="SaveSettingsAsync">Save</button>
+                        <button type="button" class="btn btn-primary" disabled="@Busy" @onclick="SaveSettingsAsync">Save</button>
                         <button type="button" class="btn btn-ghost" @onclick="() => _editing = false">Cancel</button>
                     </div>
                     <p class="muted small" style="margin-top:12px">
@@ -199,8 +207,8 @@ else
                             }
                         </div>
                         <div class="actions">
-                            <button type="button" class="btn btn-secondary btn-sm" disabled="@IsBusy" @onclick="BeginEdit"><Icon Name="edit" Size="14" /> Edit settings</button>
-                            <button type="button" class="btn btn-ghost btn-sm" disabled="@IsBusy" @onclick="RegenerateAsync"><Icon Name="redo" Size="14" /> New questions</button>
+                            <button type="button" class="btn btn-secondary btn-sm" disabled="@Busy" @onclick="BeginEdit"><Icon Name="edit" Size="14" /> Edit settings</button>
+                            <button type="button" class="btn btn-ghost btn-sm" disabled="@Busy" @onclick="RegenerateAsync"><Icon Name="redo" Size="14" /> New questions</button>
                         </div>
                         @if (CostHint(exam.QuestionCount) is { } newCost)
                         {
@@ -254,7 +262,7 @@ else
             </div>
 
             <div class="actions" style="margin-top:16px">
-                <button type="button" class="btn btn-danger btn-sm" disabled="@IsBusy" @onclick="DeleteAsync"><Icon Name="trash" Size="14" /> Delete exam</button>
+                <button type="button" class="btn btn-danger btn-sm" disabled="@Busy" @onclick="DeleteAsync"><Icon Name="trash" Size="14" /> Delete exam</button>
             </div>
         </aside>
     </div>
@@ -284,7 +292,63 @@ else
     // Passed to generation only in advanced mode; in simple mode the one model does everything.
     private AiChoice? Choice => _settings?.AdvancedModels == true ? _writeWith : null;
 
-    protected override async Task OnParametersSetAsync() => await LoadAsync();
+    // The AI's question writing for this exam, which runs on the server; null when there's none.
+    private QuestionWriter.Job? _job;
+    private bool Writing => _job is { Finished: false };
+    private bool Busy => IsBusy || Writing;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        Writer.Changed -= OnWriterChanged;
+        Writer.Changed += OnWriterChanged;
+        await LoadAsync();
+    }
+
+    // Each finished batch of questions shows up right away, and the outcome when the job ends.
+    private void OnWriterChanged(int examId)
+    {
+        if (examId != ExamId) return;
+        _ = InvokeAsync(async () =>
+        {
+            await LoadAsync();
+            StateHasChanged();
+        });
+    }
+
+    public override void Dispose()
+    {
+        Writer.Changed -= OnWriterChanged;
+        base.Dispose();
+    }
+
+    // A job that ended (maybe while the user was away) is reported once, then forgotten.
+    private void TakeOutcome(string userId)
+    {
+        _job = Writer.Get(userId, ExamId);
+        if (_job is not { Finished: true } done) return;
+
+        if (done.Cancelled)
+            Ui.Toast.Success("Stopped. Questions the AI had already finished are kept.");
+        else if (done.Error is not null)
+            _error = done.Error;
+        else if (done.Kind == QuestionWriter.Kind.Replace)
+            Ui.Toast.Success("Question replaced. The old one stays in your question bank.");
+        else
+            ReportFill(done.Result);
+        Writer.Dismiss(userId, ExamId);
+        _job = null;
+    }
+
+    private async Task CancelWritingAsync() => Writer.Cancel(await UserIdAsync(), ExamId);
+
+    private async Task StartWritingAsync(QuestionWriter.Kind kind, int? questionId = null)
+    {
+        _error = null;
+        var userId = await UserIdAsync();
+        if (!Writer.Start(userId, ExamId, kind, Choice, questionId))
+            Ui.Toast.Error("The AI is already writing questions for this exam.");
+        _job = Writer.Get(userId, ExamId);
+    }
 
     private async Task LoadAsync()
     {
@@ -292,6 +356,7 @@ else
         try
         {
             _detail = await Exams.GetAsync(userId, ExamId, PageToken);
+            TakeOutcome(userId);
             // The weak-questions practice isn't edited like an exam; it's started from its topic.
             if (_detail.Exam.IsPractice)
             {
@@ -352,11 +417,7 @@ else
         if (!await ConfirmGenerationAsync(missing.Total))
             return;
 
-        FillResult? result = null;
-        await RunBusyAsync("Filling the exam...", async (progress, ct) =>
-            result = await Exams.FillAsync(userId, ExamId, Choice, progress, ct), m => _error = m, keepPageOpen: true);
-        ReportFill(result);
-        await LoadAsync();
+        await StartWritingAsync(QuestionWriter.Kind.Fill);
     }
 
     private void ReportFill(FillResult? result)
@@ -416,21 +477,12 @@ else
         if (!await ConfirmGenerationAsync(exam.QuestionCount))
             return;
 
-        _error = null;
-        FillResult? result = null;
-        await RunBusyAsync("Writing new questions...", async (progress, ct) =>
-            result = await Exams.RegenerateAllAsync(await UserIdAsync(), ExamId, Choice, progress, ct), m => _error = m, keepPageOpen: true);
-        ReportFill(result);
-        await LoadAsync();
+        await StartWritingAsync(QuestionWriter.Kind.Regenerate);
     }
 
     private async Task ReplaceAsync(Question q)
     {
-        _error = null;
-        var ok = await RunBusyAsync("Writing a replacement question...", async (progress, ct) =>
-            await Exams.ReplaceQuestionAsync(await UserIdAsync(), ExamId, q.Id, Choice, progress, ct), m => _error = m, keepPageOpen: true);
-        if (ok) Ui.Toast.Success("Question replaced. The old one stays in your question bank.");
-        await LoadAsync();
+        await StartWritingAsync(QuestionWriter.Kind.Replace, q.Id);
     }
 
     private async Task RemoveAsync(Question q)

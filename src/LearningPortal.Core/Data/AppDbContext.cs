@@ -18,6 +18,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
     public DbSet<Attempt> Attempts => Set<Attempt>();
     public DbSet<AttemptAnswer> AttemptAnswers => Set<AttemptAnswer>();
     public DbSet<FollowUp> FollowUps => Set<FollowUp>();
+    public DbSet<ExplainSession> ExplainSessions => Set<ExplainSession>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -99,6 +100,14 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
             e.HasIndex(x => new { x.AttemptId, x.Position });
             e.HasOne(x => x.Attempt).WithMany(x => x.Answers).HasForeignKey(x => x.AttemptId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(x => x.Question).WithMany().HasForeignKey(x => x.QuestionId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        b.Entity<ExplainSession>(e =>
+        {
+            e.HasIndex(x => new { x.UserId, x.TopicId });
+            e.HasOne(x => x.Topic).WithMany().HasForeignKey(x => x.TopicId).OnDelete(DeleteBehavior.Cascade);
+            e.Property(x => x.Concept).HasMaxLength(ExplainSession.MaxConceptLength);
+            e.Property(x => x.Model).HasMaxLength(200);
         });
 
         b.Entity<FollowUp>(e =>

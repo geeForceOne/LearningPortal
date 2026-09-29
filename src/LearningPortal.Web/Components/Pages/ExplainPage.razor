@@ -1,0 +1,146 @@
+@page "/topics/{TopicId:int}/explain"
+@inherits AppPage
+@inject TopicService Topics
+@inject ExplainService Explain
+
+<PageTitle>Explain it back - @AppInfo.Name</PageTitle>
+
+@if (_notFound)
+{
+    <div class="empty"><p>That topic doesn't exist or isn't yours.</p><a class="btn btn-secondary" href="">Go to your topics</a></div>
+}
+else if (_topic is null || _concepts is null)
+{
+    <p class="page-loading">Loading...</p>
+}
+else
+{
+    <nav class="crumbs" aria-label="Breadcrumb">
+        <a href="">Topics</a><span class="sep">/</span>
+        <a href="topics/@TopicId">@_topic.Summary.Name</a>
+    </nav>
+    <div class="page-head">
+        <div>
+            <h1>Explain it back</h1>
+            <p class="page-sub">
+                Pick a concept from your material and explain it in your own words, as if to someone new to the subject.
+                The AI asks one or two questions like a curious student, then tells you what you explained well and what was missing.
+            </p>
+        </div>
+        @if (_concepts.Count > 0)
+        {
+            <button type="button" class="btn btn-primary" disabled="@_starting" @onclick="SurpriseAsync"><Icon Name="play" Size="16" /> Surprise me</button>
+        }
+    </div>
+
+    @if (_concepts.Count == 0)
+    {
+        <div class="empty"><p>Add material to this topic first. Its concepts show up here once it's been outlined.</p></div>
+    }
+    else
+    {
+        <p class="muted small">"Surprise me" favours the parts of your material you do worst on or haven't practised yet.</p>
+        @foreach (var group in _concepts.GroupBy(c => c.MaterialTitle))
+        {
+            <section class="section" @key="group.Key">
+                <div class="section-head"><h2>@group.Key</h2></div>
+                <ul class="rows">
+                    @foreach (var c in group)
+                    {
+                        var concept = c;
+                        <li class="row" @key="concept.SectionId">
+                            <div class="row-main">
+                                <button type="button" class="link-button concept-pick" disabled="@_starting" @onclick="() => StartAsync(concept)">@concept.Label</button>
+                            </div>
+                            <div class="row-aside"><span class="map-swatch is-@concept.State" title="@StateLabel(concept.State)"></span> <span class="small muted">@StateLabel(concept.State)</span></div>
+                        </li>
+                    }
+                </ul>
+            </section>
+        }
+    }
+
+    @if (_history is { Count: > 0 })
+    {
+        <section class="section">
+            <div class="section-head"><h2>Your explanations<span class="count">@_history.Count</span></h2></div>
+            <ul class="rows">
+                @foreach (var h in _history)
+                {
+                    <li class="row" @key="h.Id">
+                        <div class="row-main">
+                            <a class="row-title" href="explain/@h.Id">@h.Concept</a>
+                            <div class="row-meta"><span>@Format.Date(h.CreatedAt)</span></div>
+                        </div>
+                        <div class="row-aside">
+                            @if (h.Score is { } score)
+                            {
+                                <VerdictLabel Score="score" ShowScore="true" />
+                            }
+                            else
+                            {
+                                <span class="muted small">Not finished</span>
+                            }
+                        </div>
+                    </li>
+                }
+            </ul>
+        </section>
+    }
+}
+
+@code {
+    [Parameter] public int TopicId { get; set; }
+    [CascadingParameter] private AppUi Ui { get; set; } = default!;
+
+    private TopicDetail? _topic;
+    private IReadOnlyList<ExplainConcept>? _concepts;
+    private IReadOnlyList<ExplainSummary>? _history;
+    private bool _starting;
+    private bool _notFound;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            var userId = await UserIdAsync();
+            _topic = await Topics.GetAsync(userId, TopicId, PageToken);
+            _concepts = await Explain.GetConceptsAsync(userId, TopicId, PageToken);
+            _history = await Explain.ListAsync(userId, TopicId, PageToken);
+        }
+        catch (NotFoundException)
+        {
+            _notFound = true;
+        }
+    }
+
+    private async Task SurpriseAsync()
+    {
+        if (await Explain.SurpriseAsync(await UserIdAsync(), TopicId, PageToken) is { } concept)
+            await StartAsync(concept);
+    }
+
+    private async Task StartAsync(ExplainConcept concept)
+    {
+        _starting = true;
+        try
+        {
+            var id = await Explain.StartAsync(await UserIdAsync(), TopicId, concept.SectionId, concept.Label, PageToken);
+            Nav.NavigateTo($"explain/{id}");
+        }
+        catch (NotFoundException ex)
+        {
+            Ui.Toast.Error(ex.Message);
+            _starting = false;
+        }
+    }
+
+    private static string StateLabel(string state) => state switch
+    {
+        "solid" => "Solid",
+        "shaky" => "Shaky",
+        "weak" => "Weak",
+        "new" => "Not practised yet",
+        _ => "No questions yet",
+    };
+}

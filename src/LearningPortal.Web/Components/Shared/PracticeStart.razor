@@ -9,7 +9,7 @@
         <Icon Name="redo" Size="14" /> Practice weak questions@(TopicName is null ? "" : $" in {TopicName}")
     </button>
     <label class="practice-size">
-        <input type="number" class="input" min="1" max="@PracticeService.MaxSize" @bind="_size" aria-label="How many questions" />
+        <input type="number" class="input" min="1" max="@MaxSize" @bind="_size" aria-label="How many questions" />
         <span>of @WeakCount</span>
     </label>
 </div>
@@ -28,12 +28,15 @@
 
     private int? _countShown;
 
+    // No more than the topic has weak questions, and never above the practice limit.
+    private int MaxSize => Math.Clamp(WeakCount, 1, PracticeService.MaxSize);
+
     // Only when the count changes, so a number the user typed survives a re-render of the page.
     protected override void OnParametersSet()
     {
         if (_countShown == WeakCount) return;
         _countShown = WeakCount;
-        _size = Math.Min(PracticeService.DefaultSize, Math.Max(1, WeakCount));
+        _size = Math.Min(PracticeService.DefaultSize, MaxSize);
     }
 
     private async Task StartAsync()
@@ -43,7 +46,7 @@
         {
             var state = AuthState is null ? null : await AuthState;
             var userId = state?.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? throw new InvalidOperationException("Not signed in.");
-            var attemptId = await Practice.StartAsync(userId, TopicId, Math.Clamp(_size, 1, PracticeService.MaxSize));
+            var attemptId = await Practice.StartAsync(userId, TopicId, Math.Clamp(_size, 1, MaxSize));
             Nav.NavigateTo($"attempts/{attemptId}");
         }
         catch (Exception ex) when (ex is InvalidOperationException or NotFoundException)

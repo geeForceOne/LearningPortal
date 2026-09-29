@@ -28,7 +28,10 @@ LearningPortal is a multi-user, Docker-hosted web app that turns a user's own st
 - **Question bank reuse.** Each exam has a reuse percentage (default 0%, i.e. off; the slider starts at 20% when turned on): up to that share of its questions comes from the topic's bank (matching type, difficulty and code/theory, least-used first), and the AI writes the rest. New questions must not repeat what the bank already asks. When a topic's bank is large compared to its material, the UI says new questions will increasingly overlap.
 - **Weak-question practice.** Each topic has one hidden "Weak questions" practice exam, rebuilt from the questions most often answered wrong or partly right each time it's started (10 by default, adjustable, no AI). It isn't listed or edited like an exam; "Save as exam" keeps a run's questions as a normal exam.
 - **Follow-up questions.** After an answer is revealed (during an attempt or on the results), the user can ask the AI up to 3 follow-ups about it. The AI sees only the question, the answer given, the explanation and the source section; replies are saved with the attempt.
-- **Long AI work.** While the AI writes questions, the busy bar says to keep the page open and leaving asks for confirmation, since leaving cancels the work (finished batches are kept).
+- **Question writing runs in the background.** Filling, regenerating and replacing questions run on the server (`QuestionWriter`), so they carry on when the user leaves the page or closes the browser. The exam page follows the job live and shows its outcome when the user comes back; the topic page marks exams being written.
+- **Concept map.** A topic's sections as tiles, sized by text and coloured by how well their questions go (no AI). Picking a section practises it through the topic's practice exam.
+- **Explain it back.** The user picks a concept (one outline line per section, or "Surprise me", which favours weak sections) and explains it in their own words; the AI asks one or two questions like a curious beginner, then scores it (0-100) with feedback. Only that section's text goes to the AI. Sessions are kept per topic and don't count in statistics.
+- **Gap finder.** The AI compares the topic's outlines with what the subject usually covers and lists gaps; it can write a study note per gap, added as material marked "Written by the AI". Both come from general knowledge, so the UI states clearly that they can be wrong.
 - **Repeating an exam.** A repeat uses the same questions, with the question order and the multiple-choice options shuffled.
 - **Amending an exam.** The user can:
   - edit its settings (name, count, type, difficulty) and regenerate
@@ -93,7 +96,7 @@ Uses the latest .NET (currently .NET 10, `net10.0`) with Blazor Server. It is sp
 
 - **Verify external APIs, don't work from memory.** Before coding against the Claude or OpenAI API, an SSO provider, or a document-parsing library, check its current official docs or spec. Model IDs and SDK shapes change.
 - **AI-written text.** Show questions, options, answers, explanations and grading feedback through the `RichText` component (safe Markdown with code blocks and syntax colouring), never as raw text or unescaped HTML.
-- **Shared dialogs.** Use reusable `ConfirmDialog`, `PromptDialog`, and `Toast` components in `Components/Shared/`, which are awaited from code, instead of writing one-off modals per page.
+- **Shared dialogs.** Use reusable `ConfirmDialog`, `PromptDialog`, and `Toast` components in `Components/Shared/`, which are awaited from code, instead of writing one-off modals per page. Clicking outside a dialog never closes it (a stray click shouldn't throw away what was typed); Cancel, or Escape where offered, does.
 - **Hand-written CSS design system** in `wwwroot/css/app.css`. It is dark-first, with a light theme; each user picks Dark (default), Light, or System in Settings, rendered as `<html data-theme>`. It uses no component library. It must be responsive at desktop, tablet, and phone widths.
 - **Gotcha:** don't name a component parameter `Assets`, because it collides with `ComponentBase.Assets` in .NET 10.
 

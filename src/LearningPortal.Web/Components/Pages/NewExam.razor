@@ -5,6 +5,7 @@
 @inject QuestionGenerationService Generator
 @inject SettingsService Settings
 @inject LearningPortalOptions Options
+@inject QuestionWriter Writer
 
 <PageTitle>New exam - @AppInfo.Name</PageTitle>
 
@@ -47,11 +48,6 @@ else
         }
         <SaturationNotice Basis="Basis" Show="@(ToGenerate() > 0)" Style="margin-top:14px" />
 
-        @if (IsBusy)
-        {
-            <div style="margin-top:20px"><BusyBar Message="@BusyMessage" OnCancel="CancelBusy" KeepOpen="BusyKeepsPageOpen" /></div>
-            <p class="muted small" style="margin-top:8px">Writing questions can take a minute or two. Questions finished so far are kept even if you cancel.</p>
-        }
         @if (_error is not null)
         {
             <div class="notice notice-error" style="margin-top:20px">@_error</div>
@@ -133,21 +129,18 @@ else
                 "Generate questions"))
             return;
 
-        int? examId = null;
-        FillResult? result = null;
-        await RunBusyAsync("Creating the exam...", async (progress, ct) =>
+        // The questions are written in the background; the exam page shows the progress.
+        int examId;
+        try
         {
-            examId = await Exams.CreateAsync(userId, TopicId, _values.ToSettings(), ct);
-            result = await Exams.FillAsync(userId, examId.Value, Choice, progress, ct);
-        }, message => _error = message, keepPageOpen: true);
-
-        if (examId is null)
+            examId = await Exams.CreateAsync(userId, TopicId, _values.ToSettings(), PageToken);
+        }
+        catch (ArgumentException ex)
+        {
+            _error = ex.Message;
             return;
-
-        if (result is { Missing: > 0 })
-            Ui.Toast.Error($"The exam has {Format.Plural(result.Missing, "question", "questions")} fewer than asked. You can top it up from the exam page.");
-        else if (_error is not null)
-            Ui.Toast.Error(_error);
+        }
+        Writer.Start(userId, examId, QuestionWriter.Kind.Fill, Choice);
 
         Nav.NavigateTo($"exams/{examId}");
     }

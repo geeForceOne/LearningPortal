@@ -1,7 +1,7 @@
 @if (_visible)
 {
-    <div class="modal-backdrop" @onclick="() => Resolve(false)">
-        <div class="modal" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" @onclick:stopPropagation="true"
+    <div class="modal-backdrop">
+        <div class="modal" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title"
              @onkeydown="OnKeyDown" tabindex="-1" @ref="_root">
             <h2 id="confirm-title">@_title</h2>
             <p>@_message</p>

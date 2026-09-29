@@ -1,7 +1,7 @@
 @if (_visible)
 {
-    <div class="modal-backdrop" @onclick="() => Resolve(null)">
-        <div class="modal @(_multiline ? "modal-wide" : "")" role="dialog" aria-modal="true" aria-labelledby="prompt-title" @onclick:stopPropagation="true">
+    <div class="modal-backdrop">
+        <div class="modal @(_multiline ? "modal-wide" : "")" role="dialog" aria-modal="true" aria-labelledby="prompt-title">
             <h2 id="prompt-title">@_title</h2>
             @if (_hint is not null)
             {

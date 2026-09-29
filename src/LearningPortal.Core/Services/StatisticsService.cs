@@ -18,6 +18,13 @@ public sealed record WeakQuestion(
     int QuestionId, int TopicId, string TopicName, string Prompt, QuestionType Type, Difficulty Difficulty,
     int Answered, int Missed, double AverageScore, string? SourceLabel);
 
+// The concept map: each material's sections with how well their questions go. AverageScore is null
+// while nothing from the section has been answered in a finished attempt.
+public sealed record SectionScore(
+    int SectionId, int Index, string Heading, int TokenEstimate, int QuestionCount, int Answered, int Missed, double? AverageScore);
+
+public sealed record MaterialMap(int MaterialId, string Title, IReadOnlyList<SectionScore> Sections);
+
 public sealed record BreakdownCell(QuestionType Type, Difficulty Difficulty, int Answered, double AverageScore);
 
 public sealed record StatisticsReport(
@@ -41,6 +48,64 @@ public sealed class StatisticsService(IDbContextFactory<AppDbContext> dbFactory,
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         return RankWeak(await GradedAnswersAsync(db, userId, topicId, ct)).ToList();
+    }
+
+    public async Task<IReadOnlyList<MaterialMap>> GetSectionMapAsync(string userId, int topicId, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var sections = await db.MaterialSections.AsNoTracking()
+            .Where(s => s.Material!.UserId == userId && s.Material.TopicId == topicId)
+            .Select(s => new { s.Id, s.MaterialId, MaterialTitle = s.Material!.Title, MaterialCreated = s.Material.CreatedAt, s.Index, s.Heading, s.TokenEstimate })
+            .ToListAsync(ct);
+
+        var questionCounts = await db.Questions.AsNoTracking()
+            .Where(q => q.UserId == userId && q.TopicId == topicId && q.SourceSectionId != null)
+            .GroupBy(q => q.SourceSectionId!.Value)
+            .Select(g => new { SectionId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.SectionId, x => x.Count, ct);
+
+        var scores = (await db.AttemptAnswers.AsNoTracking()
+                .Where(a => a.Attempt!.UserId == userId && a.Attempt.CompletedAt != null && a.Score != null
+                    && a.Question!.TopicId == topicId && a.Question.SourceSectionId != null)
+                .Select(a => new { SectionId = a.Question!.SourceSectionId!.Value, Score = a.Score!.Value })
+                .ToListAsync(ct))
+            .GroupBy(a => a.SectionId)
+            .ToDictionary(g => g.Key, g => (Answered: g.Count(),
+                Missed: g.Count(a => VerdictRules.FromScore(a.Score) != Verdict.Correct), Average: g.Average(a => a.Score)));
+
+        return sections
+            .GroupBy(s => (s.MaterialId, s.MaterialTitle, s.MaterialCreated))
+            .OrderBy(g => g.Key.MaterialCreated)
+            .Select(g => new MaterialMap(g.Key.MaterialId, g.Key.MaterialTitle, g.OrderBy(s => s.Index).Select(s =>
+            {
+                var hasScore = scores.TryGetValue(s.Id, out var sc);
+                return new SectionScore(s.Id, s.Index, s.Heading, s.TokenEstimate, questionCounts.GetValueOrDefault(s.Id),
+                    hasScore ? sc.Answered : 0, hasScore ? sc.Missed : 0, hasScore ? sc.Average : null);
+            }).ToList()))
+            .ToList();
+    }
+
+    // A section's questions for practice: the most often missed first, then the ones never answered,
+    // then the rest by lowest average score.
+    public async Task<IReadOnlyList<int>> RankSectionQuestionsAsync(string userId, int topicId, int sectionId, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var questionIds = await db.Questions.AsNoTracking()
+            .Where(q => q.UserId == userId && q.TopicId == topicId && q.SourceSectionId == sectionId)
+            .Select(q => q.Id)
+            .ToListAsync(ct);
+        var graded = (await db.AttemptAnswers.AsNoTracking()
+                .Where(a => a.Attempt!.UserId == userId && a.Attempt.CompletedAt != null && a.Score != null && questionIds.Contains(a.QuestionId))
+                .Select(a => new { a.QuestionId, Score = a.Score!.Value })
+                .ToListAsync(ct))
+            .GroupBy(a => a.QuestionId)
+            .ToDictionary(g => g.Key, g => (MissedShare: g.Count(a => VerdictRules.FromScore(a.Score) != Verdict.Correct) / (double)g.Count(), Average: g.Average(a => a.Score)));
+
+        return questionIds
+            .OrderByDescending(id => graded.TryGetValue(id, out var g) ? g.MissedShare : 0.5)
+            .ThenBy(id => graded.TryGetValue(id, out var g) ? g.Average : 50)
+            .ThenBy(_ => Random.Shared.Next())
+            .ToList();
     }
 
     private static Task<List<GradedAnswer>> GradedAnswersAsync(AppDbContext db, string userId, int? topicId, CancellationToken ct) =>

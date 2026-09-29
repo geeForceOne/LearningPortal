@@ -3,9 +3,10 @@
 //   trip  - the dot travels out to a neighbouring node, lights it up and comes back;
 //   rim   - it leaves the hub, runs once around the outer ring and returns;
 //   pulse - it swells in place while a wave of light passes out to the other nodes.
-// The header logo plays one motion when hovered or focused; a mark with data-motion="loop" (the
-// busy indicator) keeps playing its motion for as long as it's on the page. Nothing moves when
-// the user asks for reduced motion.
+// The header and sign-in logos play one motion when hovered or focused; a mark with
+// data-motion="once" (the sign-in page) plays one shortly after it appears, and one with
+// data-motion="loop" (the busy indicator) keeps playing for as long as it's on the page. Nothing
+// moves when the user asks for reduced motion.
 (() => {
     const MOTIONS = ["trip", "rim", "pulse"];
     const reduced = matchMedia("(prefers-reduced-motion: reduce)");
@@ -165,7 +166,7 @@
 
     // Header logo: one play per hover or keyboard focus.
     const onEnter = e => {
-        const brand = e.target.closest?.(".brand");
+        const brand = e.target.closest?.(".brand, .auth-brand");
         // Moving between the logo's own parts isn't a new hover.
         if (!brand || (e.relatedTarget && brand.contains(e.relatedTarget))) return;
         const svg = brand.querySelector("svg.brand-mark");
@@ -174,9 +175,16 @@
     document.addEventListener("mouseover", onEnter);
     document.addEventListener("focusin", onEnter);
 
-    // Busy indicators come and go as Blazor renders; start each one that appears.
+    // Busy indicators and the sign-in logo come and go as Blazor renders; start each one that
+    // appears. A "once" logo plays a single time per element, after a short pause.
+    const welcomed = new WeakSet();
     const startLoops = () => {
         for (const svg of document.querySelectorAll('svg.brand-mark[data-motion="loop"]')) play(svg, true);
+        for (const svg of document.querySelectorAll('svg.brand-mark[data-motion="once"]')) {
+            if (welcomed.has(svg)) continue;
+            welcomed.add(svg);
+            setTimeout(() => { if (svg.isConnected) play(svg, false); }, 500);
+        }
     };
     new MutationObserver(startLoops).observe(document.documentElement, { childList: true, subtree: true });
     reduced.addEventListener?.("change", () => { if (!reduced.matches) startLoops(); else requestFrame(); });
