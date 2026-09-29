@@ -183,7 +183,7 @@ public sealed class AttemptService(
 
     // Asks the AI a follow-up about a revealed answer. It sees the question, the answer given, the
     // explanation, the question's source section and the earlier follow-ups, never the whole topic.
-    public async Task<FollowUp> AskFollowUpAsync(string userId, int attemptId, int answerId, string text, CancellationToken ct)
+    public async Task<FollowUp> AskFollowUpAsync(string userId, int attemptId, int answerId, string text, AiChoice? choice, CancellationToken ct)
     {
         var asked = text.Trim();
         if (asked.Length == 0)
@@ -205,7 +205,7 @@ public sealed class AttemptService(
             ? await db.MaterialSections.Where(s => s.Id == sid).Select(s => s.Text).FirstOrDefaultAsync(ct)
             : null;
 
-        var connection = await settings.GetConnectionAsync(userId, AiTask.Generation, ct: ct);
+        var connection = await settings.GetConnectionAsync(userId, AiTask.Generation, choice, ct);
         var json = await AiClientFactory.Create(connection).CompleteJsonAsync(new AiRequest
         {
             System = Prompts.FollowUpSystem(language),

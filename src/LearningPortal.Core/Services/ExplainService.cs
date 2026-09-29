@@ -96,7 +96,8 @@ public sealed partial class ExplainService(
     }
 
     // Saves the explanation and has the AI ask its questions about it.
-    public async Task<ExplainSession> ExplainAsync(string userId, int sessionId, string explanation, CancellationToken ct)
+    // choice is the model picked on the page (advanced mode); null uses the questions default.
+    public async Task<ExplainSession> ExplainAsync(string userId, int sessionId, string explanation, AiChoice? choice, CancellationToken ct)
     {
         var text = explanation.Trim();
         if (text.Length == 0)
@@ -110,7 +111,7 @@ public sealed partial class ExplainService(
             throw new InvalidOperationException("This explanation already has its questions.");
         var (language, source) = await ContextAsync(db, session, ct);
 
-        var connection = await settings.GetConnectionAsync(userId, AiTask.Generation, ct: ct);
+        var connection = await settings.GetConnectionAsync(userId, AiTask.Generation, choice, ct);
         var json = await AiClientFactory.Create(connection).CompleteJsonAsync(new AiRequest
         {
             System = Prompts.ExplainQuestionsSystem(language),
@@ -142,7 +143,7 @@ public sealed partial class ExplainService(
     }
 
     // Saves the replies to the AI's questions and has it assess the whole explanation.
-    public async Task<ExplainSession> ReplyAsync(string userId, int sessionId, IReadOnlyList<string> replies, CancellationToken ct)
+    public async Task<ExplainSession> ReplyAsync(string userId, int sessionId, IReadOnlyList<string> replies, AiChoice? choice, CancellationToken ct)
     {
         var cleaned = replies.Select(r => r.Trim()).ToList();
         if (cleaned.Any(r => r.Length > ExplainSession.MaxReplyLength))
@@ -156,7 +157,7 @@ public sealed partial class ExplainService(
             throw new InvalidOperationException("This explanation has already been assessed.");
         var (language, source) = await ContextAsync(db, session, ct);
 
-        var connection = await settings.GetConnectionAsync(userId, AiTask.Generation, ct: ct);
+        var connection = await settings.GetConnectionAsync(userId, AiTask.Generation, choice, ct);
         var json = await AiClientFactory.Create(connection).CompleteJsonAsync(new AiRequest
         {
             System = Prompts.ExplainAssessmentSystem(language),

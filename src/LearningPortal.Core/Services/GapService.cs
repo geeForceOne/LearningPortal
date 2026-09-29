@@ -17,7 +17,8 @@ public sealed class GapService(
     SettingsService settings,
     MaterialService materials)
 {
-    public async Task<IReadOnlyList<Gap>> FindAsync(string userId, int topicId, CancellationToken ct)
+    // choice is the model picked on the page (advanced mode); null uses the questions default.
+    public async Task<IReadOnlyList<Gap>> FindAsync(string userId, int topicId, AiChoice? choice, CancellationToken ct)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var topic = await db.Topics.AsNoTracking().FirstOrDefaultAsync(t => t.Id == topicId && t.UserId == userId, ct)
@@ -30,7 +31,7 @@ public sealed class GapService(
         if (outlines.Count == 0)
             throw new InvalidOperationException("Add material to this topic first.");
 
-        var json = await AiClientFactory.Create(await settings.GetConnectionAsync(userId, AiTask.Generation, ct: ct)).CompleteJsonAsync(new AiRequest
+        var json = await AiClientFactory.Create(await settings.GetConnectionAsync(userId, AiTask.Generation, choice, ct)).CompleteJsonAsync(new AiRequest
         {
             System = Prompts.GapsSystem(topic.Language),
             Prompt = Prompts.GapsPrompt(topic.Name, topic.Description, outlines.Select(o => (o.Title, o.Outline))),
@@ -55,13 +56,13 @@ public sealed class GapService(
     }
 
     // Writes a study note for one gap and adds it to the topic as material. Returns the new material.
-    public async Task<AddedMaterial> WriteNoteAsync(string userId, int topicId, Gap gap, CancellationToken ct)
+    public async Task<AddedMaterial> WriteNoteAsync(string userId, int topicId, Gap gap, AiChoice? choice, CancellationToken ct)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var topic = await db.Topics.AsNoTracking().FirstOrDefaultAsync(t => t.Id == topicId && t.UserId == userId, ct)
             ?? throw new NotFoundException();
 
-        var json = await AiClientFactory.Create(await settings.GetConnectionAsync(userId, AiTask.Generation, ct: ct)).CompleteJsonAsync(new AiRequest
+        var json = await AiClientFactory.Create(await settings.GetConnectionAsync(userId, AiTask.Generation, choice, ct)).CompleteJsonAsync(new AiRequest
         {
             System = Prompts.NoteSystem(topic.Language),
             Prompt = Prompts.NotePrompt(topic.Name, gap.Title, gap.Why),

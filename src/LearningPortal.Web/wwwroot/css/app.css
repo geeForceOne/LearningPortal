@@ -782,7 +782,7 @@ a.row-title:hover { text-decoration: underline; text-decoration-color: var(--rul
 .practice-size .input { width: 4.5em; min-height: 32px; padding: 4px 8px; }
 
 /* Concept map: a topic's sections as tiles, coloured by how well their questions go. */
-.map-legend { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-bottom: 8px; font-size: var(--t-sm); color: var(--pencil); }
+.map-legend { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-bottom: 22px; font-size: var(--t-sm); color: var(--pencil); }
 .map-legend span { display: inline-flex; align-items: center; gap: 6px; }
 .map-swatch { display: inline-block; width: 14px; height: 14px; border-radius: 3px; border: 1px solid var(--rule-strong); }
 .map-tiles { display: flex; flex-wrap: wrap; gap: 8px; }

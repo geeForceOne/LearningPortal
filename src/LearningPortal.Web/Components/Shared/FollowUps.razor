@@ -3,6 +3,7 @@
 @using System.Security.Claims
 @using LearningPortal.Core.Ai
 @inject AttemptService Attempts
+@inject SettingsService Settings
 
 <div class="follow-ups">
     @foreach (var f in Answer.FollowUps)
@@ -18,8 +19,8 @@
         var left = FollowUp.MaxPerAnswer - Answer.FollowUps.Count;
         if (!_open)
         {
-            <button type="button" class="link-button follow-up-open" @onclick="() => _open = true">
-                @(Answer.FollowUps.Count == 0 ? "Ask the AI a follow-up question" : $"Ask another follow-up ({left} left)")
+            <button type="button" class="link-button follow-up-open" @onclick="OpenAsync">
+                @(Answer.FollowUps.Count == 0 ? "Ask Recall a follow-up question" : $"Ask another follow-up ({left} left)")
             </button>
         }
         else
@@ -28,13 +29,17 @@
                 <label class="field-label" for="@_id">Your follow-up question</label>
                 <textarea id="@_id" class="textarea" rows="2" maxlength="@FollowUp.MaxQuestionLength" @bind="_text" @bind:event="oninput"
                           disabled="@_asking" placeholder="For example: why isn't the second option right?"></textarea>
+                @if (_settings is { AdvancedModels: true })
+                {
+                    <AiModelSelect Label="Answer with" @bind-Value="_answerWith" Available="_settings.HasKey" Inline="true" />
+                }
                 @if (_error is not null)
                 {
                     <div class="notice notice-error">@_error</div>
                 }
                 @if (_asking)
                 {
-                    <BusyBar Message="The AI is answering..." />
+                    <BusyBar Message="Recall is answering..." />
                 }
                 else
                 {
@@ -60,6 +65,25 @@
     private bool _asking;
     private string _text = "";
     private string? _error;
+    private SettingsView? _settings;
+    private AiChoice _answerWith = default!;
+
+    private async Task<string> UserIdAsync()
+    {
+        var state = AuthState is null ? null : await AuthState;
+        return state?.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? throw new InvalidOperationException("Not signed in.");
+    }
+
+    // Settings are read when the form opens, so a page with many answers doesn't load them per answer.
+    private async Task OpenAsync()
+    {
+        if (_settings is null)
+        {
+            _settings = await Settings.GetAsync(await UserIdAsync());
+            _answerWith = _settings.Default(AiTask.Generation);
+        }
+        _open = true;
+    }
 
     private void Close()
     {
@@ -74,9 +98,8 @@
         _error = null;
         try
         {
-            var state = AuthState is null ? null : await AuthState;
-            var userId = state?.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? throw new InvalidOperationException("Not signed in.");
-            var followUp = await Attempts.AskFollowUpAsync(userId, AttemptId, Answer.Id, _text, CancellationToken.None);
+            var choice = _settings?.AdvancedModels == true ? _answerWith : null;
+            var followUp = await Attempts.AskFollowUpAsync(await UserIdAsync(), AttemptId, Answer.Id, _text, choice, CancellationToken.None);
             Answer.FollowUps.Add(followUp);
             Close();
         }

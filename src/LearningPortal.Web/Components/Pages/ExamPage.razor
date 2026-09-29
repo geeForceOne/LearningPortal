@@ -55,7 +55,7 @@ else
     {
         <div style="margin-bottom:20px">
             <BusyBar Message="@_job!.Message" OnCancel="CancelWritingAsync" Large="true"
-                     Note="This can take a few minutes. You can leave this page: the AI keeps writing, and the questions will be here when you come back." />
+                     Note="This can take a few minutes. You can leave this page: Recall keeps writing, and the questions will be here when you come back." />
         </div>
     }
     else if (IsBusy)
@@ -328,7 +328,7 @@ else
         if (_job is not { Finished: true } done) return;
 
         if (done.Cancelled)
-            Ui.Toast.Success("Stopped. Questions the AI had already finished are kept.");
+            Ui.Toast.Success("Stopped. Questions Recall had already finished are kept.");
         else if (done.Error is not null)
             _error = done.Error;
         else if (done.Kind == QuestionWriter.Kind.Replace)
@@ -346,7 +346,7 @@ else
         _error = null;
         var userId = await UserIdAsync();
         if (!Writer.Start(userId, ExamId, kind, Choice, questionId))
-            Ui.Toast.Error("The AI is already writing questions for this exam.");
+            Ui.Toast.Error("Recall is already writing questions for this exam.");
         _job = Writer.Get(userId, ExamId);
     }
 

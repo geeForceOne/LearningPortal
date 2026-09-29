@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 LearningPortal is a multi-user, Docker-hosted web app that turns a user's own study material into training exams using AI.
 
 - **Topics.** A user creates topics. Each topic holds any number of content materials: uploaded PDF, Word, PowerPoint, LaTeX, or Markdown files, or text pasted in directly.
-- **AI.** Content material is sent to an AI provider (Claude or ChatGPT) for analysis. Each user configures their provider and API key in Settings. In the UI it's just called **"AI"**, with no vendor-specific wording outside Settings.
+- **AI.** Content material is sent to an AI provider (Claude or ChatGPT) for analysis. Each user configures their provider and API key in Settings. In the UI it's called **"AI"**, with no vendor-specific wording outside Settings. Texts about what the app is doing say **"Recall"** ("Recall is writing questions", "Recall asks"); "AI" stays where it matters that a machine produced something that can be wrong ("Written by the AI"), and in provider, cost and settings wording.
 - **Exams.** A user creates any number of exams per topic and can amend them later. An exam definition has a user-chosen name, a question count, a type (multiple choice, written, or a mix), and a difficulty (easy, medium, or hard). The AI generates the questions and answers.
 - **Written answers.** The user types an answer and the AI judges whether it qualifies as correct. Answers are short, at most 10–20 sentences, not essays. The UI should make this limit clear.
 - **Revealing answers.** After answering a question, the user can reveal the answer right away or wait until the end of the exam. Every answer comes with a thorough explanation, because the point is to learn from it.

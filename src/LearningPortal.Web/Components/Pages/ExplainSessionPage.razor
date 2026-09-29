@@ -1,6 +1,7 @@
 @page "/explain/{SessionId:int}"
 @inherits AppPage
 @inject ExplainService Explain
+@inject SettingsService Settings
 
 <PageTitle>Explain it back - @AppInfo.Name</PageTitle>
 
@@ -43,7 +44,7 @@ else
             </div>
 
             <div class="explain-student">
-                <h3 class="small muted">The student asks</h3>
+                <h3 class="small muted">Recall asks</h3>
                 @for (var i = 0; i < _session.Questions.Count; i++)
                 {
                     var index = i;
@@ -85,6 +86,12 @@ else
             }
         }
 
+        @if (_session.CompletedAt is null && _settings is { AdvancedModels: true })
+        {
+            <div style="margin-top:16px;max-width:520px">
+                <AiModelSelect Label="Write with" @bind-Value="_writeWith" Available="_settings.HasKey" Inline="true" />
+            </div>
+        }
         @if (_error is not null)
         {
             <div class="notice notice-error" style="margin-top:16px">@_error</div>
@@ -104,12 +111,23 @@ else
     private string[] _replies = [];
     private string? _error;
     private bool _starting;
+    private SettingsView? _settings;
+    private AiChoice _writeWith = default!;
+
+    // Passed only in advanced mode; in simple mode the one model does everything.
+    private AiChoice? Choice => _settings?.AdvancedModels == true ? _writeWith : null;
 
     protected override async Task OnParametersSetAsync()
     {
         try
         {
-            _session = await Explain.GetAsync(await UserIdAsync(), SessionId, PageToken);
+            var userId = await UserIdAsync();
+            _session = await Explain.GetAsync(userId, SessionId, PageToken);
+            if (_settings is null)
+            {
+                _settings = await Settings.GetAsync(userId, PageToken);
+                _writeWith = _settings.Default(AiTask.Generation);
+            }
             _replies = new string[_session.Questions.Count];
             Array.Fill(_replies, "");
             _explanation = "";
@@ -127,8 +145,8 @@ else
     {
         _error = null;
         var userId = await UserIdAsync();
-        if (await RunBusyAsync("The student is reading your explanation...", async (_, ct) =>
-                await Explain.ExplainAsync(userId, SessionId, _explanation, ct), m => _error = m))
+        if (await RunBusyAsync("Recall is reading your explanation...", async (_, ct) =>
+                await Explain.ExplainAsync(userId, SessionId, _explanation, Choice, ct), m => _error = m))
         {
             _session = await Explain.GetAsync(userId, SessionId, PageToken);
             _replies = new string[_session.Questions.Count];
@@ -141,7 +159,7 @@ else
         _error = null;
         var userId = await UserIdAsync();
         if (await RunBusyAsync("Assessing your explanation...", async (_, ct) =>
-                await Explain.ReplyAsync(userId, SessionId, _replies, ct), m => _error = m))
+                await Explain.ReplyAsync(userId, SessionId, _replies, Choice, ct), m => _error = m))
             _session = await Explain.GetAsync(userId, SessionId, PageToken);
     }
 

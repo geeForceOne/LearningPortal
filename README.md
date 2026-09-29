@@ -70,16 +70,39 @@ After each question, or at the end, you see what was right, what you picked, and
 
 ![A written answer graded as partially correct](docs/images/recall-review-written.jpg)
 
-## More ways to learn
+## Explain it back
 
-- **Explain it back:** pick a concept from your material (or let Recall pick one you're weak in) and
-  explain it in your own words. The AI asks one or two questions like a curious student, then tells
-  you what you explained well and what was missing
-- **Concept map:** your material's sections as tiles, coloured by how well you do on their
-  questions. Pick a weak one to practise it
-- **Gap finder:** the AI lists what a course on your topic usually covers that your material
-  doesn't, and can write a short study note for each gap. These come from the AI's general
-  knowledge and are clearly marked as such, since they can be wrong
+The best test of understanding is explaining something in your own words. Pick a concept from
+your material, or press **Surprise me** and Recall picks one you're weak in or haven't practised.
+Write your explanation as if to someone new to the subject.
+
+Recall then asks one or two questions like a curious student would: about what was unclear,
+missing or not quite right. Answer them, and you get a score and feedback on what you explained
+well and what was missing. Only that part of your material goes to the AI, so it checks you
+against your own sources. Your explanations are kept per topic, so you can look back at them.
+
+![Explain it back: an explanation, the questions and the feedback](docs/images/recall-explain.jpg)
+
+## Concept map
+
+A topic's material, section by section, as tiles: sized by how much text each section has and
+coloured by how well you do on the questions written from it (solid, shaky, weak, not practised
+yet, or no questions yet). Pick a section and practise just that part. The map uses your results
+only, so it costs nothing.
+
+![Concept map: sections coloured by how well you know them](docs/images/recall-concept-map.jpg)
+
+## Find gaps
+
+Your material might not cover everything a course on the topic usually does. **Find gaps**
+compares your material with the subject and lists what's missing, with a line on why each part
+matters. For each gap, Recall can write a short study note and add it to the topic as material,
+so later exams can ask about it too.
+
+This comes from the AI's general knowledge, not from your sources, so it can be wrong. The page
+says so, and study notes are marked "Written by the AI · may contain mistakes" wherever they appear.
+
+![Find gaps: what the material doesn't cover yet](docs/images/recall-gaps.jpg)
 
 ## Question bank
 

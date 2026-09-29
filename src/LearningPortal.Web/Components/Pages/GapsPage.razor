@@ -25,7 +25,7 @@ else
         <div>
             <h1>Find gaps</h1>
             <p class="page-sub">
-                The AI compares your material with what a course on this topic usually covers and lists what's missing.
+                Recall compares your material with what a course on this topic usually covers and lists what's missing.
                 For each gap it can write a short study note, added to the topic as material.
             </p>
         </div>
@@ -43,6 +43,14 @@ else
     }
     else
     {
+        @if (_settings is { AdvancedModels: true })
+        {
+            <div style="margin-bottom:14px;max-width:520px">
+                <AiModelSelect Label="Write with" @bind-Value="_writeWith" Available="_settings.HasKey" Inline="true">
+                    <Hint><span class="field-hint">Used for finding gaps and for the study notes.</span></Hint>
+                </AiModelSelect>
+            </div>
+        }
         <div class="actions">
             <button type="button" class="btn btn-primary" disabled="@IsBusy" @onclick="FindAsync">
                 <Icon Name="book" Size="16" /> @(_gaps is null ? "Find gaps" : "Look again")
@@ -61,11 +69,11 @@ else
 
     @if (_gaps is { Count: 0 })
     {
-        <div class="empty" style="margin-top:20px"><p>The AI didn't find any important gaps in your material.</p></div>
+        <div class="empty" style="margin-top:20px"><p>Recall didn't find any important gaps in your material.</p></div>
     }
     else if (_gaps is not null)
     {
-        <section class="section">
+        <section class="section" style="margin-top:28px">
             <div class="section-head"><h2>Possible gaps<span class="count">@_gaps.Count</span></h2></div>
             <ul class="rows">
                 @foreach (var g in _gaps)
@@ -104,12 +112,23 @@ else
     private readonly Dictionary<string, int> _written = [];
     private string? _error;
     private bool _notFound;
+    private SettingsView? _settings;
+    private AiChoice _writeWith = default!;
+
+    // Passed only in advanced mode; in simple mode the one model does everything.
+    private AiChoice? Choice => _settings?.AdvancedModels == true ? _writeWith : null;
 
     protected override async Task OnParametersSetAsync()
     {
         try
         {
-            _topic = await Topics.GetAsync(await UserIdAsync(), TopicId, PageToken);
+            var userId = await UserIdAsync();
+            _topic = await Topics.GetAsync(userId, TopicId, PageToken);
+            if (_settings is null)
+            {
+                _settings = await Settings.GetAsync(userId, PageToken);
+                _writeWith = _settings.Default(AiTask.Generation);
+            }
         }
         catch (NotFoundException)
         {
@@ -122,8 +141,8 @@ else
         _error = null;
         var userId = await UserIdAsync();
         IReadOnlyList<Gap>? found = null;
-        if (await RunBusyAsync("The AI is comparing your material with the subject...", async (_, ct) =>
-                found = await Gaps.FindAsync(userId, TopicId, ct), m => _error = m))
+        if (await RunBusyAsync("Recall is comparing your material with the subject...", async (_, ct) =>
+                found = await Gaps.FindAsync(userId, TopicId, Choice, ct), m => _error = m))
             _gaps = found;
     }
 
@@ -133,13 +152,12 @@ else
         var userId = await UserIdAsync();
         AddedMaterial? added = null;
         if (!await RunBusyAsync($"Writing a study note on {gap.Title}...", async (_, ct) =>
-                added = await Gaps.WriteNoteAsync(userId, TopicId, gap, ct), m => _error = m) || added is null)
+                added = await Gaps.WriteNoteAsync(userId, TopicId, gap, Choice, ct), m => _error = m) || added is null)
             return;
 
         _written[gap.Title] = added.Id;
         // Outlined like any other material, so exams can use it.
-        var settings = await Settings.GetAsync(userId, PageToken);
-        Analysis.Enqueue(userId, added.Id, settings.AdvancedModels ? settings.Default(AiTask.Analysis) : null);
+        Analysis.Enqueue(userId, added.Id, _settings!.AdvancedModels ? _settings.Default(AiTask.Analysis) : null);
         Ui.Toast.Success("Study note added to the topic's material. It's marked as written by the AI.");
     }
 }

@@ -109,7 +109,7 @@ else
                                         }
                                         @if (_userId is not null && Writer.IsWriting(_userId, e.Id))
                                         {
-                                            <span class="tag">AI is writing questions</span>
+                                            <span class="tag">Recall is writing questions</span>
                                         }
                                     </div>
                                 </div>
@@ -424,7 +424,7 @@ else
         // The cost is mentioned only when it's worth noticing; a few cents isn't.
         var them = started.Count == 1 ? "it" : "them";
         var estimate = Format.CostHint(started.Sum(m => m.TokenEstimate), _model) is { } c ? $" Analysing {them} takes {c}." : "";
-        Ui.Toast.Success($"{what}.{estimate} The AI is analysing {them} now.");
+        Ui.Toast.Success($"{what}.{estimate} Recall is analysing {them} now.");
     }
 
     private async Task Reanalyze(int materialId)
