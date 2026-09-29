@@ -1,5 +1,16 @@
 # Release notes
 
+## 1.5.0 - 2026-09-29
+
+### New
+
+- Practice weak questions: a topic's questions you've answered wrong or only partly right most often, in one practice run. It's 10 questions by default (you can change that), reuses your existing questions, and costs nothing. Start it from the topic or from Statistics, and keep a run as a normal exam with "Save as exam".
+- Ask the AI a follow-up about a revealed answer, such as "why isn't B right?". You can ask up to three per question, and the replies are saved with the attempt, so they're still there on the results.
+
+### Improved
+
+- The logo's yellow dot now moves while the AI works and when you point at the logo, with three different motions. Nothing moves if your device is set to reduce motion.
+
 ## 1.4.0 - 2026-09-28
 
 ### New
