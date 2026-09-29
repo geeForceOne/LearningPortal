@@ -1,5 +1,11 @@
 # Release notes
 
+## 1.7.0 - 2026-09-29
+
+### Fixed
+
+- Minor fixes and updates.
+
 ## 1.6.0 - 2026-09-29
 
 ### New
