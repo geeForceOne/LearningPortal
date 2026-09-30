@@ -1,5 +1,17 @@
 # Release notes
 
+## 1.8.0 - 2026-09-30
+
+### New
+
+- Put Recall on the home screen of your phone or tablet and use it like an app: "Install app" in Chrome on Android, or Share → "Add to Home Screen" in Safari on iPhone and iPad.
+- Add an optional expiry date to your API keys in Settings. From 5 days before, a banner reminds you to replace the key; close it and it stays hidden until the next day.
+- Admins can let people request an account from the sign-in page (Admin → Users). Each request comes with the person's name and an optional message, and the admin approves it (the usual invite is sent) or declines it (with a short email).
+
+### Fixed
+
+- Minor fixes and updates.
+
 ## 1.7.0 - 2026-09-29
 
 ### Fixed
