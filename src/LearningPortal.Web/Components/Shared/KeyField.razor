@@ -11,7 +11,7 @@
     else if (Status == SecretStatus.Set)
     {
         <div class="notice notice-good" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-            <span style="flex:1">A @Noun is saved. Type a new one below to replace it.</span>
+            <span style="flex:1">A @Noun is saved@(SavedExpiresOn is { } saved ? $", expiring {Format.Day(saved)}" : ""). Type a new one below to replace it.</span>
             <button type="button" class="btn btn-ghost btn-sm" @onclick="OnRemove">Remove @Noun</button>
         </div>
     }
@@ -38,6 +38,16 @@
         </button>
     </div>
     <span class="field-hint">@Hint It's stored encrypted and never shown again.</span>
+
+    @if (ShowExpiry)
+    {
+        <div class="key-expiry">
+            <label class="field-label" for="@(_id)-expires">Expires on <span class="muted" style="font-weight:400">(optional)</span></label>
+            <input id="@(_id)-expires" class="input" type="date" value="@ExpiresOn?.ToString("yyyy-MM-dd")"
+                   @onchange="e => ExpiresOnChanged.InvokeAsync(DateOnly.TryParse(e.Value?.ToString(), out var d) ? d : null)" />
+            <span class="field-hint">The expiry date you chose when creating the key. @AppInfo.Name reminds you @SettingsService.ReminderDays days before.</span>
+        </div>
+    }
 </div>
 
 @code {
@@ -54,4 +64,10 @@
     [Parameter] public string? Placeholder { get; set; }
     // What the secret is called in the messages: "key", "password".
     [Parameter] public string Noun { get; set; } = "key";
+
+    // API keys only: an optional expiry date, edited with the key and saved with it.
+    [Parameter] public bool ShowExpiry { get; set; }
+    [Parameter] public DateOnly? ExpiresOn { get; set; }
+    [Parameter] public EventCallback<DateOnly?> ExpiresOnChanged { get; set; }
+    [Parameter] public DateOnly? SavedExpiresOn { get; set; }
 }

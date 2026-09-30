@@ -20,7 +20,7 @@
             </label>
             <div class="modal-actions">
                 <button type="button" class="btn btn-ghost" @onclick="() => Resolve(null)">Cancel</button>
-                <button type="button" class="btn btn-primary" disabled="@string.IsNullOrWhiteSpace(_value)" @onclick="Submit">@_okLabel</button>
+                <button type="button" class="btn btn-primary" disabled="@(!_allowEmpty && string.IsNullOrWhiteSpace(_value))" @onclick="Submit">@_okLabel</button>
             </div>
         </div>
     </div>
@@ -38,10 +38,12 @@
     private ElementReference _input;
     private TaskCompletionSource<string?>? _tcs;
 
-    // Resolves to the trimmed text, or null if cancelled.
+    // Resolves to the trimmed text, or null if cancelled. allowEmpty: for optional text, OK works
+    // with an empty box (and resolves to "").
     public Task<string?> AskAsync(string title, string label, string initialValue = "", string okLabel = "Save",
-        string? hint = null, bool multiline = false)
+        string? hint = null, bool multiline = false, bool allowEmpty = false)
     {
+        _allowEmpty = allowEmpty;
         _tcs?.TrySetResult(null);
         _title = title;
         _label = label;
@@ -67,9 +69,11 @@
     {
         if (e.Key == "Escape")
             Resolve(null);
-        else if (e.Key == "Enter" && !_multiline && !string.IsNullOrWhiteSpace(_value))
+        else if (e.Key == "Enter" && !_multiline && (_allowEmpty || !string.IsNullOrWhiteSpace(_value)))
             Submit();
     }
+
+    private bool _allowEmpty;
 
     private void Submit() => Resolve(_value.Trim());
 

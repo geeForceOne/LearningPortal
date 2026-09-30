@@ -11,6 +11,15 @@ window.learningPortal = {
         try { localStorage.setItem("lp." + key, value); } catch { }
     },
 
+    // True on an iPhone or iPad in Safari that isn't running Recall from the home screen yet, so the
+    // page can explain "Add to Home Screen" (iOS has no install prompt of its own). iPadOS reports
+    // itself as a Mac, so a touch-capable "Mac" counts too.
+    isIosBrowser: () => {
+        const ios = /iPhone|iPad|iPod/.test(navigator.userAgent)
+            || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+        return ios && !navigator.standalone;
+    },
+
     // Resolves to false when the browser refuses (no permission, insecure context).
     copyText: async (text) => {
         try { await navigator.clipboard.writeText(text); return true; } catch { return false; }

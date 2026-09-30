@@ -26,6 +26,14 @@
     <link rel="stylesheet" href="@Assets["css/app.css"]" />
     <link rel="stylesheet" href="@Assets["LearningPortal.Web.styles.css"]" />
     <link rel="icon" type="image/svg+xml" href="@Assets["favicon.svg"]" />
+    @* Installing as an app: Android reads the manifest; iPhone and iPad ("Add to Home Screen")
+       read the apple-* tags and the touch icon. *@
+    <link rel="manifest" href="manifest.webmanifest" />
+    <meta name="theme-color" content="#141c22" />
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+    <meta name="apple-mobile-web-app-title" content="Recall" />
     <ImportMap />
     <HeadOutlet @rendermode="PageRenderMode" />
 </head>

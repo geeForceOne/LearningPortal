@@ -55,11 +55,13 @@ else
             </div>
 
             <KeyField Label="Anthropic API key (Claude)" Status="_view.ClaudeKey" Value="@_claudeKey" ValueChanged="v => KeyTyped(AiProvider.Claude, v)"
-                      OnRemove="() => Remove(AiProvider.Claude)" Removing="_removeClaude" Placeholder="sk-ant-...">
+                      OnRemove="() => Remove(AiProvider.Claude)" Removing="_removeClaude" Placeholder="sk-ant-..."
+                      ShowExpiry="HasKeyAfterSave(AiProvider.Claude)" @bind-ExpiresOn="_claudeExpires" SavedExpiresOn="_view.ClaudeKeyExpiresOn">
                 <Hint>Create one at <a href="https://platform.claude.com/settings/keys" target="_blank" rel="noopener noreferrer">platform.claude.com</a> under API keys.</Hint>
             </KeyField>
             <KeyField Label="OpenAI API key (ChatGPT)" Status="_view.OpenAiKey" Value="@_openAiKey" ValueChanged="v => KeyTyped(AiProvider.OpenAi, v)"
-                      OnRemove="() => Remove(AiProvider.OpenAi)" Removing="_removeOpenAi" Placeholder="sk-...">
+                      OnRemove="() => Remove(AiProvider.OpenAi)" Removing="_removeOpenAi" Placeholder="sk-..."
+                      ShowExpiry="HasKeyAfterSave(AiProvider.OpenAi)" @bind-ExpiresOn="_openAiExpires" SavedExpiresOn="_view.OpenAiKeyExpiresOn">
                 <Hint>Create one at <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer">platform.openai.com</a> under API keys.</Hint>
             </KeyField>
 
@@ -124,6 +126,8 @@ else
     private string _openAiKey = "";
     private bool _removeClaude;
     private bool _removeOpenAi;
+    private DateOnly? _claudeExpires;
+    private DateOnly? _openAiExpires;
     private bool _savingKeys;
     private bool _savingModels;
     private Theme _theme;
@@ -149,6 +153,8 @@ else
     private async Task LoadViewAsync()
     {
         _view = await Settings.GetAsync(await UserIdAsync(), PageToken);
+        _claudeExpires = _view.ClaudeKeyExpiresOn;
+        _openAiExpires = _view.OpenAiKeyExpiresOn;
         _claudeKey = "";
         _openAiKey = "";
         _removeClaude = false;
@@ -159,18 +165,36 @@ else
     private bool Available(AiProvider provider) => _view!.HasKey(provider);
 
     private bool KeysChanged =>
-        _removeClaude || _removeOpenAi || !string.IsNullOrWhiteSpace(_claudeKey) || !string.IsNullOrWhiteSpace(_openAiKey);
+        _removeClaude || _removeOpenAi || !string.IsNullOrWhiteSpace(_claudeKey) || !string.IsNullOrWhiteSpace(_openAiKey)
+        || _claudeExpires != _view!.ClaudeKeyExpiresOn || _openAiExpires != _view.OpenAiKeyExpiresOn;
+
+    // The expiry date belongs to a key, so it's offered while one is saved (and not being removed)
+    // or being typed in.
+    private bool HasKeyAfterSave(AiProvider provider) => provider == AiProvider.Claude
+        ? !string.IsNullOrWhiteSpace(_claudeKey) || (!_removeClaude && _view!.HasKey(AiProvider.Claude))
+        : !string.IsNullOrWhiteSpace(_openAiKey) || (!_removeOpenAi && _view!.HasKey(AiProvider.OpenAi));
 
     private void KeyTyped(AiProvider provider, string value)
     {
-        if (provider == AiProvider.Claude) { _claudeKey = value; _removeClaude = false; }
-        else { _openAiKey = value; _removeOpenAi = false; }
+        // A new key has its own expiry date, so starting to type one clears the old date.
+        if (provider == AiProvider.Claude)
+        {
+            if (string.IsNullOrWhiteSpace(_claudeKey) && !string.IsNullOrWhiteSpace(value)) _claudeExpires = null;
+            _claudeKey = value;
+            _removeClaude = false;
+        }
+        else
+        {
+            if (string.IsNullOrWhiteSpace(_openAiKey) && !string.IsNullOrWhiteSpace(value)) _openAiExpires = null;
+            _openAiKey = value;
+            _removeOpenAi = false;
+        }
     }
 
     private void Remove(AiProvider provider)
     {
-        if (provider == AiProvider.Claude) { _removeClaude = true; _claudeKey = ""; }
-        else { _removeOpenAi = true; _openAiKey = ""; }
+        if (provider == AiProvider.Claude) { _removeClaude = true; _claudeKey = ""; _claudeExpires = null; }
+        else { _removeOpenAi = true; _openAiKey = ""; _openAiExpires = null; }
     }
 
     // A choice whose provider has no key switches to the other provider's default when that one has
@@ -198,7 +222,8 @@ else
             // A typed key replaces the stored one; an empty box leaves it alone; "Remove" clears it.
             await Settings.SaveKeysAsync(await UserIdAsync(),
                 _removeClaude ? "" : string.IsNullOrWhiteSpace(_claudeKey) ? null : _claudeKey,
-                _removeOpenAi ? "" : string.IsNullOrWhiteSpace(_openAiKey) ? null : _openAiKey, PageToken);
+                _removeOpenAi ? "" : string.IsNullOrWhiteSpace(_openAiKey) ? null : _openAiKey,
+                _claudeExpires, _openAiExpires, PageToken);
             await LoadViewAsync();
 
             // The saved models only change when the user saves them, so a switch here needs a save.

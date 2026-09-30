@@ -14,8 +14,12 @@ public sealed record SettingsView(
     bool AdvancedModels,
     AiChoice Simple,
     AiChoice Analysis,
-    AiChoice Generation)
+    AiChoice Generation,
+    DateOnly? ClaudeKeyExpiresOn = null,
+    DateOnly? OpenAiKeyExpiresOn = null)
 {
+    public DateOnly? KeyExpiresOn(AiProvider provider) => provider == AiProvider.Claude ? ClaudeKeyExpiresOn : OpenAiKeyExpiresOn;
+
     public SecretStatus KeyStatus(AiProvider provider) => provider == AiProvider.Claude ? ClaudeKey : OpenAiKey;
 
     public bool HasKey(AiProvider provider) => KeyStatus(provider) == SecretStatus.Set;
@@ -46,15 +50,55 @@ public sealed class SettingsService(IDbContextFactory<AppDbContext> dbFactory, S
             s.AdvancedModels,
             Choice(s.Provider, s.Model),
             Choice(s.AnalysisProvider, s.AnalysisModel),
-            Choice(s.GenerationProvider, s.GenerationModel));
+            Choice(s.GenerationProvider, s.GenerationModel),
+            s.ClaudeKeyExpiresOn,
+            s.OpenAiKeyExpiresOn);
+    }
+
+    // A key whose expiry date is near or past: shown from ReminderDays before the date on.
+    public sealed record KeyReminder(AiProvider Provider, DateOnly ExpiresOn, int DaysLeft);
+
+    public const int ReminderDays = 5;
+
+    // The keys to remind the user about today; empty when there are none or the user closed the
+    // reminder today. Only saved keys count.
+    public async Task<IReadOnlyList<KeyReminder>> GetKeyRemindersAsync(string userId, DateOnly today, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var s = await db.UserSettings.AsNoTracking().FirstOrDefaultAsync(x => x.UserId == userId, ct);
+        if (s is null || s.KeyReminderDismissedOn == today)
+            return [];
+
+        var reminders = new List<KeyReminder>();
+        void Check(AiProvider provider, string? key, DateOnly? expires)
+        {
+            if (key is null || expires is not { } date) return;
+            var days = date.DayNumber - today.DayNumber;
+            if (days <= ReminderDays)
+                reminders.Add(new KeyReminder(provider, date, days));
+        }
+        Check(AiProvider.Claude, s.ClaudeApiKeyProtected, s.ClaudeKeyExpiresOn);
+        Check(AiProvider.OpenAi, s.OpenAiApiKeyProtected, s.OpenAiKeyExpiresOn);
+        return reminders;
+    }
+
+    // Hides the reminder until the next day (on every device).
+    public async Task DismissKeyRemindersAsync(string userId, DateOnly today, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var s = await GetOrAddAsync(db, userId, ct);
+        s.KeyReminderDismissedOn = today;
+        await db.SaveChangesAsync(ct);
     }
 
     // The model a task would use, when it's in the priced list; null for a custom model ID.
     public async Task<AiModelInfo?> GetPricedModelAsync(string userId, AiTask task, CancellationToken ct = default) =>
         AiModels.Find((await GetAsync(userId, ct)).Default(task));
 
-    // For each key, null leaves the stored key unchanged and an empty string removes it.
-    public async Task SaveKeysAsync(string userId, string? newClaudeKey, string? newOpenAiKey, CancellationToken ct = default)
+    // For each key, null leaves the stored key unchanged and an empty string removes it. The expiry
+    // dates are what the form shows (null = none); a key that ends up removed loses its date.
+    public async Task SaveKeysAsync(string userId, string? newClaudeKey, string? newOpenAiKey,
+        DateOnly? claudeExpiresOn = null, DateOnly? openAiExpiresOn = null, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var s = await GetOrAddAsync(db, userId, ct);
@@ -62,6 +106,8 @@ public sealed class SettingsService(IDbContextFactory<AppDbContext> dbFactory, S
             s.ClaudeApiKeyProtected = newClaudeKey.Trim() is { Length: > 0 } k ? protector.Protect(k) : null;
         if (newOpenAiKey is not null)
             s.OpenAiApiKeyProtected = newOpenAiKey.Trim() is { Length: > 0 } k ? protector.Protect(k) : null;
+        s.ClaudeKeyExpiresOn = s.ClaudeApiKeyProtected is null ? null : claudeExpiresOn;
+        s.OpenAiKeyExpiresOn = s.OpenAiApiKeyProtected is null ? null : openAiExpiresOn;
         await db.SaveChangesAsync(ct);
     }
 

@@ -25,6 +25,9 @@ public static class Format
 
     public static string Date(DateTime utc) => utc.ToLocalTime().ToString("d MMM yyyy, HH:mm");
 
+    // A calendar day: "4 Oct 2026".
+    public static string Day(DateOnly day) => day.ToString("d MMM yyyy", CultureInfo.InvariantCulture);
+
     public static string Duration(int seconds) => seconds switch
     {
         < 60 => $"{seconds} s",

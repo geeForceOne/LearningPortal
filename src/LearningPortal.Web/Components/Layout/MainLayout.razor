@@ -64,6 +64,8 @@
     <main class="main" @onclick="() => _menuOpen = false">
         <AuthorizeView>
             <WhatsNewBanner />
+            <KeyExpiryBanner />
+            <InstallHint />
         </AuthorizeView>
         <CascadingValue Value="_ui" IsFixed="true">
             @Body

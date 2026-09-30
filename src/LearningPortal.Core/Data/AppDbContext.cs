@@ -19,6 +19,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
     public DbSet<AttemptAnswer> AttemptAnswers => Set<AttemptAnswer>();
     public DbSet<FollowUp> FollowUps => Set<FollowUp>();
     public DbSet<ExplainSession> ExplainSessions => Set<ExplainSession>();
+    public DbSet<SiteSettings> SiteSettings => Set<SiteSettings>();
+    public DbSet<AccountRequest> AccountRequests => Set<AccountRequest>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -100,6 +102,16 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
             e.HasIndex(x => new { x.AttemptId, x.Position });
             e.HasOne(x => x.Attempt).WithMany(x => x.Answers).HasForeignKey(x => x.AttemptId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(x => x.Question).WithMany().HasForeignKey(x => x.QuestionId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        b.Entity<SiteSettings>(e => e.Property(x => x.Id).ValueGeneratedNever());
+
+        b.Entity<AccountRequest>(e =>
+        {
+            e.HasIndex(x => x.Email);
+            e.Property(x => x.Email).HasMaxLength(AccountRequest.MaxEmailLength);
+            e.Property(x => x.Name).HasMaxLength(AppUser.MaxDisplayNameLength);
+            e.Property(x => x.Message).HasMaxLength(AccountRequest.MaxMessageLength);
         });
 
         b.Entity<ExplainSession>(e =>

@@ -11,8 +11,8 @@ public sealed record UserRow(
     string Id, string UserName, string? Email, string? DisplayName, string ShownName,
     bool IsAdmin, bool HasPassword, DateTime CreatedAt);
 
-// Account management. Mostly admin-only (there's no public sign-up: accounts exist only when the
-// admin creates them here); FindAsync, SetEmailAsync, SetDisplayNameAsync and ChangePasswordAsync
+// Account management. Mostly admin-only (there's no open sign-up: accounts exist only when an
+// admin creates them here, directly or by approving a request); FindAsync, SetEmailAsync, SetDisplayNameAsync and ChangePasswordAsync
 // also back each user's own Account page. Each call uses its own scope so Identity's DbContext never goes stale over
 // a long-lived Blazor circuit.
 public sealed class UserAdminService(IServiceScopeFactory scopes)

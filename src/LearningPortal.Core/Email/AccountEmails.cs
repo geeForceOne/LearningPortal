@@ -34,6 +34,29 @@ public static class AccountEmails
         usersLink,
         "You get this email because \"Notify me when invited users join\" is on under Admin > Email settings.");
 
+    // To an admin, when someone asks for an account.
+    public static EmailMessage AccountRequested(string name, string email, string? message, string usersLink) => Build(
+        $"{name} would like a {AppInfo.Name} account",
+        $"{name} ({email}) asked for an account on {AppInfo.Name}." +
+            (string.IsNullOrWhiteSpace(message) ? " They didn't add a message." : $" Their message: \"{message}\""),
+        "Approve or decline the request on the Users page. Approving sends them the usual invite.",
+        "Open Users",
+        usersLink,
+        "You get this email because \"Notify me about account requests\" is on under Admin > Email settings.");
+
+    // To someone whose account request was declined. note: an optional line from the admin.
+    public static EmailMessage AccountRequestDeclined(string name, string? note)
+    {
+        var intro = $"Hello {name}, thank you for your interest in {AppInfo.Name}. Your request for an account wasn't approved.";
+        var extra = string.IsNullOrWhiteSpace(note) ? "" : $"A note from the administrator: {note}";
+        return new(
+            $"Your {AppInfo.Name} account request",
+            $"{intro}\n\n{(extra.Length > 0 ? extra + "\n" : "")}",
+            Html($"About your {AppInfo.Name} account request",
+                $"<p style=\"margin:0 0 16px\">{Enc(intro)}</p>" +
+                (extra.Length > 0 ? $"<p style=\"margin:0\">{Enc(extra)}</p>" : "")));
+    }
+
     public static EmailMessage Test(string shownName) => new(
         $"{AppInfo.Name} test email",
         $"Hello {shownName},\n\nEmail from {AppInfo.Name} works. Invites and password reset links will arrive like this one.\n",

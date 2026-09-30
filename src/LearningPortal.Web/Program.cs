@@ -78,6 +78,7 @@ builder.Services.AddScoped<CircuitHandler, ActivityCircuitHandler>();
 builder.Services.AddSingleton<AccountMailService>();
 builder.Services.AddSingleton<AnalysisQueue>();
 builder.Services.AddSingleton<QuestionWriter>();
+builder.Services.AddSingleton<RequestLimiter>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<AnalysisQueue>());
 
 builder.Services.AddRazorComponents()

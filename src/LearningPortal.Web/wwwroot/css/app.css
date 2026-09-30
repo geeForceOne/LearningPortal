@@ -877,6 +877,8 @@ a.row-title:hover { text-decoration: underline; text-decoration-color: var(--rul
 .whats-new > svg { flex: none; color: var(--pencil); }
 .whats-new p { flex: 1; margin: 0; }
 .whats-new a { margin-left: 4px; font-weight: 700; }
+.whats-new.banner-warn { border-left-color: var(--partial); background: var(--partial-soft); }
+.key-expiry { display: grid; gap: 4px; margin-top: 10px; max-width: 260px; }
 
 /* A link to pass on by hand: read-only field plus a copy button, stacked on narrow screens. */
 .link-copy { display: flex; gap: 8px; margin: 10px 0 6px; }

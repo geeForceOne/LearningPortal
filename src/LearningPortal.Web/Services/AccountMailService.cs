@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Text;
 using LearningPortal.Core.Email;
 using LearningPortal.Core.Models;
+using LearningPortal.Core.Services;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.WebUtilities;
@@ -159,6 +160,72 @@ public sealed class AccountMailService(
         if (kind == PasswordLinkKind.Invite)
             await NotifyInviteAcceptedAsync(users, user, requestBaseUrl);
         return (user, []);
+    }
+
+    public async Task<bool> GetNotifyAccountRequestsAsync(string userId)
+    {
+        await using var scope = scopes.CreateAsyncScope();
+        var users = scope.ServiceProvider.GetRequiredService<UserManager<AppUser>>();
+        return await users.Users.Where(u => u.Id == userId).Select(u => u.NotifyAccountRequests).FirstOrDefaultAsync();
+    }
+
+    public async Task SetNotifyAccountRequestsAsync(string userId, bool notify)
+    {
+        await using var scope = scopes.CreateAsyncScope();
+        var users = scope.ServiceProvider.GetRequiredService<UserManager<AppUser>>();
+        await users.Users.Where(u => u.Id == userId)
+            .ExecuteUpdateAsync(s => s.SetProperty(u => u.NotifyAccountRequests, notify));
+    }
+
+    // Tells every admin who wants it about a new account request, in the background so the
+    // requester's page answers right away.
+    public async Task NotifyAccountRequestAsync(AccountRequestView request, string requestBaseUrl)
+    {
+        if (!await emailSettings.IsConfiguredAsync())
+            return;
+
+        await using var scope = scopes.CreateAsyncScope();
+        var users = scope.ServiceProvider.GetRequiredService<UserManager<AppUser>>();
+        var recipients = (await users.GetUsersInRoleAsync(Roles.Admin))
+            .Where(a => a.NotifyAccountRequests && !string.IsNullOrEmpty(a.Email))
+            .Select(a => (Email: a.Email!, Name: a.ShownName))
+            .ToList();
+        if (recipients.Count == 0)
+            return;
+
+        var message = AccountEmails.AccountRequested(request.Name, request.Email, request.Message,
+            $"{await BaseUrlAsync(requestBaseUrl)}/admin/users");
+        _ = Task.Run(async () =>
+        {
+            foreach (var (email, name) in recipients)
+            {
+                try
+                {
+                    await sender.SendAsync(email, name, message, null, CancellationToken.None);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex, "Telling an admin about account request {RequestId} failed", request.Id);
+                }
+            }
+        });
+    }
+
+    // The short "not approved" email. Returns why it couldn't be sent, or null when it was.
+    public async Task<string?> SendRequestDeclinedAsync(AccountRequestView request, string? note, CancellationToken ct)
+    {
+        if (!await emailSettings.IsConfiguredAsync(ct))
+            return "Email isn't set up.";
+        try
+        {
+            await sender.SendAsync(request.Email, request.Name, AccountEmails.AccountRequestDeclined(request.Name, note), null, ct);
+            return null;
+        }
+        catch (EmailException ex)
+        {
+            logger.LogWarning(ex, "Sending the decline email for account request {RequestId} failed", request.Id);
+            return $"The email couldn't be sent. {ex.Message}";
+        }
     }
 
     public async Task<bool> GetNotifyInviteAcceptedAsync(string userId)

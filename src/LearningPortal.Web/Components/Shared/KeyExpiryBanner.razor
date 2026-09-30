@@ -1,0 +1,52 @@
+@using System.Security.Claims
+@inject SettingsService Settings
+
+@* Reminds the user of API keys that expire within SettingsService.ReminderDays days, or already
+   have, from the dates they entered in Settings. Closing it hides it until the next day, on every
+   device. *@
+@if (_reminders is { Count: > 0 })
+{
+    <div class="whats-new banner-warn" role="status">
+        <Icon Name="key" />
+        <p>@Message() <a href="settings">Replace @(_reminders.Count > 1 ? "them" : "it") in Settings</a></p>
+        <button type="button" class="btn btn-ghost btn-icon btn-sm" aria-label="Close until tomorrow" title="Close until tomorrow" @onclick="DismissAsync">
+            <Icon Name="x" Size="16" />
+        </button>
+    </div>
+}
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private string? _userId;
+    private IReadOnlyList<SettingsService.KeyReminder>? _reminders;
+
+    private static DateOnly Today => DateOnly.FromDateTime(DateTime.Now);
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = AuthState is null ? null : await AuthState;
+        _userId = state?.User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (_userId is not null)
+            _reminders = await Settings.GetKeyRemindersAsync(_userId, Today);
+    }
+
+    private string Message() => string.Join(" ", _reminders!.Select(r =>
+    {
+        var key = $"Your {AiModels.ProviderName(r.Provider)} API key";
+        return r.DaysLeft switch
+        {
+            < 0 => $"{key} expired on {Format.Day(r.ExpiresOn)}.",
+            0 => $"{key} expires today.",
+            1 => $"{key} expires tomorrow.",
+            _ => $"{key} expires in {r.DaysLeft} days, on {Format.Day(r.ExpiresOn)}.",
+        };
+    }));
+
+    private async Task DismissAsync()
+    {
+        _reminders = null;
+        if (_userId is not null)
+            await Settings.DismissKeyRemindersAsync(_userId, Today);
+    }
+}

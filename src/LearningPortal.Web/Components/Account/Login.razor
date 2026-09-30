@@ -4,6 +4,8 @@
 @inject UserManager<AppUser> UserManager
 @inject NavigationManager Nav
 @inject UserActivityService Activity
+@inject AccountRequestService Requests
+@inject AccountMailService Mail
 
 <PageTitle>Sign in - @AppInfo.Name</PageTitle>
 
@@ -37,10 +39,15 @@
         <button type="submit" class="btn btn-primary btn-lg">Sign in</button>
     </EditForm>
     <p class="small" style="margin-top:18px"><a href="account/forgot">Forgot password?</a></p>
+    @if (_requestsOpen)
+    {
+        <p class="small">No account yet? <a href="account/request">Request an account</a></p>
+    }
 </div>
 
 @code {
     private string? _error;
+    private bool _requestsOpen;
 
     [SupplyParameterFromForm]
     private LoginInput Input { get; set; } = new();
@@ -48,11 +55,15 @@
     [SupplyParameterFromQuery]
     private string? ReturnUrl { get; set; }
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
         // No accounts yet: the first person to arrive sets up the admin account.
         if (!UserManager.Users.Any())
+        {
             Nav.NavigateTo("account/setup");
+            return;
+        }
+        _requestsOpen = await Requests.IsOpenAsync() && await Mail.EmailConfiguredAsync();
     }
 
     private async Task SignInAsync()

@@ -18,7 +18,7 @@ LearningPortal is a multi-user, Docker-hosted web app that turns a user's own st
 
 ### Product decisions
 
-- **Accounts.** There is no public sign-up. The first user to register becomes the admin, and after that only the admin creates accounts. Each user's data is private, with no sharing between users.
+- **Accounts.** There is no open sign-up. The first user to register becomes the admin, and after that the admin creates accounts. The admin can also let people request an account from the sign-in page (off by default, needs email): name required, a short optional message; the admin approves (the usual invite is sent) or declines (a short email). Each user's data is private, with no sharing between users.
 - **AI key.** Each user configures their own API keys (Anthropic and/or OpenAI). There is no shared or admin key.
 - **Model choice.** Settings has a Simple mode (one model for everything) and an Advanced mode with two defaults: one for outlining uploads, one for questions and grading. In Advanced mode the upload and generation screens show a model picker preset to that default; it lists only providers with a saved key and also takes a one-off custom model ID, which never changes the default. API keys and models are saved separately in Settings. Grading and replacing a question use the questions default (or the exam page's picker). Each question and outline stores the model that wrote it.
 - **Exam material.** When a topic has more than one material, an exam can leave some out (a collapsed "Material" list, all ticked by default, stored per exam as the excluded ones so later uploads are included). The AI writes only from the ticked material, and only its bank questions are reused. The UI says "material", not "documents".

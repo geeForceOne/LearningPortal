@@ -126,6 +126,13 @@ else
                     ? "You get an email when someone you or another admin invited sets their password. Only for you; other admins choose for themselves."
                     : "Needs email to be on. Until then, nothing is sent.")
             </p>
+            <label class="check">
+                <input type="checkbox" checked="@_notifyRequests" @onchange="e => SetNotifyRequestsAsync((bool)e.Value!)" />
+                Notify me about account requests
+            </label>
+            <p class="muted small" style="margin-top:-8px">
+                An email when someone asks for an account, while account requests are open (Admin > Users).
+            </p>
         </div>
     </section>
 }
@@ -151,7 +158,17 @@ else
     protected override async Task OnInitializedAsync()
     {
         _notifyInviteAccepted = await Mail.GetNotifyInviteAcceptedAsync(await UserIdAsync());
+        _notifyRequests = await Mail.GetNotifyAccountRequestsAsync(await UserIdAsync());
         await LoadAsync();
+    }
+
+    private bool _notifyRequests;
+
+    private async Task SetNotifyRequestsAsync(bool notify)
+    {
+        _notifyRequests = notify;
+        await Mail.SetNotifyAccountRequestsAsync(await UserIdAsync(), notify);
+        Ui.Toast.Success(notify ? "You'll get an email about account requests." : "No more emails about account requests.");
     }
 
     // Saved straight away, like the other on/off preferences.

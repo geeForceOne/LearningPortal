@@ -3,6 +3,7 @@
 @inherits AppPage
 @inject UserAdminService Users
 @inject AccountMailService Mail
+@inject AccountRequestService Requests
 @inject IJSRuntime JS
 
 <PageTitle>Users - @AppInfo.Name</PageTitle>
@@ -11,14 +12,39 @@
     <div>
         <h1>Users</h1>
         <p class="page-sub">
-            There's no public sign-up. Create an account here and the person gets an invite link to choose
-            their own password. Each person's topics and results are private.
+            Create an account here and the person gets an invite link to choose their own password, or let
+            people request an account for you to approve. Each person's topics and results are private.
         </p>
     </div>
 </div>
 
 <div class="two-col">
     <section>
+        @if (_requests.Count > 0)
+        {
+            <div class="section-head"><h2>Account requests<span class="count">@_requests.Count</span></h2></div>
+            <ul class="rows" style="margin-bottom:28px">
+                @foreach (var r in _requests)
+                {
+                    var request = r;
+                    <li class="row" @key="request.Id">
+                        <div class="row-main">
+                            <span class="row-title">@request.Name</span>
+                            <div class="row-meta"><span>@request.Email</span><span>@Format.Date(request.CreatedAt)</span></div>
+                            @if (request.Message is not null)
+                            {
+                                <p class="small" style="margin:6px 0 0;white-space:pre-line">@request.Message</p>
+                            }
+                        </div>
+                        <div class="row-actions">
+                            <button type="button" class="btn btn-primary btn-sm" disabled="@_sending" @onclick="() => ApproveAsync(request)">Approve</button>
+                            <button type="button" class="btn btn-ghost btn-sm" disabled="@_sending" @onclick="() => DeclineAsync(request)">Decline</button>
+                        </div>
+                    </li>
+                }
+            </ul>
+        }
+
         @if (_link is not null)
         {
             <div class="notice notice-warn" style="margin-bottom:18px" role="status">
@@ -107,6 +133,24 @@
         </div>
 
         <div class="panel">
+            <h2>Account requests</h2>
+            <label class="check">
+                <input type="checkbox" checked="@_requestsOpen" disabled="@(!_emailOn && !_requestsOpen)" @onchange="e => SetRequestsOpenAsync((bool)e.Value!)" />
+                Let people request an account
+            </label>
+            <p class="muted small" style="margin-top:6px">
+                @if (!_emailOn)
+                {
+                    @:Needs email to be on, since approval and decline are sent by email.
+                }
+                else
+                {
+                    @:Adds "Request an account" to the sign-in page. You approve or decline each request here; approving sends the usual invite.
+                }
+            </p>
+        </div>
+
+        <div class="panel">
             <h2>Email</h2>
             <p class="muted small">
                 @if (_emailOn)
@@ -137,12 +181,71 @@
     private bool _emailOn;
     private List<string> _errors = [];
     private LinkToShare? _link;
+    private IReadOnlyList<AccountRequestView> _requests = [];
+    private bool _requestsOpen;
 
     protected override async Task OnInitializedAsync()
     {
         _myId = await UserIdAsync();
         _users = await Users.ListAsync();
         _emailOn = await Mail.EmailConfiguredAsync();
+        _requests = await Requests.ListAsync(PageToken);
+        _requestsOpen = await Requests.IsOpenAsync(PageToken);
+    }
+
+    private async Task SetRequestsOpenAsync(bool open)
+    {
+        _requestsOpen = open;
+        await Requests.SetOpenAsync(open, PageToken);
+        Ui.Toast.Success(open ? "People can now request an account from the sign-in page." : "Account requests are closed.");
+    }
+
+    // Creates the account and sends the normal invite; the request is then done.
+    private async Task ApproveAsync(AccountRequestView request)
+    {
+        _sending = true;
+        try
+        {
+            var (userId, errors) = await Users.CreateAsync(request.Email, request.Name, isAdmin: false);
+            if (userId is null)
+            {
+                Ui.Toast.Error(string.Join(" ", errors));
+                return;
+            }
+            await Requests.DeleteAsync(request.Id, PageToken);
+            _requests = await Requests.ListAsync(PageToken);
+            _users = await Users.ListAsync();
+            await DeliverAsync(userId, request.Name, isInvite: true, $"Account for {request.Name} created.");
+        }
+        finally
+        {
+            _sending = false;
+        }
+    }
+
+    private async Task DeclineAsync(AccountRequestView request)
+    {
+        var note = await Ui.Prompt.AskAsync("Decline request", $"Note to {request.Name} (optional)", "", "Decline",
+            hint: "They get a short email saying the request wasn't approved. A note is added to it if you write one.",
+            multiline: true, allowEmpty: true);
+        if (note is null)
+            return;
+
+        _sending = true;
+        try
+        {
+            var failed = await Mail.SendRequestDeclinedAsync(request, note, PageToken);
+            await Requests.DeleteAsync(request.Id, PageToken);
+            _requests = await Requests.ListAsync(PageToken);
+            if (failed is null)
+                Ui.Toast.Success($"Request from {request.Name} declined. They've been told by email.");
+            else
+                Ui.Toast.Error($"Request from {request.Name} declined, but they couldn't be told: {failed}");
+        }
+        finally
+        {
+            _sending = false;
+        }
     }
 
     private async Task CreateAsync()

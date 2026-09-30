@@ -1,0 +1,41 @@
+@inject IJSRuntime JS
+
+@* On an iPhone or iPad in Safari, explains how to add Recall to the home screen: iOS has no install
+   prompt of its own (Android's browsers offer "Install app" themselves). Closing it is remembered
+   on this device, since it's about this device. *@
+@if (_show)
+{
+    <div class="whats-new" role="note">
+        <Icon Name="upload" />
+        <p>Use @AppInfo.Name like an app: tap <strong>Share</strong>, then <strong>Add to Home Screen</strong>.</p>
+        <button type="button" class="btn btn-ghost btn-icon btn-sm" aria-label="Close" title="Close" @onclick="CloseAsync">
+            <Icon Name="x" Size="16" />
+        </button>
+    </div>
+}
+
+@code {
+    private const string ClosedPref = "installHintClosed";
+    private bool _show;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        try
+        {
+            _show = await JS.InvokeAsync<bool>("learningPortal.isIosBrowser")
+                    && await JS.InvokeAsync<string?>("learningPortal.getPref", ClosedPref) != "1";
+        }
+        catch (JSException)
+        {
+            return;
+        }
+        if (_show) StateHasChanged();
+    }
+
+    private async Task CloseAsync()
+    {
+        _show = false;
+        try { await JS.InvokeVoidAsync("learningPortal.setPref", ClosedPref, "1"); } catch (JSException) { }
+    }
+}

@@ -23,6 +23,8 @@ public sealed class AppUser : IdentityUser
 
     // Admins only: email me when an invited person sets their password. Each admin decides for themselves.
     public bool NotifyInviteAccepted { get; set; } = true;
+    // Admins only: an email when someone requests an account (when requests are open).
+    public bool NotifyAccountRequests { get; set; } = true;
 
     // The name shown in the UI: the display name, else the part of the email before the "@",
     // else the username (older accounts without an email).
@@ -48,6 +50,11 @@ public sealed class UserSettings
     public string UserId { get; set; } = "";
     public string? ClaudeApiKeyProtected { get; set; }
     public string? OpenAiApiKeyProtected { get; set; }
+    // Optional expiry dates the user entered for their keys (providers don't expose them to the
+    // key itself), for the reminder banner. KeyReminderDismissedOn hides the banner for that day.
+    public DateOnly? ClaudeKeyExpiresOn { get; set; }
+    public DateOnly? OpenAiKeyExpiresOn { get; set; }
+    public DateOnly? KeyReminderDismissedOn { get; set; }
 
     // Advanced mode: separate defaults for outlining uploads and for questions and grading, and
     // a model picker on the upload and generation screens. Simple mode: Provider/Model for everything.
@@ -318,4 +325,27 @@ public sealed class ExplainSession
 
     private static List<string> Parse(string? json) =>
         string.IsNullOrWhiteSpace(json) ? [] : System.Text.Json.JsonSerializer.Deserialize<List<string>>(json) ?? [];
+}
+
+// App-wide switches the admin sets. A single row (Id 1); no row means everything is off.
+public sealed class SiteSettings
+{
+    public int Id { get; set; } = 1;
+    // Lets people ask for an account from the sign-in page; an admin approves each request.
+    public bool AllowAccountRequests { get; set; }
+}
+
+// Someone asking for an account. Approving it creates the account and sends the normal invite;
+// declining it sends a short email. Either way the request is then deleted, and unanswered ones
+// are removed after AccountRequestService.KeepFor.
+public sealed class AccountRequest
+{
+    public const int MaxEmailLength = 256;
+    public const int MaxMessageLength = 1_000;
+
+    public int Id { get; set; }
+    public string Email { get; set; } = "";
+    public string Name { get; set; } = "";
+    public string? Message { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }

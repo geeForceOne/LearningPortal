@@ -128,7 +128,16 @@ See what's sticking and what isn't:
 
 ## On a phone
 
-Recall is made for a computer, but works on tablets and phones too.
+Recall is made for a computer, but works on tablets and phones too, and you can put it on your
+home screen like an app (its own icon, full screen, no browser bar):
+
+- **Android:** in Chrome, open the menu and choose **Install app**
+- **iPhone and iPad:** in Safari, tap **Share**, then **Add to Home Screen**. Recall shows a short
+  hint about this the first time. The home-screen app keeps its own sign-in, so you sign in once
+  more there
+
+Installing needs Recall to be reached over **HTTPS**; over plain `http://` you only get a
+bookmark-style shortcut. There's no offline mode: like the website, the app needs a connection.
 
 <img src="docs/images/recall-phone.jpg" alt="A code question on a phone" width="320">
 
@@ -145,9 +154,15 @@ worked through section by section.
 
 ## Accounts and email
 
-There's no public sign-up. The first person to open a new installation creates the
-administrator account, and after that only the admin creates accounts. Each person's topics and
+There's no open sign-up. The first person to open a new installation creates the
+administrator account, and after that the admin creates accounts. Each person's topics and
 results are private.
+
+The admin can also let people **request an account** (Admin → Users, off by default, needs
+email). The sign-in page then shows "Request an account": people enter their email, their name
+and, if they like, a few words about who they are and why they'd like to use Recall. Admins get
+an email for each request and approve or decline it on the Users page. Approving sends the usual
+invite; declining sends a short email, with an optional note.
 
 The admin sets up outgoing email under **Admin → Email settings** (any SMTP server, with
 shortcuts for Gmail and Brevo). With email set up:
