@@ -1,5 +1,20 @@
 # Release notes
 
+## 1.10.0 - 2026-10-01
+
+### New
+
+- **I don't know**: instead of guessing, say you don't know. It counts as incorrect, so the question comes back when you practise your weak questions, and the results show which ones you didn't know.
+- **Homepage widget**: admins can show the number of accounts and active users on a [Homepage](https://gethomepage.dev) dashboard, with a token created under Admin settings. "Email settings" is now called "Admin settings".
+
+### Improved
+
+- Ask up to 10 follow-up questions per answer, instead of 3.
+
+### Fixed
+
+- The concept map no longer repeats the file name on every tile for material without headings, such as most PDFs. Sections are named after their subject from the material's outline instead, also on the material page and in where a question came from.
+
 ## 1.9.1 - 2026-10-01
 
 ### Improved

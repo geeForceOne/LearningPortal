@@ -52,7 +52,7 @@ else
                 {
                     var section = s;
                     <button type="button" class="map-tile @State(section) @(_selected?.SectionId == section.SectionId ? "is-selected" : "")"
-                            style="flex-grow:@Weight(section)" aria-pressed="@(_selected?.SectionId == section.SectionId)"
+                            style="flex-grow:@Weight(section)" title="@section.Concepts" aria-pressed="@(_selected?.SectionId == section.SectionId)"
                             @onclick="() => Select(section)">
                         <span class="map-tile-name">@Name(section)</span>
                         <span class="map-tile-facts">@Facts(section)</span>
@@ -65,6 +65,10 @@ else
                 <div class="map-detail">
                     <div>
                         <strong>@Name(sel)</strong>
+                        @if (sel.Concepts is not null)
+                        {
+                            <p class="small" style="margin:2px 0 0">@sel.Concepts</p>
+                        }
                         <p class="muted small" style="margin:2px 0 0">@Detail(sel)</p>
                     </div>
                     @if (sel.QuestionCount > 0)
@@ -137,7 +141,7 @@ else
 
     private static int MaxSize(SectionScore s) => Math.Clamp(s.QuestionCount, 1, PracticeService.MaxSize);
 
-    private static string Name(SectionScore s) => string.IsNullOrWhiteSpace(s.Heading) ? $"Part {s.Index + 1}" : s.Heading;
+    private static string Name(SectionScore s) => s.Name;
 
     private static string State(SectionScore s) => s.QuestionCount == 0 ? "is-empty"
         : s.AverageScore is not { } avg ? "is-new"

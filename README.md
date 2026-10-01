@@ -98,8 +98,9 @@ against your own sources. Your explanations are kept per topic, so you can look 
 
 A topic's material, section by section, as tiles: sized by how much text each section has and
 coloured by how well you do on the questions written from it (solid, shaky, weak, not practised
-yet, or no questions yet). Pick a section and practise just that part. The map uses your results
-only, so it costs nothing.
+yet, or no questions yet). Material without headings, like most PDFs, gets its section names
+from the outline Recall made when you uploaded it. Pick a section and practise just that part. The
+map uses your results only, so it costs nothing.
 
 ![Concept map: sections coloured by how well you know them](docs/images/recall-concept-map.jpg)
 
@@ -169,13 +170,13 @@ There's no open sign-up. The first person to open a new installation creates the
 administrator account, and after that the admin creates accounts. Each person's topics and
 results are private.
 
-The admin can also let people **request an account** (Admin → Email settings, off by default, needs
+The admin can also let people **request an account** (Admin settings, off by default, needs
 email). The sign-in page then shows "Request an account": people enter their email, their name
 and, if they like, a few words about who they are and why they'd like to use Recall. Admins get
 an email for each request and approve or decline it on the Users page. Approving sends the usual
 invite; declining sends a short email, with an optional note.
 
-The admin sets up outgoing email under **Admin → Email settings** (any SMTP server, with
+The admin sets up outgoing email under **Admin settings** (any SMTP server, with
 shortcuts for Gmail and Brevo). With email set up:
 
 - New users get an **invite link** to choose their own password
@@ -185,6 +186,46 @@ Without email, the admin gets the same links on the Users page to pass on by han
 
 After an update, everyone sees a short "What's new" banner linking to the release notes, until
 they close it.
+
+## Homepage widget
+
+Recall can show a few numbers on a [Homepage](https://gethomepage.dev) dashboard: the number of
+accounts, the people who used Recall in the last 7 days, and those using it right now (the last
+10 minutes). An admin creates a token under **Admin settings → Homepage widget**. It's shown once,
+there's one for the whole installation, and it can be replaced or turned off there at any time.
+
+```powershell
+Invoke-RestMethod http://localhost:8080/api/homepage/stats -Headers @{ 'X-API-Key' = '<token>' }
+```
+
+returns
+
+```json
+{ "accounts": 12, "activeThisWeek": 7, "activeNow": 2 }
+```
+
+In Homepage's `services.yaml`, as a [customapi](https://gethomepage.dev/widgets/services/customapi/) widget:
+
+```yaml
+- Recall:
+    href: https://learn.example.com
+    widget:
+      type: customapi
+      url: http://recall:8080/api/homepage/stats
+      refreshInterval: 60000
+      headers:
+        X-API-Key: <token>
+      mappings:
+        - field: accounts
+          label: Accounts
+          format: number
+        - field: activeThisWeek
+          label: This week
+          format: number
+        - field: activeNow
+          label: Now
+          format: number
+```
 
 ## With Docker
 
@@ -233,7 +274,7 @@ Optional settings, as environment variables:
 | `Storage__DataDirectory` | `/data` | Where the database, files and keys are kept |
 
 If you run it behind a reverse proxy under its own address, enter that address in
-**Admin → Email settings** so links in emails point to it.
+**Admin settings** so links in emails point to it.
 
 ## Build from source instead
 

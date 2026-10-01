@@ -304,8 +304,13 @@ public sealed class QuestionGenerationService(
         return result;
     }
 
-    internal static string SourceLabel(Material material, MaterialSection section) =>
-        section.Heading == material.Title ? material.Title : $"{material.Title} / {section.Heading}";
+    internal static string SourceLabel(Material material, MaterialSection section)
+    {
+        if (material.Sections.Count <= 1 && section.Heading == material.Title)
+            return material.Title;
+        var names = SectionNames.For(material.Title, material.Outline, material.Sections.Select(s => (s.Index, s.Heading)));
+        return $"{material.Title} / {(names.TryGetValue(section.Index, out var name) ? name.Name : section.Heading)}";
+    }
 
     internal static Question? TryParseQuestion(JsonElement item, Difficulty difficulty)
     {

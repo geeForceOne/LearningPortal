@@ -1,5 +1,6 @@
 using LearningPortal.Core.Data;
 using LearningPortal.Core.Models;
+using LearningPortal.Core.Text;
 using Microsoft.EntityFrameworkCore;
 
 namespace LearningPortal.Core.Services;
@@ -39,10 +40,15 @@ public sealed class PracticeService(
     {
         size = Math.Clamp(size, 1, MaxSize);
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var heading = await db.MaterialSections
+        var section = await db.MaterialSections
             .Where(s => s.Id == sectionId && s.Material!.UserId == userId && s.Material.TopicId == topicId)
-            .Select(s => s.Heading)
+            .Select(s => new { s.MaterialId, s.Index, s.Material!.Title, s.Material.Outline })
             .FirstOrDefaultAsync(ct) ?? throw new NotFoundException();
+        var siblings = await db.MaterialSections
+            .Where(s => s.MaterialId == section.MaterialId)
+            .Select(s => new { s.Index, s.Heading })
+            .ToListAsync(ct);
+        var heading = SectionNames.For(section.Title, section.Outline, siblings.Select(s => (s.Index, s.Heading)))[section.Index].Name;
         var ids = (await statistics.RankSectionQuestionsAsync(userId, topicId, sectionId, ct)).Take(size).ToList();
         if (ids.Count == 0)
             throw new InvalidOperationException("This section has no questions yet. Questions written from it show up here.");

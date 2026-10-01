@@ -32,7 +32,7 @@ public static class AccountEmails
         "You can see and manage the account on the Users page.",
         "Open Users",
         usersLink,
-        "You get this email because \"Notify me when invited users join\" is on under Admin > Email settings.");
+        "You get this email because \"Notify me when invited users join\" is on under Admin settings.");
 
     // To an admin, when someone asks for an account.
     public static EmailMessage AccountRequested(string name, string email, string? message, string usersLink) => Build(
@@ -42,7 +42,7 @@ public static class AccountEmails
         "Approve or decline the request on the Users page. Approving sends them the usual invite.",
         "Open Users",
         usersLink,
-        "You get this email because \"Notify me about account requests\" is on under Admin > Email settings.");
+        "You get this email because \"Notify me about account requests\" is on under Admin settings.");
 
     // To someone whose account request was declined. note: an optional line from the admin.
     public static EmailMessage AccountRequestDeclined(string name, string? note)

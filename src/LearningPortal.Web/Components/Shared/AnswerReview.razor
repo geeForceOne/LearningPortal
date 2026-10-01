@@ -32,7 +32,11 @@ else
 {
     <div class="your-answer">
         <h3 class="small muted" style="margin-bottom:6px">Your answer</h3>
-        @if (string.IsNullOrWhiteSpace(Answer.WrittenAnswer))
+        @if (Answer.DontKnow)
+        {
+            <p class="muted">You said you didn't know.</p>
+        }
+        else if (string.IsNullOrWhiteSpace(Answer.WrittenAnswer))
         {
             <p class="muted">Not answered.</p>
         }
@@ -47,6 +51,10 @@ else
     @if (!Answer.IsAnswered)
     {
         <span class="verdict verdict-incorrect">Not answered</span>
+    }
+    else if (Answer.DontKnow)
+    {
+        <span class="verdict verdict-incorrect">You didn't know</span>
     }
     else if (Answer.Score is { } score)
     {

@@ -252,6 +252,8 @@ public sealed class AttemptAnswer
     // Comma-separated option ids the user picked.
     public string? SelectedOptionIds { get; set; }
     public string? WrittenAnswer { get; set; }
+    // The user said "I don't know" instead of guessing: scored 0, shown as "You didn't know".
+    public bool DontKnow { get; set; }
     public int? Score { get; set; }
     public string? Feedback { get; set; }
     public DateTime? AnsweredAt { get; set; }
@@ -278,7 +280,7 @@ public sealed class AttemptAnswer
 // Kept with the attempt's answer so it's still there when the attempt is reviewed.
 public sealed class FollowUp
 {
-    public const int MaxPerAnswer = 3;
+    public const int MaxPerAnswer = 10;
     public const int MaxQuestionLength = 500;
 
     public int Id { get; set; }
@@ -332,6 +334,9 @@ public sealed class SiteSettings
     public int Id { get; set; } = 1;
     // Lets people ask for an account from the sign-in page; an admin approves each request.
     public bool AllowAccountRequests { get; set; }
+    // SHA-256 (hex) of the token for the Homepage widget endpoint; the token itself isn't kept.
+    public string? HomepageTokenHash { get; set; }
+    public DateTime? HomepageTokenCreatedAt { get; set; }
 }
 
 // Someone asking for an account. Approving it creates the account and sends the normal invite;

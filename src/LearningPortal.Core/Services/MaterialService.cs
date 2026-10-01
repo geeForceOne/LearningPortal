@@ -166,6 +166,36 @@ public sealed class MaterialService(
         return new MaterialDetail(material, sections);
     }
 
+    // Before 1.10.0, questions from material without headings were labelled "Title / Title (part 3)".
+    // Relabels those with the section's name from the outline; a no-op once they're fixed.
+    public async Task RefreshPartSourceLabelsAsync(CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var questions = await db.Questions
+            .Where(q => q.SourceSectionId != null && q.SourceMaterialId != null && q.SourceLabel != null && q.SourceLabel.Contains(" (part "))
+            .ToListAsync(ct);
+        if (questions.Count == 0)
+            return;
+
+        var materialIds = questions.Select(q => q.SourceMaterialId!.Value).Distinct().ToList();
+        var materials = await db.Materials.AsNoTracking()
+            .Where(m => materialIds.Contains(m.Id))
+            .Select(m => new Material
+            {
+                Id = m.Id, Title = m.Title, Outline = m.Outline,
+                Sections = m.Sections.Select(s => new MaterialSection { Id = s.Id, MaterialId = s.MaterialId, Index = s.Index, Heading = s.Heading }).ToList(),
+            })
+            .ToDictionaryAsync(m => m.Id, ct);
+
+        foreach (var q in questions)
+        {
+            if (materials.TryGetValue(q.SourceMaterialId!.Value, out var material)
+                && material.Sections.FirstOrDefault(s => s.Id == q.SourceSectionId) is { } section)
+                q.SourceLabel = QuestionGenerationService.SourceLabel(material, section);
+        }
+        await db.SaveChangesAsync(ct);
+    }
+
     public async Task RenameAsync(string userId, int materialId, string title, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);

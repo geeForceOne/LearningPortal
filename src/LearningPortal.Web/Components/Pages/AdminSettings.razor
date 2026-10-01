@@ -1,20 +1,22 @@
-@page "/admin/email"
+@page "/admin/settings"
 @attribute [Authorize(Roles = Roles.Admin)]
 @inherits AppPage
 @inject EmailSettingsService EmailSettings
 @inject AccountMailService Mail
 @inject AccountRequestService Requests
+@inject HomepageStatsService Homepage
+@inject IJSRuntime JS
 @using LearningPortal.Core.Email
 @using LearningPortal.Core.Models
 
-<PageTitle>Email settings - @AppInfo.Name</PageTitle>
+<PageTitle>Admin settings - @AppInfo.Name</PageTitle>
 
 <div class="page-head">
     <div>
-        <h1>Email settings</h1>
+        <h1>Admin settings</h1>
         <p class="page-sub">
-            The mail server @AppInfo.Name uses to send invites and password reset links, account requests,
-            and which emails you get as an admin. Without email, you get the links on the Users page to pass on yourself.
+            Settings for the whole of @AppInfo.Name: the mail server for invites and password reset links, account requests,
+            the emails you get as an admin, and the Homepage widget. Without email, you get the links on the Users page to pass on yourself.
         </p>
     </div>
 </div>
@@ -168,6 +170,49 @@ else
                 </div>
             </div>
         </section>
+
+        <section class="setting">
+            <div class="setting-intro">
+                <h2>Homepage widget</h2>
+                <p>Show the number of accounts and active users on a <a href="https://gethomepage.dev/widgets/services/customapi/" target="_blank" rel="noopener">Homepage</a> dashboard. One token for the whole instance.</p>
+            </div>
+            <div class="setting-body">
+                @if (_newToken is not null)
+                {
+                    <div class="notice notice-warn" role="status">
+                        <strong>Copy the token now.</strong> It isn't shown again; only a fingerprint of it is stored.
+                        <div class="link-copy">
+                            <input class="input" readonly value="@_newToken" aria-label="Token" onfocus="this.select()" spellcheck="false" />
+                            <button type="button" class="btn btn-primary btn-sm" @onclick="CopyTokenAsync">Copy token</button>
+                        </div>
+                        <button type="button" class="btn btn-ghost btn-sm" @onclick="() => _newToken = null">Done</button>
+                    </div>
+                }
+                @if (_tokenCreatedAt is { } created)
+                {
+                    <div class="notice notice-good">The widget is on. Token created @Format.Date(created).</div>
+                }
+                else
+                {
+                    <div class="notice">The widget is off. Create a token to turn it on.</div>
+                }
+                <div class="field">
+                    <span class="field-label">Address for the widget</span>
+                    <code class="small">GET @(Nav.BaseUri)api/homepage/stats</code>
+                    <span class="field-hint">
+                        Send the token in an <code>X-API-Key</code> header. It returns <code>accounts</code>, <code>activeThisWeek</code>
+                        (used @AppInfo.Name in the last 7 days) and <code>activeNow</code> (in the last 10 minutes). The README has a widget example.
+                    </span>
+                </div>
+                <div class="actions">
+                    <button type="button" class="btn btn-secondary" @onclick="CreateTokenAsync">@(_tokenCreatedAt is null ? "Create token" : "Replace token")</button>
+                    @if (_tokenCreatedAt is not null)
+                    {
+                        <button type="button" class="btn btn-ghost" @onclick="RevokeTokenAsync">Turn off</button>
+                    }
+                </div>
+            </div>
+        </section>
     </div>
 }
 
@@ -194,11 +239,43 @@ else
         _notifyInviteAccepted = await Mail.GetNotifyInviteAcceptedAsync(await UserIdAsync());
         _notifyRequests = await Mail.GetNotifyAccountRequestsAsync(await UserIdAsync());
         _requestsOpen = await Requests.IsOpenAsync(PageToken);
+        _tokenCreatedAt = await Homepage.GetTokenCreatedAtAsync(PageToken);
         await LoadAsync();
     }
 
     private bool _notifyRequests;
     private bool _requestsOpen;
+    private DateTime? _tokenCreatedAt;
+    private string? _newToken;
+
+    private async Task CreateTokenAsync()
+    {
+        if (_tokenCreatedAt is not null && !await Ui.Confirm.AskAsync("Replace the token?",
+                "The current token stops working straight away. Put the new one in your Homepage config.", "Replace token"))
+            return;
+        _newToken = await Homepage.CreateTokenAsync(PageToken);
+        _tokenCreatedAt = await Homepage.GetTokenCreatedAtAsync(PageToken);
+    }
+
+    private async Task RevokeTokenAsync()
+    {
+        if (!await Ui.Confirm.AskAsync("Turn off the Homepage widget?",
+                "The token stops working straight away, and the widget shows an error until you create a new one.", "Turn off"))
+            return;
+        await Homepage.RevokeTokenAsync(PageToken);
+        _tokenCreatedAt = null;
+        _newToken = null;
+        Ui.Toast.Success("The Homepage widget is off.");
+    }
+
+    private async Task CopyTokenAsync()
+    {
+        if (_newToken is null) return;
+        if (await JS.InvokeAsync<bool>("learningPortal.copyText", _newToken))
+            Ui.Toast.Success("Token copied.");
+        else
+            Ui.Toast.Error("The browser didn't allow copying. Select the token and copy it by hand.");
+    }
 
     private async Task SetRequestsOpenAsync(bool open)
     {
@@ -252,7 +329,7 @@ else
     private async Task SaveClickedAsync()
     {
         if (await SaveAsync())
-            Ui.Toast.Success(_view!.IsConfigured ? "Email settings saved. Email is on." : "Email settings saved. Email is off.");
+            Ui.Toast.Success(_view!.IsConfigured ? "Mail server saved. Email is on." : "Mail server saved. Email is off.");
     }
 
     private async Task SaveAndTestAsync()

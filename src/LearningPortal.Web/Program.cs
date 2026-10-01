@@ -1,6 +1,7 @@
 using LearningPortal.Core;
 using LearningPortal.Core.Data;
 using LearningPortal.Core.Models;
+using LearningPortal.Core.Services;
 using LearningPortal.Web.Components;
 using LearningPortal.Web.Services;
 using Microsoft.AspNetCore.Components.Authorization;
@@ -96,6 +97,8 @@ await using (var scope = app.Services.CreateAsyncScope())
     var roles = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
     if (!await roles.RoleExistsAsync(Roles.Admin))
         await roles.CreateAsync(new IdentityRole(Roles.Admin));
+
+    await scope.ServiceProvider.GetRequiredService<MaterialService>().RefreshPartSourceLabelsAsync();
 }
 
 if (!app.Environment.IsDevelopment())
@@ -113,5 +116,6 @@ app.MapStaticAssets();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 app.MapAccountEndpoints();
+app.MapHomepageEndpoints();
 
 app.Run();

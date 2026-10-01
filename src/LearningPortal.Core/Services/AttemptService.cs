@@ -110,6 +110,7 @@ public sealed class AttemptService(
         var options = answer.Question!.Options;
         var valid = selectedOptionIds.Where(id => options.Any(o => o.Id == id)).Distinct().ToList();
         answer.SelectedOptionIds = AttemptAnswer.JoinIds(valid);
+        answer.DontKnow = false;
         answer.Score = ScoreChoice(options, valid, answer.Question.AllowsMultiple);
         answer.AnsweredAt = DateTime.UtcNow;
         AddTime(attempt, elapsedSeconds);
@@ -132,6 +133,7 @@ public sealed class AttemptService(
         {
             var (attempt, answer) = await LoadAnswerAsync(db, userId, attemptId, answerId, ct);
             answer.WrittenAnswer = trimmed;
+            answer.DontKnow = false;
             answer.Score = null;
             answer.Feedback = null;
             answer.AnsweredAt = DateTime.UtcNow;
@@ -140,6 +142,23 @@ public sealed class AttemptService(
         }
 
         return await GradeAsync(userId, attemptId, answerId, ct);
+    }
+
+    // "I don't know" instead of guessing: counts as incorrect (0%), and nothing goes to the AI.
+    public async Task<AttemptAnswer> AnswerDontKnowAsync(
+        string userId, int attemptId, int answerId, int elapsedSeconds, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var (attempt, answer) = await LoadAnswerAsync(db, userId, attemptId, answerId, ct);
+        answer.SelectedOptionIds = null;
+        answer.WrittenAnswer = null;
+        answer.DontKnow = true;
+        answer.Score = 0;
+        answer.Feedback = null;
+        answer.AnsweredAt = DateTime.UtcNow;
+        AddTime(attempt, elapsedSeconds);
+        await db.SaveChangesAsync(ct);
+        return answer;
     }
 
     public async Task<AttemptAnswer> GradeAsync(string userId, int attemptId, int answerId, CancellationToken ct)

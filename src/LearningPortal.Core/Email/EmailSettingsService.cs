@@ -64,7 +64,7 @@ public sealed class EmailSettingsService(IDbContextFactory<AppDbContext> dbFacto
 
         var password = _protector.Read(s.PasswordProtected);
         if (password.Status == SecretStatus.Unreadable)
-            throw new EmailException("The saved SMTP password can't be read anymore. Enter it again on the Email settings page.");
+            throw new EmailException("The saved SMTP password can't be read anymore. Enter it again on the Admin settings page.");
 
         return new EmailConnection(s.Host, s.Port, s.Security, s.UserName, password.Value, s.From,
             string.IsNullOrWhiteSpace(s.FromName) ? DefaultFromName : s.FromName, s.PublicUrl);

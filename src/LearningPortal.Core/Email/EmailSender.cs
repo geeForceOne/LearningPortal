@@ -11,7 +11,7 @@ public sealed record EmailMessage(string Subject, string TextBody, string HtmlBo
 // A failure to send, with a message that can be shown to an admin as it is.
 public sealed class EmailException(string message, Exception? inner = null) : Exception(message, inner);
 
-// Sends through the SMTP server the admin configured on the Email settings page.
+// Sends through the SMTP server the admin configured on the Admin settings page.
 public sealed class EmailSender(EmailSettingsService settings)
 {
     public async Task SendAsync(string toAddress, string? toName, EmailMessage email,
@@ -45,7 +45,7 @@ public sealed class EmailSender(EmailSettingsService settings)
         }
         catch (AuthenticationException ex)
         {
-            throw new EmailException("The mail server rejected the login. Check the username and password on the Email settings page.", ex);
+            throw new EmailException("The mail server rejected the login. Check the username and password on the Admin settings page.", ex);
         }
         catch (SmtpCommandException ex)
         {

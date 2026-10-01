@@ -1,8 +1,8 @@
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using LearningPortal.Core.Ai;
 using LearningPortal.Core.Data;
 using LearningPortal.Core.Models;
+using LearningPortal.Core.Text;
 using Microsoft.EntityFrameworkCore;
 
 namespace LearningPortal.Core.Services;
@@ -16,7 +16,7 @@ public sealed record ExplainSummary(int Id, string Concept, int? Score, DateTime
 // "Explain it back": the user explains a concept in their own words, the AI asks one or two
 // questions about it like a curious beginner, and then assesses the whole explanation. Only the
 // concept's own section of the material goes to the AI.
-public sealed partial class ExplainService(
+public sealed class ExplainService(
     IDbContextFactory<AppDbContext> dbFactory,
     SettingsService settings,
     StatisticsService statistics)
@@ -34,10 +34,10 @@ public sealed partial class ExplainService(
         var concepts = new List<ExplainConcept>();
         foreach (var material in await statistics.GetSectionMapAsync(userId, topicId, ct))
         {
-            var lines = OutlineLines(outlines.GetValueOrDefault(material.MaterialId));
+            var lines = SectionNames.ParseOutline(outlines.GetValueOrDefault(material.MaterialId));
             foreach (var s in material.Sections)
             {
-                var label = lines.GetValueOrDefault(s.Index) ?? (string.IsNullOrWhiteSpace(s.Heading) ? $"Part {s.Index + 1}" : s.Heading.Trim());
+                var label = lines.GetValueOrDefault(s.Index)?.Line ?? s.Name;
                 concepts.Add(new ExplainConcept(s.SectionId, material.Title, Truncate(label), StateOf(s)));
             }
         }
@@ -195,25 +195,6 @@ public sealed partial class ExplainService(
             : null;
         return (language, source);
     }
-
-    // Outline lines look like "[3] Subject: key concepts" (see Prompts.OutlinePrompt).
-    private static Dictionary<int, string> OutlineLines(string? outline)
-    {
-        var lines = new Dictionary<int, string>();
-        if (string.IsNullOrWhiteSpace(outline))
-            return lines;
-        foreach (Match m in OutlineLine().Matches(outline))
-        {
-            var index = int.Parse(m.Groups[1].Value);
-            var text = m.Groups[2].Value.Trim().Trim('*').Trim();
-            if (text.Length > 0)
-                lines.TryAdd(index, text);
-        }
-        return lines;
-    }
-
-    [GeneratedRegex(@"^\s*(?:[-*]\s*)?\[(\d+)\]\s*(.+)$", RegexOptions.Multiline)]
-    private static partial Regex OutlineLine();
 
     private static string StateOf(SectionScore s) => s.QuestionCount == 0 ? "empty"
         : s.AverageScore is not { } avg ? "new"

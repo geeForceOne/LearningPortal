@@ -1,5 +1,6 @@
 using LearningPortal.Core.Data;
 using LearningPortal.Core.Models;
+using LearningPortal.Core.Text;
 using Microsoft.EntityFrameworkCore;
 
 namespace LearningPortal.Core.Services;
@@ -18,10 +19,11 @@ public sealed record WeakQuestion(
     int QuestionId, int TopicId, string TopicName, string Prompt, QuestionType Type, Difficulty Difficulty,
     int Answered, int Missed, double AverageScore, string? SourceLabel);
 
-// The concept map: each material's sections with how well their questions go. AverageScore is null
+// The concept map: each material's sections with how well their questions go. Name is what the UI
+// shows (see SectionNames) and Concepts the outline's key concepts, if any. AverageScore is null
 // while nothing from the section has been answered in a finished attempt.
 public sealed record SectionScore(
-    int SectionId, int Index, string Heading, int TokenEstimate, int QuestionCount, int Answered, int Missed, double? AverageScore);
+    int SectionId, int Index, string Name, string? Concepts, int TokenEstimate, int QuestionCount, int Answered, int Missed, double? AverageScore);
 
 public sealed record MaterialMap(int MaterialId, string Title, IReadOnlyList<SectionScore> Sections);
 
@@ -57,6 +59,10 @@ public sealed class StatisticsService(IDbContextFactory<AppDbContext> dbFactory,
             .Where(s => s.Material!.UserId == userId && s.Material.TopicId == topicId)
             .Select(s => new { s.Id, s.MaterialId, MaterialTitle = s.Material!.Title, MaterialCreated = s.Material.CreatedAt, s.Index, s.Heading, s.TokenEstimate })
             .ToListAsync(ct);
+        var outlines = await db.Materials.AsNoTracking()
+            .Where(m => m.UserId == userId && m.TopicId == topicId)
+            .Select(m => new { m.Id, m.Outline })
+            .ToDictionaryAsync(m => m.Id, m => m.Outline, ct);
 
         var questionCounts = await db.Questions.AsNoTracking()
             .Where(q => q.UserId == userId && q.TopicId == topicId && q.SourceSectionId != null)
@@ -76,12 +82,17 @@ public sealed class StatisticsService(IDbContextFactory<AppDbContext> dbFactory,
         return sections
             .GroupBy(s => (s.MaterialId, s.MaterialTitle, s.MaterialCreated))
             .OrderBy(g => g.Key.MaterialCreated)
-            .Select(g => new MaterialMap(g.Key.MaterialId, g.Key.MaterialTitle, g.OrderBy(s => s.Index).Select(s =>
+            .Select(g =>
             {
-                var hasScore = scores.TryGetValue(s.Id, out var sc);
-                return new SectionScore(s.Id, s.Index, s.Heading, s.TokenEstimate, questionCounts.GetValueOrDefault(s.Id),
-                    hasScore ? sc.Answered : 0, hasScore ? sc.Missed : 0, hasScore ? sc.Average : null);
-            }).ToList()))
+                var names = SectionNames.For(g.Key.MaterialTitle, outlines.GetValueOrDefault(g.Key.MaterialId), g.Select(s => (s.Index, s.Heading)));
+                return new MaterialMap(g.Key.MaterialId, g.Key.MaterialTitle, g.OrderBy(s => s.Index).Select(s =>
+                {
+                    var hasScore = scores.TryGetValue(s.Id, out var sc);
+                    var name = names[s.Index];
+                    return new SectionScore(s.Id, s.Index, name.Name, name.Concepts, s.TokenEstimate, questionCounts.GetValueOrDefault(s.Id),
+                        hasScore ? sc.Answered : 0, hasScore ? sc.Missed : 0, hasScore ? sc.Average : null);
+                }).ToList());
+            })
             .ToList();
     }
 

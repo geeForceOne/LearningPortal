@@ -3,6 +3,7 @@ using System;
 using LearningPortal.Core.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -10,9 +11,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace LearningPortal.Core.Data.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20261001181655_DontKnowAnswers")]
+    partial class DontKnowAnswers
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.12");
@@ -614,12 +617,6 @@ namespace LearningPortal.Core.Data.Migrations
 
                     b.Property<bool>("AllowAccountRequests")
                         .HasColumnType("INTEGER");
-
-                    b.Property<DateTime?>("HomepageTokenCreatedAt")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("HomepageTokenHash")
-                        .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 

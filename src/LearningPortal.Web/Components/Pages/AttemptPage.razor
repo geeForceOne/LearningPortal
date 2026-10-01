@@ -86,7 +86,7 @@ else
 
     private string RailLabel(AttemptAnswer a, int i)
     {
-        var state = !a.IsAnswered ? "not answered" : a.Revealed && a.Score is { } s ? $"{VerdictRules.FromScore(s)}".ToLowerInvariant() : "answered";
+        var state = !a.IsAnswered ? "not answered" : a.Revealed && a.DontKnow ? "didn't know" : a.Revealed && a.Score is { } s ? $"{VerdictRules.FromScore(s)}".ToLowerInvariant() : "answered";
         return $"Question {i + 1}, {state}";
     }
 
@@ -142,6 +142,20 @@ else
             }
         }
 
+        await AfterAnswerAsync(userId, answerId);
+    }
+
+    private async Task DontKnowAsync()
+    {
+        _error = null;
+        var userId = await UserIdAsync();
+        var answerId = Current.Id;
+        await Attempts.AnswerDontKnowAsync(userId, AttemptId, answerId, ElapsedSeconds(), PageToken);
+        await AfterAnswerAsync(userId, answerId);
+    }
+
+    private async Task AfterAnswerAsync(string userId, int answerId)
+    {
         if (_revealImmediately)
         {
             await Attempts.RevealAsync(userId, AttemptId, answerId, PageToken);
@@ -368,6 +382,10 @@ else
                     <button type="button" class="btn btn-primary btn-lg" disabled="@(IsBusy || !canSubmit)" @onclick="SubmitAsync">
                         @(_revealImmediately ? "Check answer" : "Save answer")
                     </button>
+                    <button type="button" class="btn btn-secondary btn-lg" disabled="@IsBusy" @onclick="DontKnowAsync"
+                            title="Better than guessing: it counts as incorrect, and the question comes back in weak-question practice.">
+                        I don't know
+                    </button>
                 }
 
                 @if (a.IsAnswered && _view.AnsweredCount < _view.Answers.Count)
@@ -404,6 +422,7 @@ else
         var correct = answers.Count(x => x.Score is { } s && VerdictRules.FromScore(s) == Verdict.Correct);
         var partial = answers.Count(x => x.Score is { } s && VerdictRules.FromScore(s) == Verdict.Partial);
         var wrong = answers.Count - correct - partial;
+        var dontKnow = answers.Count(x => x.DontKnow);
 
         <nav class="crumbs" aria-label="Breadcrumb">
             <a href="">Topics</a><span class="sep">/</span>
@@ -423,7 +442,7 @@ else
             <div class="score-hero">
                 <div class="score-big"><span class="marker">@Format.Percent(attempt.ScorePercent)</span></div>
                 <div class="score-facts">
-                    <span><strong>@correct</strong> correct, <strong>@partial</strong> partially correct, <strong>@wrong</strong> incorrect</span>
+                    <span><strong>@correct</strong> correct, <strong>@partial</strong> partially correct, <strong>@wrong</strong> incorrect@(dontKnow > 0 ? $" ({dontKnow} you didn't know)" : "")</span>
                     <span>Time spent <strong>@Format.Duration(attempt.ActiveSeconds)</strong></span>
                     <span>Finished @Format.Date(attempt.CompletedAt!.Value)</span>
                 </div>

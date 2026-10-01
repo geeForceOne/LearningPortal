@@ -279,11 +279,15 @@ public static class Prompts
             foreach (var o in question.Options.OrderBy(o => o.Order))
                 sb.AppendLine($"- {(o.IsCorrect ? "[correct] " : "")}{(given.SelectedIds.Contains(o.Id) ? "[picked by the student] " : "")}{o.Text}");
             sb.AppendLine("</options>");
+            if (given.DontKnow)
+                sb.AppendLine("<student_answer>\n(the student said they didn't know)\n</student_answer>");
         }
         else
         {
             sb.AppendLine($"<reference_answer>\n{question.ReferenceAnswer}\n</reference_answer>");
-            sb.AppendLine($"<student_answer>\n{(string.IsNullOrWhiteSpace(given.WrittenAnswer) ? "(not answered)" : given.WrittenAnswer)}\n</student_answer>");
+            var written = given.DontKnow ? "(the student said they didn't know)"
+                : string.IsNullOrWhiteSpace(given.WrittenAnswer) ? "(not answered)" : given.WrittenAnswer;
+            sb.AppendLine($"<student_answer>\n{written}\n</student_answer>");
             if (!string.IsNullOrWhiteSpace(given.Feedback))
                 sb.AppendLine($"<grading_feedback>\n{given.Feedback}\n</grading_feedback>");
         }
