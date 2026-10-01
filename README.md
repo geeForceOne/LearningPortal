@@ -169,7 +169,7 @@ There's no open sign-up. The first person to open a new installation creates the
 administrator account, and after that the admin creates accounts. Each person's topics and
 results are private.
 
-The admin can also let people **request an account** (Admin → Users, off by default, needs
+The admin can also let people **request an account** (Admin → Email settings, off by default, needs
 email). The sign-in page then shows "Request an account": people enter their email, their name
 and, if they like, a few words about who they are and why they'd like to use Recall. Admins get
 an email for each request and approve or decline it on the Users page. Approving sends the usual

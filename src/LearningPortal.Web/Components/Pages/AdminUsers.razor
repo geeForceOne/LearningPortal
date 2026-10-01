@@ -19,202 +19,147 @@
     </div>
 </div>
 
-<div class="two-col">
-    <section>
-        @if (_requests.Count > 0)
-        {
-            <div class="section-head"><h2>Account requests<span class="count">@_requests.Count</span></h2></div>
-            <ul class="rows" style="margin-bottom:28px">
-                @foreach (var r in _requests)
-                {
-                    var request = r;
-                    <li class="row" @key="request.Id">
-                        <div class="row-main">
-                            <span class="row-title">@request.Name</span>
-                            <div class="row-meta"><span>@request.Email</span><span>@Format.Date(request.CreatedAt)</span></div>
-                            @if (request.Message is not null)
-                            {
-                                <p class="small" style="margin:6px 0 0;white-space:pre-line">@request.Message</p>
-                            }
-                        </div>
-                        <div class="row-actions">
-                            <button type="button" class="btn btn-primary btn-sm" disabled="@_sending" @onclick="() => ApproveAsync(request)">Approve</button>
-                            <button type="button" class="btn btn-ghost btn-sm" disabled="@_sending" @onclick="() => DeclineAsync(request)">Decline</button>
-                        </div>
-                    </li>
-                }
-            </ul>
-        }
-
-        @if (_link is not null)
-        {
-            <div class="notice notice-warn" style="margin-bottom:18px" role="status">
-                <strong>@_link.Title</strong>
-                <div>@_link.Reason Copy the link and send it to them yourself. @_link.Validity</div>
-                <div class="link-copy">
-                    <input class="input" readonly value="@_link.Url" aria-label="Link" onfocus="this.select()" />
-                    <button type="button" class="btn btn-primary btn-sm" @onclick="CopyLinkAsync">Copy link</button>
-                </div>
-                <button type="button" class="btn btn-ghost btn-sm" @onclick="() => _link = null">Done</button>
-            </div>
-        }
-
-        <div class="section-head">
-            <h2>Accounts<span class="count">@_users.Count</span></h2>
-            <label class="sort-pick">
-                <span class="muted small">Sort by</span>
-                <select class="select select-sm" @bind="_sort">
-                    <option value="@Sort.Name">Name</option>
-                    <option value="@Sort.LastActive">Last active</option>
-                    <option value="@Sort.Attempts">Attempts</option>
-                </select>
-            </label>
-        </div>
-        <p class="muted small" style="margin-top:8px">
-            Activity counts and dates only: you never see what anyone's topics or questions are about.
-            Last active updates at most every @((int)UserActivityService.ActiveResolution.TotalMinutes) minutes.
-        </p>
+@if (_requests.Count > 0)
+{
+    <section class="section">
+        <div class="section-head"><h2>Account requests<span class="count">@_requests.Count</span></h2></div>
         <ul class="rows">
-            @foreach (var u in Sorted())
+            @foreach (var r in _requests)
             {
-                var isMe = u.Id == _myId;
-                var usage = _usage.GetValueOrDefault(u.Id);
-                <li class="row" @key="u.Id">
+                var request = r;
+                <li class="row" @key="request.Id">
                     <div class="row-main">
-                        <span class="row-title">@u.ShownName @(isMe ? "(you)" : "")</span>
-                        <div class="row-meta">
-                            <span>@(u.IsAdmin ? "Administrator" : "User")</span>
-                            <span>@(u.Email ?? "No email address")</span>
-                            @* Older accounts sign in with their own username as well. *@
-                            @if (!string.Equals(u.UserName, u.Email, StringComparison.OrdinalIgnoreCase))
-                            {
-                                <span>Username @u.UserName</span>
-                            }
-                            @if (!u.HasPassword)
-                            {
-                                <span class="tag">Invite pending</span>
-                            }
-                            <span>Created @Format.Ago(u.CreatedAt)</span>
-                        </div>
-                        @if (usage is not null)
+                        <span class="row-title">@request.Name</span>
+                        <div class="row-meta"><span>@request.Email</span><span>@Format.Date(request.CreatedAt)</span></div>
+                        @if (request.Message is not null)
                         {
-                            <div class="row-meta">
-                                <span title="@(usage.LastActiveAt is { } at ? Format.Date(at) : "")">
-                                    @(usage.LastActiveAt is { } active ? $"Last active {Format.Ago(active)}" : "Not active yet")
-                                </span>
-                                <span>@Format.Plural(usage.Topics, "topic", "topics")</span>
-                                <span>@Format.Plural(usage.Exams, "exam", "exams")</span>
-                                <span>@Format.Plural(usage.BankQuestions, "bank question", "bank questions")</span>
-                                <span>@Format.Plural(usage.Attempts, "attempt", "attempts")</span>
-                            </div>
+                            <p class="small" style="margin:6px 0 0;white-space:pre-line">@request.Message</p>
                         }
                     </div>
                     <div class="row-actions">
-                        <button type="button" class="btn btn-ghost btn-sm" disabled="@_sending" @onclick="() => SendLinkAsync(u)">@(u.HasPassword ? "Send reset link" : "Resend invite")</button>
-                        <button type="button" class="btn btn-ghost btn-sm" @onclick="() => EditEmailAsync(u)">@(u.Email is null ? "Add email" : "Change email")</button>
-                        @if (!isMe)
-                        {
-                            <button type="button" class="btn btn-ghost btn-sm" @onclick="() => ToggleAdminAsync(u)">@(u.IsAdmin ? "Remove admin" : "Make admin")</button>
-                            <button type="button" class="btn btn-ghost btn-icon btn-sm" aria-label="Delete @u.ShownName" @onclick="() => DeleteAsync(u)"><Icon Name="trash" Size="16" /></button>
-                        }
+                        <button type="button" class="btn btn-primary btn-sm" disabled="@_sending" @onclick="() => ApproveAsync(request)">Approve</button>
+                        <button type="button" class="btn btn-ghost btn-sm" disabled="@_sending" @onclick="() => DeclineAsync(request)">Decline</button>
                     </div>
                 </li>
             }
         </ul>
     </section>
+}
 
-    <aside>
-        <div class="panel">
-            <h2>Create account</h2>
-            <form class="form" @onsubmit="CreateAsync" @onsubmit:preventDefault="true">
-                <label class="field">
-                    <span>Email address</span>
-                    <input class="input" type="email" @bind="_newEmail" @bind:event="oninput" autocomplete="off" spellcheck="false" />
-                    <span class="field-hint">
-                        They sign in with this.
-                        @if (_emailOn)
+@if (_link is not null)
+{
+    <div class="notice notice-warn" style="margin-top:28px" role="status">
+        <strong>@_link.Title</strong>
+        <div>@_link.Reason Copy the link and send it to them yourself. @_link.Validity</div>
+        <div class="link-copy">
+            <input class="input" readonly value="@_link.Url" aria-label="Link" onfocus="this.select()" />
+            <button type="button" class="btn btn-primary btn-sm" @onclick="CopyLinkAsync">Copy link</button>
+        </div>
+        <button type="button" class="btn btn-ghost btn-sm" @onclick="() => _link = null">Done</button>
+    </div>
+}
+
+<section class="section">
+    <div class="section-head">
+        <h2>Accounts<span class="count">@_users.Count</span></h2>
+        <button type="button" class="btn btn-primary btn-sm" disabled="@_sending" @onclick="NewAccountAsync"><Icon Name="plus" Size="16" /> New account</button>
+    </div>
+    <p class="muted small" style="margin-top:8px">
+        Counts and dates only: you never see what anyone's topics or questions are about. Last active updates at most every
+        @((int)UserActivityService.ActiveResolution.TotalMinutes) minutes.
+        @if (!_emailOn)
+        {
+            <span>Email is off, so invite and reset links are shown here for you to pass on (<a href="admin/email">Email settings</a>).</span>
+        }
+    </p>
+
+    <table class="table users-table">
+        <thead>
+            <tr>
+                @SortHeader("Name", Column.Name)
+                @SortHeader("Role", Column.Role)
+                @SortHeader("Last active", Column.LastActive)
+                @SortHeader("Topics", Column.Topics, numeric: true)
+                @SortHeader("Exams", Column.Exams, numeric: true)
+                @SortHeader("Bank questions", Column.Questions, numeric: true)
+                @SortHeader("Attempts", Column.Attempts, numeric: true)
+                <th><span class="visually-hidden">Actions</span></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var u in Sorted())
+            {
+                var isMe = u.Id == _myId;
+                var usage = Usage(u);
+                <tr @key="u.Id">
+                    <td data-label="Name">
+                        <span class="users-name">@u.ShownName @(isMe ? "(you)" : "")</span>
+                        <span class="muted small users-email">@(u.Email ?? "No email address")</span>
+                        @* Older accounts sign in with their own username as well. *@
+                        @if (!string.Equals(u.UserName, u.Email, StringComparison.OrdinalIgnoreCase))
                         {
-                            @:The invite link goes here too.
+                            <span class="muted small users-email">Username @u.UserName</span>
                         }
-                        else
+                        @if (!u.HasPassword)
                         {
-                            @:Email isn't set up, so you'll get the invite link to pass on yourself.
+                            <span class="tag">Invite pending</span>
                         }
-                    </span>
-                </label>
-                <label class="field">
-                    <span>Display name <span class="muted">(optional)</span></span>
-                    <input class="input" @bind="_newName" @bind:event="oninput" autocomplete="off" maxlength="@AppUser.MaxDisplayNameLength" />
-                    <span class="field-hint">Without one, the first part of their email is shown. They can change it later.</span>
-                </label>
-                <label class="check">
-                    <input type="checkbox" @bind="_newAdmin" /> Administrator
-                </label>
-                @foreach (var e in _errors)
-                {
-                    <div class="field-error">@e</div>
-                }
-                <button type="submit" class="btn btn-primary" disabled="@(_sending || string.IsNullOrWhiteSpace(_newEmail))">
-                    @(_emailOn ? "Create and send invite" : "Create account")
-                </button>
-            </form>
-        </div>
+                    </td>
+                    <td data-label="Role">@(u.IsAdmin ? "Admin" : "User")</td>
+                    <td data-label="Last active" class="nowrap" title="@(usage.LastActiveAt is { } at ? Format.Date(at) : "")">
+                        @(usage.LastActiveAt is { } active ? Format.Ago(active) : "Not yet")
+                    </td>
+                    <td data-label="Topics" class="num">@usage.Topics</td>
+                    <td data-label="Exams" class="num">@usage.Exams</td>
+                    <td data-label="Bank questions" class="num">@usage.BankQuestions</td>
+                    <td data-label="Attempts" class="num">@usage.Attempts</td>
+                    <td class="users-actions">
+                        <div class="row-menu">
+                            <button type="button" class="btn btn-ghost btn-icon btn-sm" aria-label="Actions for @u.ShownName" aria-expanded="@(_menuFor == u.Id)"
+                                    @onclick="() => _menuFor = _menuFor == u.Id ? null : u.Id"><Icon Name="more" Size="16" /></button>
+                            @if (_menuFor == u.Id)
+                            {
+                                <div class="menu-scrim" @onclick="() => _menuFor = null"></div>
+                                <div class="menu-list" @onclick="() => _menuFor = null">
+                                    <div class="menu-note">Created @Format.Ago(u.CreatedAt)</div>
+                                    <button type="button" disabled="@_sending" @onclick="() => SendLinkAsync(u)">@(u.HasPassword ? "Send reset link" : "Resend invite")</button>
+                                    <button type="button" @onclick="() => EditEmailAsync(u)">@(u.Email is null ? "Add email" : "Change email")</button>
+                                    @if (!isMe)
+                                    {
+                                        <button type="button" @onclick="() => ToggleAdminAsync(u)">@(u.IsAdmin ? "Remove admin" : "Make admin")</button>
+                                        <hr />
+                                        <button type="button" class="danger" @onclick="() => DeleteAsync(u)"><Icon Name="trash" Size="16" /> Delete account</button>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</section>
 
-        <div class="panel">
-            <h2>Account requests</h2>
-            <label class="check">
-                <input type="checkbox" checked="@_requestsOpen" disabled="@(!_emailOn && !_requestsOpen)" @onchange="e => SetRequestsOpenAsync((bool)e.Value!)" />
-                Let people request an account
-            </label>
-            <p class="muted small" style="margin-top:6px">
-                @if (!_emailOn)
-                {
-                    @:Needs email to be on, since approval and decline are sent by email.
-                }
-                else
-                {
-                    @:Adds "Request an account" to the sign-in page. You approve or decline each request here; approving sends the usual invite.
-                }
-            </p>
-        </div>
-
-        <div class="panel">
-            <h2>Email</h2>
-            <p class="muted small">
-                @if (_emailOn)
-                {
-                    @:Email is on: invites and reset links are sent by email, and anyone can use "Forgot password?" on the sign-in page.
-                }
-                else
-                {
-                    @:Email is off, so invite and reset links are shown here for you to pass on, and "Forgot password?" on the sign-in page tells people to ask you.
-                }
-            </p>
-            <a class="btn btn-ghost btn-sm" href="admin/email">Email settings</a>
-        </div>
-    </aside>
-</div>
+<CreateAccountDialog @ref="_createDialog" />
 
 @code {
     [CascadingParameter] private AppUi Ui { get; set; } = default!;
 
     private sealed record LinkToShare(string Title, string Reason, string Url, string Validity);
 
-    private enum Sort { Name, LastActive, Attempts }
+    private enum Column { Name, Role, LastActive, Topics, Exams, Questions, Attempts }
 
     private IReadOnlyList<UserRow> _users = [];
     private IReadOnlyDictionary<string, UserUsage> _usage = new Dictionary<string, UserUsage>();
-    private Sort _sort = Sort.Name;
+    private Column _sort = Column.Name;
+    private bool _descending;
+    private string? _menuFor;
     private string _myId = "";
-    private string _newName = "";
-    private string _newEmail = "";
-    private bool _newAdmin;
     private bool _sending;
     private bool _emailOn;
-    private List<string> _errors = [];
     private LinkToShare? _link;
     private IReadOnlyList<AccountRequestView> _requests = [];
-    private bool _requestsOpen;
+    private CreateAccountDialog _createDialog = default!;
 
     protected override async Task OnInitializedAsync()
     {
@@ -223,23 +168,48 @@
         _usage = await Stats.GetUsageAsync(PageToken);
         _emailOn = await Mail.EmailConfiguredAsync();
         _requests = await Requests.ListAsync(PageToken);
-        _requestsOpen = await Requests.IsOpenAsync(PageToken);
     }
 
-    // Names A to Z (as listed); activity and attempts newest or largest first.
-    private IEnumerable<UserRow> Sorted() => _sort switch
-    {
-        Sort.LastActive => _users.OrderByDescending(u => _usage.GetValueOrDefault(u.Id)?.LastActiveAt ?? DateTime.MinValue),
-        Sort.Attempts => _users.OrderByDescending(u => _usage.GetValueOrDefault(u.Id)?.Attempts ?? 0),
-        _ => _users,
-    };
+    // A new account has no usage row until the page reloads; it shows as nothing done yet.
+    private UserUsage Usage(UserRow u) => _usage.GetValueOrDefault(u.Id) ?? new UserUsage(u.Id, null, 0, 0, 0, 0);
 
-    private async Task SetRequestsOpenAsync(bool open)
+    private IEnumerable<UserRow> Sorted()
     {
-        _requestsOpen = open;
-        await Requests.SetOpenAsync(open, PageToken);
-        Ui.Toast.Success(open ? "People can now request an account from the sign-in page." : "Account requests are closed.");
+        Func<UserRow, object> key = _sort switch
+        {
+            Column.Role => u => u.IsAdmin ? 0 : 1,
+            Column.LastActive => u => Usage(u).LastActiveAt ?? DateTime.MinValue,
+            Column.Topics => u => Usage(u).Topics,
+            Column.Exams => u => Usage(u).Exams,
+            Column.Questions => u => Usage(u).BankQuestions,
+            Column.Attempts => u => Usage(u).Attempts,
+            _ => u => u.ShownName.ToLowerInvariant(),
+        };
+        return _descending ? _users.OrderByDescending(key) : _users.OrderBy(key);
     }
+
+    // Clicking the current column flips the order; a new column starts with the most useful end
+    // first (A to Z for names, admins first for roles, newest or largest first for the rest).
+    private void SortBy(Column column)
+    {
+        _descending = column == _sort ? !_descending : column is not (Column.Name or Column.Role);
+        _sort = column;
+    }
+
+    private RenderFragment SortHeader(string label, Column column, bool numeric = false) =>
+        @<th class="@(numeric ? "num" : "")" aria-sort="@(_sort != column ? "none" : _descending ? "descending" : "ascending")">
+            @* The arrow's space sits on the side away from the column's alignment, so labels line up with the values. *@
+            <button type="button" class="sort-button" @onclick="() => SortBy(column)">
+                @if (numeric)
+                {
+                    <span class="sort-mark" aria-hidden="true">@(_sort != column ? "" : _descending ? "▾ " : "▴ ")</span>@label
+                }
+                else
+                {
+                    @label<span class="sort-mark" aria-hidden="true">@(_sort != column ? "" : _descending ? " ▾" : " ▴")</span>
+                }
+            </button>
+        </th>;
 
     // Creates the account and sends the normal invite; the request is then done.
     private async Task ApproveAsync(AccountRequestView request)
@@ -289,21 +259,23 @@
         }
     }
 
-    private async Task CreateAsync()
+    private async Task NewAccountAsync()
     {
+        (string Id, string Name)? created = null;
+        var ok = await _createDialog.AskAsync(_emailOn, async input =>
+        {
+            var (userId, errors) = await Users.CreateAsync(input.Email, input.DisplayName, input.IsAdmin);
+            if (userId is not null)
+                created = (userId, AppUser.ShownNameFor(input.DisplayName, input.Email.Trim(), null));
+            return errors.ToList();
+        });
+        if (!ok || created is not { } c) return;
+
         _sending = true;
         try
         {
-            var (userId, errors) = await Users.CreateAsync(_newEmail, _newName, _newAdmin);
-            _errors = errors.ToList();
-            if (userId is null) return;
-
-            var name = AppUser.ShownNameFor(_newName, _newEmail.Trim(), null);
-            _newName = "";
-            _newEmail = "";
-            _newAdmin = false;
             _users = await Users.ListAsync();
-            await DeliverAsync(userId, name, isInvite: true, $"Account for {name} created.");
+            await DeliverAsync(c.Id, c.Name, isInvite: true, $"Account for {c.Name} created.");
         }
         finally
         {

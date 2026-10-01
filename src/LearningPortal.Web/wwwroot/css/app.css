@@ -297,7 +297,8 @@ h1:focus { outline: none; }
     font-size: var(--t-xs);
 }
 
-.usermenu-list {
+.usermenu-list,
+.menu-list {
     position: absolute;
     right: 0;
     top: calc(100% + 8px);
@@ -312,7 +313,8 @@ h1:focus { outline: none; }
 }
 
 .usermenu-list a,
-.usermenu-list button {
+.usermenu-list button,
+.menu-list button {
     display: flex;
     align-items: center;
     gap: 10px;
@@ -330,11 +332,21 @@ h1:focus { outline: none; }
 }
 
 .usermenu-list a:hover,
-.usermenu-list button:hover { background: var(--sheet-2); }
+.usermenu-list button:hover,
+.menu-list button:hover:not(:disabled) { background: var(--sheet-2); }
 
 .usermenu-list form { margin: 0; }
-.usermenu-list hr { border: 0; border-top: 1px solid var(--rule); margin: 6px 0; }
-.usermenu-name { padding: 6px 10px 8px; color: var(--pencil); font-size: var(--t-xs); }
+.usermenu-list hr,
+.menu-list hr { border: 0; border-top: 1px solid var(--rule); margin: 6px 0; }
+.usermenu-name,
+.menu-note { padding: 6px 10px 8px; color: var(--pencil); font-size: var(--t-xs); }
+
+/* A "⋯" menu on a list row. The scrim behind it closes it on a click anywhere else. */
+.row-menu { position: relative; display: inline-block; }
+.row-menu .menu-list { z-index: 20; top: calc(100% + 4px); }
+.menu-list button:disabled { opacity: 0.5; cursor: default; }
+.menu-list button.danger { color: var(--wrong); }
+.menu-scrim { position: fixed; inset: 0; z-index: 10; }
 
 /* The running version: tiny next to the name in the top bar, and a quiet link on the sign-in pages. */
 .brand-version {
@@ -613,7 +625,7 @@ a.row-title:hover { text-decoration: underline; text-decoration-color: var(--rul
 /* ---------- Forms ---------- */
 
 .form { display: grid; gap: 18px; }
-/* Settings-style pages: two columns of panels or fields on a computer, one on tablets and phones. */
+/* The new-exam form: two columns of fields on a computer, one on tablets and phones. */
 .form-cols {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -621,11 +633,39 @@ a.row-title:hover { text-decoration: underline; text-decoration-color: var(--rul
     align-items: start;
 }
 
-.form-cols > .panel { margin-top: 0; }
-
 @media (max-width: 960px) {
     .form-cols { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Settings, Account and Email settings: one section per row, with the heading and a line about it
+   on the left and the controls on the right, across the full page width. Choices and dropdowns are
+   only as wide as their content. On tablets and phones the heading sits above the controls. */
+.settings { border-top: 1px solid var(--rule-strong); }
+
+.setting {
+    display: grid;
+    grid-template-columns: 250px minmax(0, 1fr);
+    gap: 14px 56px;
+    padding: 30px 0;
+    border-bottom: 1px solid var(--rule);
+}
+
+.setting-intro h2 { font-size: var(--t-md); margin-bottom: 6px; }
+.setting-intro p { margin: 0; color: var(--pencil); font-size: var(--t-sm); }
+
+.setting-body { display: grid; gap: 20px; align-content: start; min-width: 0; }
+.setting-body .form { gap: 20px; }
+.setting-body .actions { margin: 0; }
+.setting-body .field > .segmented,
+.setting-body .field > .select { justify-self: start; width: auto; max-width: 100%; }
+
+@media (max-width: 860px) {
+    .setting { grid-template-columns: minmax(0, 1fr); padding: 24px 0; }
+}
+
+/* Settings: every section stacked (title, line about it, then the controls), across the full page width. */
+.settings-stacked .setting { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+.settings-stacked .setting-intro h2 { font-size: var(--t-lg); }
 
 .field { display: grid; gap: 6px; }
 
@@ -651,10 +691,6 @@ a.row-title:hover { text-decoration: underline; text-decoration-color: var(--rul
 }
 
 .textarea { min-height: 120px; resize: vertical; line-height: 1.55; }
-.select-sm { width: auto; min-height: 32px; padding: 4px 8px; font-size: var(--t-sm); }
-
-/* A small "Sort by" picker in a section head. */
-.sort-pick { display: inline-flex; align-items: center; gap: 8px; }
 .textarea.reading { font-family: var(--font-read); font-size: 1.02rem; }
 
 .input:focus,
@@ -1557,6 +1593,48 @@ details.q-more[open] summary { margin-bottom: 8px; }
 }
 
 .table .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* A sortable column header: the whole label is the button. */
+.sort-button {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+}
+.sort-button:hover { color: var(--ink); }
+.sort-mark { display: inline-block; min-width: 1em; }
+
+/* Admin accounts table; on phones each account becomes a card with labelled values. */
+.users-table { margin-top: 12px; }
+.users-table td { vertical-align: middle; }
+.users-name { display: block; font-weight: 600; color: var(--ink); }
+.users-email { display: block; overflow-wrap: anywhere; }
+.users-table .tag { margin-top: 4px; }
+.users-actions { width: 1%; text-align: right; padding-right: 0; }
+
+@media (max-width: 720px) {
+    .users-table thead { display: none; }
+    .users-table, .users-table tbody, .users-table tr, .users-table td { display: block; }
+    .users-table tr {
+        position: relative;
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 8px 16px;
+        padding: 14px 0;
+        border-bottom: 1px solid var(--rule);
+    }
+    .users-table td, .users-table td.num { padding: 0; border: 0; text-align: left; }
+    .users-table td:first-child { grid-column: 1 / -1; padding-right: 44px; }
+    .users-table td:not(:first-child):not(.users-actions)::before {
+        content: attr(data-label);
+        display: block;
+        color: var(--pencil);
+        font-size: var(--t-xs);
+    }
+    .users-actions { position: absolute; top: 10px; right: 0; width: auto; }
+}
 
 /* Heat cell: the bar is the average score, coloured by grade band. */
 .meter { display: flex; align-items: center; gap: 10px; min-width: 140px; }

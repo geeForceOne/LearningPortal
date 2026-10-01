@@ -22,10 +22,13 @@
 }
 else
 {
-    <div class="form-cols">
-        <div>
-            <section class="panel form">
+    <div class="settings settings-stacked">
+        <section class="setting">
+            <div class="setting-intro">
                 <h2>Appearance</h2>
+                <p>How Recall looks. Saved with your account, so it follows you to other devices.</p>
+            </div>
+            <div class="setting-body">
                 <div class="field">
                     <span class="field-label" id="theme-label">Theme</span>
                     <div class="segmented" role="radiogroup" aria-labelledby="theme-label">
@@ -38,10 +41,15 @@ else
                         @(_theme == Theme.System ? "Follows your device's light or dark setting." : "Saved as soon as you pick it.")
                     </span>
                 </div>
-            </section>
+            </div>
+        </section>
 
-            <section class="panel form">
+        <section class="setting">
+            <div class="setting-intro">
                 <h2>API keys</h2>
+                <p>Your own key for Claude, OpenAI or both. Requests are billed to your account with that provider.</p>
+            </div>
+            <div class="setting-body">
                 <div class="notice notice-warn" role="note">
                     <strong>@AppInfo.KeySafetyTitle</strong>
                     <p class="key-safety">@AppInfo.KeySafety</p>
@@ -75,48 +83,53 @@ else
                 <div class="actions">
                     <button type="button" class="btn btn-primary" disabled="@(_savingKeys || !KeysChanged)" @onclick="SaveKeysAsync">Save API keys</button>
                 </div>
-            </section>
-        </div>
-
-        <section class="panel form">
-            <h2>Models</h2>
-            <div class="field">
-                <span class="field-label" id="mode-label">Mode</span>
-                <div class="segmented" role="radiogroup" aria-labelledby="mode-label">
-                    <label><input type="radio" name="model-mode" checked="@(!_advanced)" @onchange="() => _advanced = false" /> Simple</label>
-                    <label><input type="radio" name="model-mode" checked="@_advanced" @onchange="() => _advanced = true" /> Advanced</label>
-                </div>
-                <span class="field-hint">
-                    @(_advanced
-                        ? "Separate models for outlining uploads and for questions. You can pick another model each time you upload or generate."
-                        : "One model for everything.")
-                </span>
             </div>
+        </section>
 
-            @if (_advanced)
-            {
-                <AiModelSelect Label="Uploads (outline)" @bind-Value="_analysis" Available="Available" AllowCustom="true">
-                    <Hint><span class="field-hint">Reads each file you add once to outline it. A cheaper model is usually enough.</span></Hint>
-                </AiModelSelect>
-                <AiModelSelect Label="Questions & grading" @bind-Value="_generation" Available="Available" AllowCustom="true">
-                    <Hint><span class="field-hint">Writes and replaces questions, and grades written answers.</span></Hint>
-                </AiModelSelect>
-            }
-            else
-            {
-                <AiModelSelect Label="Model" @bind-Value="_simple" Available="Available" AllowCustom="true">
-                    <Hint><span class="field-hint">Outlines your uploads, writes questions and grades written answers.</span></Hint>
-                </AiModelSelect>
-            }
+        <section class="setting">
+            <div class="setting-intro">
+                <h2>Models</h2>
+                <p>Which AI model outlines your material, writes your questions and grades your answers.</p>
+            </div>
+            <div class="setting-body">
+                <div class="field">
+                    <span class="field-label" id="mode-label">Mode</span>
+                    <div class="segmented" role="radiogroup" aria-labelledby="mode-label">
+                        <label><input type="radio" name="model-mode" checked="@(!_advanced)" @onchange="() => _advanced = false" /> Simple</label>
+                        <label><input type="radio" name="model-mode" checked="@_advanced" @onchange="() => _advanced = true" /> Advanced</label>
+                    </div>
+                    <span class="field-hint">
+                        @(_advanced
+                            ? "Separate models for outlining uploads and for questions. You can pick another model each time you upload or generate."
+                            : "One model for everything.")
+                    </span>
+                </div>
 
-            <span class="field-hint">
-                Prices are per million input / output tokens, as of @AiModels.PricesAsOf. Current prices:
-                <a href="@AiModels.ClaudePricingUrl" target="_blank" rel="noopener noreferrer">Claude</a>,
-                <a href="@AiModels.OpenAiPricingUrl" target="_blank" rel="noopener noreferrer">OpenAI</a>.
-            </span>
+                @if (_advanced)
+                {
+                    <AiModelSelect Label="Uploads (outline)" @bind-Value="_analysis" Available="Available" AllowCustom="true">
+                        <Hint><span class="field-hint">Reads each file you add once to outline it. A cheaper model is usually enough.</span></Hint>
+                    </AiModelSelect>
+                    <AiModelSelect Label="Questions & grading" @bind-Value="_generation" Available="Available" AllowCustom="true">
+                        <Hint><span class="field-hint">Writes and replaces questions, and grades written answers.</span></Hint>
+                    </AiModelSelect>
+                }
+                else
+                {
+                    <AiModelSelect Label="Model" @bind-Value="_simple" Available="Available" AllowCustom="true">
+                        <Hint><span class="field-hint">Outlines your uploads, writes questions and grades written answers.</span></Hint>
+                    </AiModelSelect>
+                }
 
-            <div class="actions">
-                <button type="button" class="btn btn-primary" disabled="@_savingModels" @onclick="SaveModelsAsync">Save models</button>
+                <span class="field-hint">
+                    Prices are per million input / output tokens, as of @AiModels.PricesAsOf. Current prices:
+                    <a href="@AiModels.ClaudePricingUrl" target="_blank" rel="noopener noreferrer">Claude</a>,
+                    <a href="@AiModels.OpenAiPricingUrl" target="_blank" rel="noopener noreferrer">OpenAI</a>.
+                </span>
+
+                <div class="actions">
+                    <button type="button" class="btn btn-primary" disabled="@_savingModels" @onclick="SaveModelsAsync">Save models</button>
+                </div>
             </div>
         </section>
     </div>

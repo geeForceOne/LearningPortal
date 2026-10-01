@@ -1,5 +1,16 @@
 # Release notes
 
+## 1.9.1 - 2026-10-01
+
+### Improved
+
+- Settings, Account and Email settings are laid out section by section across the full page width, each with a short line on what it's for.
+- "Let people request an account" has moved to Admin → Email settings, next to the email about new requests.
+
+### Fixed
+
+- Minor fixes and updates.
+
 ## 1.9.0 - 2026-10-01
 
 ### New

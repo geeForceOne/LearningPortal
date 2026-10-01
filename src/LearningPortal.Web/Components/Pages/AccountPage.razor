@@ -22,70 +22,80 @@
 }
 else
 {
-    <div class="form-cols">
-        <section class="panel">
-            <h2>Profile</h2>
-            @if (ProfileSaved)
-            {
-                <div class="notice notice-good" style="margin-bottom:14px" role="status">Profile saved.</div>
-            }
-            <form class="form" @onsubmit="SaveProfileAsync" @onsubmit:preventDefault="true">
-                <label class="field">
-                    <span>Display name <span class="muted">(optional)</span></span>
-                    <input class="input" @bind="_displayName" @bind:event="oninput" autocomplete="nickname" maxlength="@AppUser.MaxDisplayNameLength"
-                           placeholder="@AppUser.ShownNameFor(null, _me.Email, _me.UserName)" />
-                    <span class="field-hint">What @AppInfo.Name calls you. Leave it empty to use the first part of your email.</span>
-                </label>
-                <label class="field">
-                    <span>Email address</span>
-                    <input class="input" type="email" @bind="_email" @bind:event="oninput" autocomplete="email" spellcheck="false" />
-                    <span class="field-hint">You sign in with this, and forgotten-password links go here.</span>
-                </label>
-                @foreach (var e in _profileErrors)
+    <div class="settings">
+        <section class="setting">
+            <div class="setting-intro">
+                <h2>Profile</h2>
+                <p>Your name in Recall and the email address you sign in with.</p>
+            </div>
+            <div class="setting-body">
+                @if (ProfileSaved)
                 {
-                    <div class="field-error">@e</div>
+                    <div class="notice notice-good" style="margin-bottom:14px" role="status">Profile saved.</div>
                 }
-                <div class="actions" style="margin:0">
-                    <button type="submit" class="btn btn-primary" disabled="@(_busy || string.IsNullOrWhiteSpace(_email) || !ProfileChanged)">Save profile</button>
-                </div>
-            </form>
+                <form class="form" @onsubmit="SaveProfileAsync" @onsubmit:preventDefault="true">
+                    <label class="field">
+                        <span>Display name <span class="muted">(optional)</span></span>
+                        <input class="input" @bind="_displayName" @bind:event="oninput" autocomplete="nickname" maxlength="@AppUser.MaxDisplayNameLength"
+                               placeholder="@AppUser.ShownNameFor(null, _me.Email, _me.UserName)" />
+                        <span class="field-hint">What @AppInfo.Name calls you. Leave it empty to use the first part of your email.</span>
+                    </label>
+                    <label class="field">
+                        <span>Email address</span>
+                        <input class="input" type="email" @bind="_email" @bind:event="oninput" autocomplete="email" spellcheck="false" />
+                        <span class="field-hint">You sign in with this, and forgotten-password links go here.</span>
+                    </label>
+                    @foreach (var e in _profileErrors)
+                    {
+                        <div class="field-error">@e</div>
+                    }
+                    <div class="actions" style="margin:0">
+                        <button type="submit" class="btn btn-primary" disabled="@(_busy || string.IsNullOrWhiteSpace(_email) || !ProfileChanged)">Save profile</button>
+                    </div>
+                </form>
+            </div>
         </section>
 
-        <section class="panel">
-            <h2>Password</h2>
-            @if (PasswordChanged)
-            {
-                <div class="notice notice-good" style="margin-bottom:14px" role="status">Password changed. You're still signed in on this device.</div>
-            }
-            <form class="form" @onsubmit="ChangePasswordAsync" @onsubmit:preventDefault="true">
-                @* Lets password managers tie the new password to the right account. *@
-                <input type="text" value="@(_me.Email ?? _me.UserName)" autocomplete="username" hidden readonly />
-                <label class="field">
-                    <span>Current password</span>
-                    <input class="input" type="password" @bind="_current" @bind:event="oninput" autocomplete="current-password" />
-                </label>
-                <label class="field">
-                    <span>New password</span>
-                    <input class="input" type="password" @bind="_new" @bind:event="oninput" autocomplete="new-password" />
-                    <span class="field-hint">At least 8 characters.</span>
-                </label>
-                <label class="field">
-                    <span>Repeat new password</span>
-                    <input class="input" type="password" @bind="_confirm" @bind:event="oninput" autocomplete="new-password" />
-                    @if (_confirm.Length > 0 && _confirm != _new)
-                    {
-                        <span class="field-error">The passwords don't match.</span>
-                    }
-                </label>
-                @foreach (var e in _passwordErrors)
+        <section class="setting">
+            <div class="setting-intro">
+                <h2>Password</h2>
+                <p>Change the password you sign in with.</p>
+            </div>
+            <div class="setting-body">
+                @if (PasswordChanged)
                 {
-                    <div class="field-error">@e</div>
+                    <div class="notice notice-good" style="margin-bottom:14px" role="status">Password changed. You're still signed in on this device.</div>
                 }
-                <div class="actions" style="margin:0">
-                    <button type="submit" class="btn btn-primary"
-                            disabled="@(_busy || _current.Length == 0 || _new.Length < 8 || _confirm != _new)">Change password</button>
-                </div>
-            </form>
+                <form class="form" @onsubmit="ChangePasswordAsync" @onsubmit:preventDefault="true">
+                    @* Lets password managers tie the new password to the right account. *@
+                    <input type="text" value="@(_me.Email ?? _me.UserName)" autocomplete="username" hidden readonly />
+                    <label class="field">
+                        <span>Current password</span>
+                        <input class="input" type="password" @bind="_current" @bind:event="oninput" autocomplete="current-password" />
+                    </label>
+                    <label class="field">
+                        <span>New password</span>
+                        <input class="input" type="password" @bind="_new" @bind:event="oninput" autocomplete="new-password" />
+                        <span class="field-hint">At least 8 characters.</span>
+                    </label>
+                    <label class="field">
+                        <span>Repeat new password</span>
+                        <input class="input" type="password" @bind="_confirm" @bind:event="oninput" autocomplete="new-password" />
+                        @if (_confirm.Length > 0 && _confirm != _new)
+                        {
+                            <span class="field-error">The passwords don't match.</span>
+                        }
+                    </label>
+                    @foreach (var e in _passwordErrors)
+                    {
+                        <div class="field-error">@e</div>
+                    }
+                    <div class="actions" style="margin:0">
+                        <button type="submit" class="btn btn-primary"
+                                disabled="@(_busy || _current.Length == 0 || _new.Length < 8 || _confirm != _new)">Change password</button>
+                    </div>
+                </form>
+            </div>
         </section>
     </div>
 }

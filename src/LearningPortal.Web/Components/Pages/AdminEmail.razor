@@ -3,6 +3,7 @@
 @inherits AppPage
 @inject EmailSettingsService EmailSettings
 @inject AccountMailService Mail
+@inject AccountRequestService Requests
 @using LearningPortal.Core.Email
 @using LearningPortal.Core.Models
 
@@ -12,8 +13,8 @@
     <div>
         <h1>Email settings</h1>
         <p class="page-sub">
-            The mail server @AppInfo.Name uses to send invites and password reset links. Without it,
-            you get the links on the Users page to pass on yourself.
+            The mail server @AppInfo.Name uses to send invites and password reset links, account requests,
+            and which emails you get as an admin. Without email, you get the links on the Users page to pass on yourself.
         </p>
     </div>
 </div>
@@ -24,116 +25,148 @@
 }
 else
 {
-    <div class="form-cols">
-        <section class="panel form">
-            <h2>Mail server</h2>
-            @if (_view.IsConfigured)
-            {
-                <div class="notice notice-good">Email is on. Sending as @_view.From through @_view.Host.</div>
-            }
-            else
-            {
-                <div class="notice">Email is off. Fill in the server and the sender address to turn it on.</div>
-            }
-
-            <div class="field">
-                <span class="field-label">Fill in for a common provider</span>
-                <div class="actions" style="margin:0">
-                    <button type="button" class="btn btn-ghost btn-sm" @onclick="FillGmail">Gmail</button>
-                    <button type="button" class="btn btn-ghost btn-sm" @onclick="FillBrevo">Brevo</button>
-                </div>
-                @if (_providerHint is not null)
+    <div class="settings">
+        <section class="setting">
+            <div class="setting-intro">
+                <h2>Mail server</h2>
+                <p>Any SMTP server works. Gmail and Brevo can be filled in for you.</p>
+            </div>
+            <div class="setting-body">
+                @if (_view.IsConfigured)
                 {
-                    <span class="field-hint">@_providerHint</span>
+                    <div class="notice notice-good">Email is on. Sending as @_view.From through @_view.Host.</div>
+                }
+                else
+                {
+                    <div class="notice">Email is off. Fill in the server and the sender address to turn it on.</div>
+                }
+
+                <div class="field">
+                    <span class="field-label">Fill in for a common provider</span>
+                    <div class="actions" style="margin:0">
+                        <button type="button" class="btn btn-ghost btn-sm" @onclick="FillGmail">Gmail</button>
+                        <button type="button" class="btn btn-ghost btn-sm" @onclick="FillBrevo">Brevo</button>
+                    </div>
+                    @if (_providerHint is not null)
+                    {
+                        <span class="field-hint">@_providerHint</span>
+                    }
+                </div>
+
+                <label class="field">
+                    <span>SMTP server</span>
+                    <input class="input" @bind="_host" @bind:event="oninput" placeholder="smtp.example.com" autocomplete="off" spellcheck="false" />
+                    <span class="field-hint">Leave empty to turn email off.</span>
+                </label>
+
+                <div class="field-row">
+                    <label class="field">
+                        <span>Port</span>
+                        <input class="input" type="number" min="1" max="65535" @bind="_port" />
+                    </label>
+                    <label class="field">
+                        <span>Encryption</span>
+                        <select class="select" @bind="_security">
+                            <option value="@EmailSecurity.Auto">Automatic</option>
+                            <option value="@EmailSecurity.StartTls">STARTTLS (usually port 587)</option>
+                            <option value="@EmailSecurity.SslOnConnect">SSL/TLS (usually port 465)</option>
+                            <option value="@EmailSecurity.None">None (local relay only)</option>
+                        </select>
+                    </label>
+                </div>
+
+                <label class="field">
+                    <span>Username</span>
+                    @* Sits right before a password field, so browsers would otherwise fill in the Recall login name. *@
+                    <input class="input" @bind="_userName" @bind:event="oninput" autocomplete="off" spellcheck="false"
+                           data-1p-ignore data-lpignore="true" data-bwignore="true" data-form-type="other" />
+                    <span class="field-hint">Leave empty if the server doesn't need a login.</span>
+                </label>
+
+                <KeyField Label="Password" Noun="password" Status="_view.Password" @bind-Value="_password"
+                          OnRemove="() => _removePassword = true" Removing="_removePassword">
+                    <Hint>For Gmail, an app password; for Brevo, an SMTP key.</Hint>
+                </KeyField>
+
+                <div class="field-row">
+                    <label class="field">
+                        <span>Sender address</span>
+                        <input class="input" type="email" @bind="_from" @bind:event="oninput" placeholder="learn@example.com" autocomplete="off" spellcheck="false" />
+                    </label>
+                    <label class="field">
+                        <span>Sender name</span>
+                        <input class="input" @bind="_fromName" @bind:event="oninput" placeholder="@EmailSettingsService.DefaultFromName" />
+                    </label>
+                </div>
+                <span class="field-hint" style="margin-top:-10px">Most providers only send from an address or domain you've verified with them.</span>
+
+                <label class="field">
+                    <span>@(AppInfo.Name)'s address</span>
+                    <input class="input" type="url" @bind="_publicUrl" @bind:event="oninput" placeholder="https://learn.example.com" autocomplete="off" spellcheck="false" />
+                    <span class="field-hint">Links in emails point here. It's the address you're using now, unless people reach the app some other way.</span>
+                </label>
+
+                @foreach (var e in _errors)
+                {
+                    <div class="field-error">@e</div>
+                }
+
+                <div class="actions">
+                    <button type="button" class="btn btn-primary" disabled="@(_saving || IsBusy)" @onclick="SaveClickedAsync">Save settings</button>
+                    <button type="button" class="btn btn-ghost" disabled="@(_saving || IsBusy || string.IsNullOrWhiteSpace(_host))" @onclick="SaveAndTestAsync">Save and send a test email to me</button>
+                </div>
+                @if (IsBusy)
+                {
+                    <p class="muted small">@BusyMessage <button type="button" class="btn btn-ghost btn-sm" @onclick="CancelBusy">Cancel</button></p>
                 }
             </div>
-
-            <label class="field">
-                <span>SMTP server</span>
-                <input class="input" @bind="_host" @bind:event="oninput" placeholder="smtp.example.com" autocomplete="off" spellcheck="false" />
-                <span class="field-hint">Leave empty to turn email off.</span>
-            </label>
-
-            <div class="field-row">
-                <label class="field">
-                    <span>Port</span>
-                    <input class="input" type="number" min="1" max="65535" @bind="_port" />
-                </label>
-                <label class="field">
-                    <span>Encryption</span>
-                    <select class="select" @bind="_security">
-                        <option value="@EmailSecurity.Auto">Automatic</option>
-                        <option value="@EmailSecurity.StartTls">STARTTLS (usually port 587)</option>
-                        <option value="@EmailSecurity.SslOnConnect">SSL/TLS (usually port 465)</option>
-                        <option value="@EmailSecurity.None">None (local relay only)</option>
-                    </select>
-                </label>
-            </div>
-
-            <label class="field">
-                <span>Username</span>
-                @* Sits right before a password field, so browsers would otherwise fill in the Recall login name. *@
-                <input class="input" @bind="_userName" @bind:event="oninput" autocomplete="off" spellcheck="false"
-                       data-1p-ignore data-lpignore="true" data-bwignore="true" data-form-type="other" />
-                <span class="field-hint">Leave empty if the server doesn't need a login.</span>
-            </label>
-
-            <KeyField Label="Password" Noun="password" Status="_view.Password" @bind-Value="_password"
-                      OnRemove="() => _removePassword = true" Removing="_removePassword">
-                <Hint>For Gmail, an app password; for Brevo, an SMTP key.</Hint>
-            </KeyField>
-
-            <div class="field-row">
-                <label class="field">
-                    <span>Sender address</span>
-                    <input class="input" type="email" @bind="_from" @bind:event="oninput" placeholder="learn@example.com" autocomplete="off" spellcheck="false" />
-                </label>
-                <label class="field">
-                    <span>Sender name</span>
-                    <input class="input" @bind="_fromName" @bind:event="oninput" placeholder="@EmailSettingsService.DefaultFromName" />
-                </label>
-            </div>
-            <span class="field-hint" style="margin-top:-10px">Most providers only send from an address or domain you've verified with them.</span>
-
-            <label class="field">
-                <span>@(AppInfo.Name)'s address</span>
-                <input class="input" type="url" @bind="_publicUrl" @bind:event="oninput" placeholder="https://learn.example.com" autocomplete="off" spellcheck="false" />
-                <span class="field-hint">Links in emails point here. It's the address you're using now, unless people reach the app some other way.</span>
-            </label>
-
-            @foreach (var e in _errors)
-            {
-                <div class="field-error">@e</div>
-            }
-
-            <div class="actions">
-                <button type="button" class="btn btn-primary" disabled="@(_saving || IsBusy)" @onclick="SaveClickedAsync">Save settings</button>
-                <button type="button" class="btn btn-ghost" disabled="@(_saving || IsBusy || string.IsNullOrWhiteSpace(_host))" @onclick="SaveAndTestAsync">Save and send a test email to me</button>
-            </div>
-            @if (IsBusy)
-            {
-                <p class="muted small">@BusyMessage <button type="button" class="btn btn-ghost btn-sm" @onclick="CancelBusy">Cancel</button></p>
-            }
         </section>
 
-        <section class="panel form">
-            <h2>Notifications</h2>
-            <label class="check">
-                <input type="checkbox" checked="@_notifyInviteAccepted" @onchange="e => SetNotifyAsync((bool)e.Value!)" />
-                Notify me when invited users join
-            </label>
-            <p class="muted small" style="margin-top:-8px">
-                @(_view.IsConfigured
-                    ? "You get an email when someone you or another admin invited sets their password. Only for you; other admins choose for themselves."
-                    : "Needs email to be on. Until then, nothing is sent.")
-            </p>
-            <label class="check">
-                <input type="checkbox" checked="@_notifyRequests" @onchange="e => SetNotifyRequestsAsync((bool)e.Value!)" />
-                Notify me about account requests
-            </label>
-            <p class="muted small" style="margin-top:-8px">
-                An email when someone asks for an account, while account requests are open (Admin > Users).
-            </p>
+        <section class="setting">
+            <div class="setting-intro">
+                <h2>Account requests</h2>
+                <p>Let people ask for an account from the sign-in page. You approve or decline each one on the Users page.</p>
+            </div>
+            <div class="setting-body">
+                <div class="field">
+                    <label class="check">
+                        <input type="checkbox" checked="@_requestsOpen" disabled="@(!_view.IsConfigured && !_requestsOpen)" @onchange="e => SetRequestsOpenAsync((bool)e.Value!)" />
+                        Let people request an account
+                    </label>
+                    <span class="field-hint">
+                        @(_view.IsConfigured
+                            ? "Adds \"Request an account\" to the sign-in page. Approving sends the usual invite; declining sends a short email."
+                            : "Needs email to be on, since approval and decline are sent by email.")
+                    </span>
+                </div>
+                <div class="field">
+                    <label class="check">
+                        <input type="checkbox" checked="@_notifyRequests" @onchange="e => SetNotifyRequestsAsync((bool)e.Value!)" />
+                        Email me about new requests
+                    </label>
+                    <span class="field-hint">Only for you; other admins choose for themselves.</span>
+                </div>
+            </div>
+        </section>
+
+        <section class="setting">
+            <div class="setting-intro">
+                <h2>Notifications</h2>
+                <p>Emails for you as an admin.</p>
+            </div>
+            <div class="setting-body">
+                <div class="field">
+                    <label class="check">
+                        <input type="checkbox" checked="@_notifyInviteAccepted" @onchange="e => SetNotifyAsync((bool)e.Value!)" />
+                        Notify me when invited users join
+                    </label>
+                    <span class="field-hint">
+                        @(_view.IsConfigured
+                            ? "An email when someone you or another admin invited sets their password. Only for you; other admins choose for themselves."
+                            : "Needs email to be on. Until then, nothing is sent.")
+                    </span>
+                </div>
+            </div>
         </section>
     </div>
 }
@@ -160,10 +193,19 @@ else
     {
         _notifyInviteAccepted = await Mail.GetNotifyInviteAcceptedAsync(await UserIdAsync());
         _notifyRequests = await Mail.GetNotifyAccountRequestsAsync(await UserIdAsync());
+        _requestsOpen = await Requests.IsOpenAsync(PageToken);
         await LoadAsync();
     }
 
     private bool _notifyRequests;
+    private bool _requestsOpen;
+
+    private async Task SetRequestsOpenAsync(bool open)
+    {
+        _requestsOpen = open;
+        await Requests.SetOpenAsync(open, PageToken);
+        Ui.Toast.Success(open ? "People can now request an account from the sign-in page." : "Account requests are closed.");
+    }
 
     private async Task SetNotifyRequestsAsync(bool notify)
     {
