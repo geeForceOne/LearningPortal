@@ -10,8 +10,7 @@ public sealed class AppUser : IdentityUser
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
-    // For the admin statistics (see UserActivityService). Null until first recorded.
-    public DateTime? LastLoginAt { get; set; }
+    // Shown on the admin's Users page (see UserActivityService). Null until first recorded.
     public DateTime? LastActiveAt { get; set; }
 
     // Optional; what the app calls the person. See ShownName for the fallback.

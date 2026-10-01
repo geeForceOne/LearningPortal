@@ -4,6 +4,7 @@
 @inject UserAdminService Users
 @inject AccountMailService Mail
 @inject AccountRequestService Requests
+@inject AdminStatisticsService Stats
 @inject IJSRuntime JS
 
 <PageTitle>Users - @AppInfo.Name</PageTitle>
@@ -58,11 +59,26 @@
             </div>
         }
 
-        <div class="section-head"><h2>Accounts<span class="count">@_users.Count</span></h2></div>
+        <div class="section-head">
+            <h2>Accounts<span class="count">@_users.Count</span></h2>
+            <label class="sort-pick">
+                <span class="muted small">Sort by</span>
+                <select class="select select-sm" @bind="_sort">
+                    <option value="@Sort.Name">Name</option>
+                    <option value="@Sort.LastActive">Last active</option>
+                    <option value="@Sort.Attempts">Attempts</option>
+                </select>
+            </label>
+        </div>
+        <p class="muted small" style="margin-top:8px">
+            Activity counts and dates only: you never see what anyone's topics or questions are about.
+            Last active updates at most every @((int)UserActivityService.ActiveResolution.TotalMinutes) minutes.
+        </p>
         <ul class="rows">
-            @foreach (var u in _users)
+            @foreach (var u in Sorted())
             {
                 var isMe = u.Id == _myId;
+                var usage = _usage.GetValueOrDefault(u.Id);
                 <li class="row" @key="u.Id">
                     <div class="row-main">
                         <span class="row-title">@u.ShownName @(isMe ? "(you)" : "")</span>
@@ -80,6 +96,18 @@
                             }
                             <span>Created @Format.Ago(u.CreatedAt)</span>
                         </div>
+                        @if (usage is not null)
+                        {
+                            <div class="row-meta">
+                                <span title="@(usage.LastActiveAt is { } at ? Format.Date(at) : "")">
+                                    @(usage.LastActiveAt is { } active ? $"Last active {Format.Ago(active)}" : "Not active yet")
+                                </span>
+                                <span>@Format.Plural(usage.Topics, "topic", "topics")</span>
+                                <span>@Format.Plural(usage.Exams, "exam", "exams")</span>
+                                <span>@Format.Plural(usage.BankQuestions, "bank question", "bank questions")</span>
+                                <span>@Format.Plural(usage.Attempts, "attempt", "attempts")</span>
+                            </div>
+                        }
                     </div>
                     <div class="row-actions">
                         <button type="button" class="btn btn-ghost btn-sm" disabled="@_sending" @onclick="() => SendLinkAsync(u)">@(u.HasPassword ? "Send reset link" : "Resend invite")</button>
@@ -172,7 +200,11 @@
 
     private sealed record LinkToShare(string Title, string Reason, string Url, string Validity);
 
+    private enum Sort { Name, LastActive, Attempts }
+
     private IReadOnlyList<UserRow> _users = [];
+    private IReadOnlyDictionary<string, UserUsage> _usage = new Dictionary<string, UserUsage>();
+    private Sort _sort = Sort.Name;
     private string _myId = "";
     private string _newName = "";
     private string _newEmail = "";
@@ -188,10 +220,19 @@
     {
         _myId = await UserIdAsync();
         _users = await Users.ListAsync();
+        _usage = await Stats.GetUsageAsync(PageToken);
         _emailOn = await Mail.EmailConfiguredAsync();
         _requests = await Requests.ListAsync(PageToken);
         _requestsOpen = await Requests.IsOpenAsync(PageToken);
     }
+
+    // Names A to Z (as listed); activity and attempts newest or largest first.
+    private IEnumerable<UserRow> Sorted() => _sort switch
+    {
+        Sort.LastActive => _users.OrderByDescending(u => _usage.GetValueOrDefault(u.Id)?.LastActiveAt ?? DateTime.MinValue),
+        Sort.Attempts => _users.OrderByDescending(u => _usage.GetValueOrDefault(u.Id)?.Attempts ?? 0),
+        _ => _users,
+    };
 
     private async Task SetRequestsOpenAsync(bool open)
     {

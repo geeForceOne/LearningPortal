@@ -1,5 +1,20 @@
 # Release notes
 
+## 1.9.0 - 2026-10-01
+
+### New
+
+- Each topic page has a new **Go deeper** section with four study tools side by side: practise your weak questions, Explain it back, the concept map and Find gaps.
+- Settings links to step-by-step guides for getting a Claude or an OpenAI API key.
+
+### Improved
+
+- Admins see each account's activity on the Users page: when they were last active and how many topics, exams, bank questions and attempts they have, with a choice to sort by name, last activity or attempts. The separate Admin statistics page is gone.
+
+### Fixed
+
+- Minor fixes and updates.
+
 ## 1.8.0 - 2026-09-30
 
 ### New

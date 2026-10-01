@@ -75,11 +75,11 @@ public static class AiModels
 {
     // Default model per provider; users can change them in Settings.
     public const string DefaultClaude = "claude-opus-5-5";
-    public const string DefaultOpenAi = "gpt-6-sol";
+    public const string DefaultOpenAi = "gpt-6.1-sol";
 
     // Neither provider's API reports prices, so these are copied from their pricing pages.
     // Update the list and this date together.
-    public const string PricesAsOf = "September 2026";
+    public const string PricesAsOf = "October 2026";
     public const string ClaudePricingUrl = "https://platform.claude.com/docs/en/about-claude/pricing";
     public const string OpenAiPricingUrl = "https://developers.openai.com/api/docs/pricing";
 
@@ -113,7 +113,8 @@ public static class AiModels
     public static readonly IReadOnlyList<AiModelInfo> OpenAi =
     [
         new("gpt-6-astra", "GPT-6 Astra", "OpenAI's most capable model, at a premium price.", 10m, 50m),
-        new("gpt-6-sol", "GPT-6 Sol", "Balanced quality and price. A good everyday choice.", 2m, 10m),
+        new("gpt-6.1-sol", "GPT-6.1 Sol", "Newest Sol: near-Astra quality at a much lower price. A good everyday choice.", 2m, 10m),
+        new("gpt-6-sol", "GPT-6 Sol", "Previous Sol, same price as GPT-6.1 Sol. Kept for anyone who picked it.", 2m, 10m),
         new("gpt-6-luna", "GPT-6 Luna", "Cheapest and fastest. Fine for easy recall questions; weaker on hard ones.", 0.10m, 0.50m),
     ];
 }

@@ -613,7 +613,19 @@ a.row-title:hover { text-decoration: underline; text-decoration-color: var(--rul
 /* ---------- Forms ---------- */
 
 .form { display: grid; gap: 18px; }
-.form-narrow { max-width: 560px; }
+/* Settings-style pages: two columns of panels or fields on a computer, one on tablets and phones. */
+.form-cols {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 16px 32px;
+    align-items: start;
+}
+
+.form-cols > .panel { margin-top: 0; }
+
+@media (max-width: 960px) {
+    .form-cols { grid-template-columns: minmax(0, 1fr); }
+}
 
 .field { display: grid; gap: 6px; }
 
@@ -639,6 +651,10 @@ a.row-title:hover { text-decoration: underline; text-decoration-color: var(--rul
 }
 
 .textarea { min-height: 120px; resize: vertical; line-height: 1.55; }
+.select-sm { width: auto; min-height: 32px; padding: 4px 8px; font-size: var(--t-sm); }
+
+/* A small "Sort by" picker in a section head. */
+.sort-pick { display: inline-flex; align-items: center; gap: 8px; }
 .textarea.reading { font-family: var(--font-read); font-size: 1.02rem; }
 
 .input:focus,
@@ -780,6 +796,30 @@ a.row-title:hover { text-decoration: underline; text-decoration-color: var(--rul
 .practice-start { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .practice-size { display: inline-flex; align-items: center; gap: 6px; font-size: var(--t-sm); color: var(--pencil); }
 .practice-size .input { width: 4.5em; min-height: 32px; padding: 4px 8px; }
+
+/* Topic page "Go deeper": the study tools as cards, two per row beside the material panel. */
+.tool-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
+.tool-card {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 16px 18px;
+    background: var(--sheet);
+    border: 1px solid var(--rule);
+    border-radius: var(--r-lg);
+    color: var(--ink);
+    text-decoration: none;
+    transition: border-color 120ms;
+}
+a.tool-card:hover, a.tool-card:focus-visible { border-color: var(--pencil); }
+.tool-card-title { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; }
+.tool-card-text { color: var(--pencil); font-size: var(--t-sm); }
+.tool-card .practice-start { margin-top: 6px; }
+.tool-card.is-muted { background: transparent; border-style: dashed; }
+
+@media (max-width: 600px) {
+    .tool-cards { grid-template-columns: minmax(0, 1fr); }
+}
 
 /* Concept map: a topic's sections as tiles, coloured by how well their questions go. */
 .map-legend { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-bottom: 22px; font-size: var(--t-sm); color: var(--pencil); }
@@ -1517,42 +1557,6 @@ details.q-more[open] summary { margin-bottom: 8px; }
 }
 
 .table .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
-
-/* A sortable column header: the whole label is the button. */
-.sort-button {
-    padding: 0;
-    border: 0;
-    background: none;
-    color: inherit;
-    font: inherit;
-    cursor: pointer;
-}
-.sort-button:hover { color: var(--ink); }
-.sort-mark { display: inline-block; min-width: 1em; }
-
-/* Admin usage table; on phones each user becomes a card with labelled values. */
-.usage-name { display: block; font-weight: 600; }
-.usage-email { display: block; overflow-wrap: anywhere; }
-
-@media (max-width: 600px) {
-    .usage-table thead { display: none; }
-    .usage-table, .usage-table tbody, .usage-table tr, .usage-table td { display: block; }
-    .usage-table tr {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 6px 16px;
-        padding: 14px 0;
-        border-bottom: 1px solid var(--rule);
-    }
-    .usage-table td, .usage-table td.num { padding: 0; border: 0; text-align: left; }
-    .usage-table td:first-child { grid-column: 1 / -1; }
-    .usage-table td:not(:first-child)::before {
-        content: attr(data-label);
-        display: block;
-        color: var(--pencil);
-        font-size: var(--t-xs);
-    }
-}
 
 /* Heat cell: the bar is the average score, coloured by grade band. */
 .meter { display: flex; align-items: center; gap: 10px; min-width: 140px; }

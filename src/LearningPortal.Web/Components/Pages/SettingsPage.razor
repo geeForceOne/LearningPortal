@@ -22,53 +22,61 @@
 }
 else
 {
-    <div class="form-narrow">
-        <section class="panel form">
-            <h2>Appearance</h2>
-            <div class="field">
-                <span class="field-label" id="theme-label">Theme</span>
-                <div class="segmented" role="radiogroup" aria-labelledby="theme-label">
-                    @foreach (var theme in Enum.GetValues<Theme>())
-                    {
-                        <label><input type="radio" name="theme" checked="@(_theme == theme)" @onchange="() => SetThemeAsync(theme)" /> @theme</label>
-                    }
+    <div class="form-cols">
+        <div>
+            <section class="panel form">
+                <h2>Appearance</h2>
+                <div class="field">
+                    <span class="field-label" id="theme-label">Theme</span>
+                    <div class="segmented" role="radiogroup" aria-labelledby="theme-label">
+                        @foreach (var theme in Enum.GetValues<Theme>())
+                        {
+                            <label><input type="radio" name="theme" checked="@(_theme == theme)" @onchange="() => SetThemeAsync(theme)" /> @theme</label>
+                        }
+                    </div>
+                    <span class="field-hint">
+                        @(_theme == Theme.System ? "Follows your device's light or dark setting." : "Saved as soon as you pick it.")
+                    </span>
                 </div>
-                <span class="field-hint">
-                    @(_theme == Theme.System ? "Follows your device's light or dark setting." : "Saved as soon as you pick it.")
-                </span>
-            </div>
-        </section>
+            </section>
 
-        <section class="panel form">
-            <h2>API keys</h2>
-            <div class="notice notice-warn" role="note">
-                <strong>@AppInfo.KeySafetyTitle</strong>
-                <p class="key-safety">@AppInfo.KeySafety</p>
-                <p class="key-safety">
-                    For Claude: set the monthly spend limit under Settings &rsaquo; Limits in the Claude Console, and choose an
-                    expiration when you <a href="https://platform.claude.com/settings/keys" target="_blank" rel="noopener noreferrer">create the key</a>.
-                </p>
-                <p class="key-safety">
-                    For OpenAI: set a monthly spend limit, enforced as a hard limit, under Limits in your organization or project
-                    settings, and choose an expiration when you <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer">create the key</a>.
-                </p>
-            </div>
+            <section class="panel form">
+                <h2>API keys</h2>
+                <div class="notice notice-warn" role="note">
+                    <strong>@AppInfo.KeySafetyTitle</strong>
+                    <p class="key-safety">@AppInfo.KeySafety</p>
+                    <p class="key-safety">
+                        For Claude: set a monthly spend limit under Settings &rsaquo; Billing &rsaquo; Spend limits in the Claude Console, and choose an
+                        expiration when you <a href="https://platform.claude.com/settings/keys" target="_blank" rel="noopener noreferrer">create the key</a>.
+                    </p>
+                    <p class="key-safety">
+                        For OpenAI: set a monthly spend limit, enforced as a hard limit, under Limits in your organization or project
+                        settings, and choose an expiration when you <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer">create the key</a>.
+                    </p>
+                </div>
 
-            <KeyField Label="Anthropic API key (Claude)" Status="_view.ClaudeKey" Value="@_claudeKey" ValueChanged="v => KeyTyped(AiProvider.Claude, v)"
-                      OnRemove="() => Remove(AiProvider.Claude)" Removing="_removeClaude" Placeholder="sk-ant-..."
-                      ShowExpiry="HasKeyAfterSave(AiProvider.Claude)" @bind-ExpiresOn="_claudeExpires" SavedExpiresOn="_view.ClaudeKeyExpiresOn">
-                <Hint>Create one at <a href="https://platform.claude.com/settings/keys" target="_blank" rel="noopener noreferrer">platform.claude.com</a> under API keys.</Hint>
-            </KeyField>
-            <KeyField Label="OpenAI API key (ChatGPT)" Status="_view.OpenAiKey" Value="@_openAiKey" ValueChanged="v => KeyTyped(AiProvider.OpenAi, v)"
-                      OnRemove="() => Remove(AiProvider.OpenAi)" Removing="_removeOpenAi" Placeholder="sk-..."
-                      ShowExpiry="HasKeyAfterSave(AiProvider.OpenAi)" @bind-ExpiresOn="_openAiExpires" SavedExpiresOn="_view.OpenAiKeyExpiresOn">
-                <Hint>Create one at <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer">platform.openai.com</a> under API keys.</Hint>
-            </KeyField>
+                <KeyField Label="Anthropic API key (Claude)" Status="_view.ClaudeKey" Value="@_claudeKey" ValueChanged="v => KeyTyped(AiProvider.Claude, v)"
+                          OnRemove="() => Remove(AiProvider.Claude)" Removing="_removeClaude" Placeholder="sk-ant-..."
+                          ShowExpiry="HasKeyAfterSave(AiProvider.Claude)" @bind-ExpiresOn="_claudeExpires" SavedExpiresOn="_view.ClaudeKeyExpiresOn">
+                    <Hint>
+                        Create one at <a href="https://platform.claude.com/settings/keys" target="_blank" rel="noopener noreferrer">platform.claude.com</a> under API keys.
+                        New to API keys? <a href="@AppInfo.ClaudeKeyGuideUrl" target="_blank" rel="noopener noreferrer">Step-by-step guide</a>.
+                    </Hint>
+                </KeyField>
+                <KeyField Label="OpenAI API key (ChatGPT)" Status="_view.OpenAiKey" Value="@_openAiKey" ValueChanged="v => KeyTyped(AiProvider.OpenAi, v)"
+                          OnRemove="() => Remove(AiProvider.OpenAi)" Removing="_removeOpenAi" Placeholder="sk-..."
+                          ShowExpiry="HasKeyAfterSave(AiProvider.OpenAi)" @bind-ExpiresOn="_openAiExpires" SavedExpiresOn="_view.OpenAiKeyExpiresOn">
+                    <Hint>
+                        Create one at <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer">platform.openai.com</a> under API keys.
+                        New to API keys? <a href="@AppInfo.OpenAiKeyGuideUrl" target="_blank" rel="noopener noreferrer">Step-by-step guide</a>.
+                    </Hint>
+                </KeyField>
 
-            <div class="actions">
-                <button type="button" class="btn btn-primary" disabled="@(_savingKeys || !KeysChanged)" @onclick="SaveKeysAsync">Save API keys</button>
-            </div>
-        </section>
+                <div class="actions">
+                    <button type="button" class="btn btn-primary" disabled="@(_savingKeys || !KeysChanged)" @onclick="SaveKeysAsync">Save API keys</button>
+                </div>
+            </section>
+        </div>
 
         <section class="panel form">
             <h2>Models</h2>

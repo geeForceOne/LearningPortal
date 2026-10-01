@@ -6,7 +6,7 @@
 
 <div class="practice-start">
     <button type="button" class="btn btn-secondary btn-sm" disabled="@_starting" @onclick="StartAsync">
-        <Icon Name="redo" Size="14" /> Practice weak questions@(TopicName is null ? "" : $" in {TopicName}")
+        <Icon Name="redo" Size="14" /> @(Label ?? "Practice weak questions")@(TopicName is null ? "" : $" in {TopicName}")
     </button>
     <label class="practice-size">
         <input type="number" class="input" min="1" max="@MaxSize" @bind="_size" aria-label="How many questions" />
@@ -22,6 +22,8 @@
     [Parameter, EditorRequired] public int WeakCount { get; set; }
     // Shown in the button when the page lists several topics.
     [Parameter] public string? TopicName { get; set; }
+    // A shorter button text where the surroundings already say what it practises.
+    [Parameter] public string? Label { get; set; }
 
     private int _size = PracticeService.DefaultSize;
     private bool _starting;

@@ -1,6 +1,23 @@
 @* Name, question count, type, difficulty, (programming topics) the code share and (topics with
    several materials) which material to use: shared by "new exam" and "edit exam". *@
-<div class="form">
+@if (Columns)
+{
+    <div class="form-cols">
+        <div class="form">@Basics</div>
+        <div class="form">@Sources</div>
+    </div>
+}
+else
+{
+    <div class="form">
+        @Basics
+        @Sources
+    </div>
+}
+
+@code {
+    // What the exam asks: name, size, type, difficulty and the code share.
+    private RenderFragment Basics => @<text>
     <label class="field">
         <span>Name</span>
         <input class="input" @bind="Model.Name" @bind:event="oninput" @bind:after="OnChanged.InvokeAsync" maxlength="200" />
@@ -70,7 +87,10 @@
             </span>
         </div>
     }
+    </text>;
 
+    // Where the questions come from: instructions, material and the question bank.
+    private RenderFragment Sources => @<text>
     <label class="field">
         <span>Instructions for the AI <span class="muted">(optional)</span></span>
         <textarea class="textarea" rows="3" maxlength="@ExamService.MaxInstructionsLength"
@@ -147,9 +167,8 @@
             }
         </p>
     }
-</div>
+    </text>;
 
-@code {
     public sealed class Values
     {
         public string Name { get; set; } = "";
@@ -202,4 +221,7 @@
 
     // The topic is a programming topic: show the code/theory share.
     [Parameter] public bool Programming { get; set; }
+
+    // Two columns on a computer (the new-exam page); one stacked form otherwise.
+    [Parameter] public bool Columns { get; set; }
 }

@@ -28,8 +28,8 @@ else
         </div>
     </div>
 
-    <div class="form-narrow">
-        <ExamSettingsForm Model="_values" BankCounts="_bank" Programming="_topic.Summary.IsProgramming" Materials="_materials" OnChanged="OnChangedAsync" />
+    <div>
+        <ExamSettingsForm Model="_values" BankCounts="_bank" Programming="_topic.Summary.IsProgramming" Materials="_materials" OnChanged="OnChangedAsync" Columns="true" />
 
         @if (_settings is { AdvancedModels: true })
         {

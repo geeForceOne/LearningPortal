@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace LearningPortal.Core.Services;
 
-// Records when each person last signed in and last used the app, for the admin statistics.
+// Records when each person last used the app (signing in counts), for the admin's Users page.
 // Written with ExecuteUpdate, so it never touches Identity's concurrency stamp and can't clash
 // with an account change saved at the same moment.
 public sealed class UserActivityService(IDbContextFactory<AppDbContext> dbFactory)
@@ -20,7 +20,7 @@ public sealed class UserActivityService(IDbContextFactory<AppDbContext> dbFactor
         var now = DateTime.UtcNow;
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         await db.Users.Where(u => u.Id == userId)
-            .ExecuteUpdateAsync(s => s.SetProperty(u => u.LastLoginAt, now).SetProperty(u => u.LastActiveAt, now), ct);
+            .ExecuteUpdateAsync(s => s.SetProperty(u => u.LastActiveAt, now), ct);
         _lastStored[userId] = now;
     }
 

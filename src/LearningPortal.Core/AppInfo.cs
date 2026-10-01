@@ -25,6 +25,10 @@ public static class AppInfo
         "date. If you'd rather not take that risk, run your own copy of " + Name + " that isn't reachable " +
         "from the public internet (home network or VPN only).";
 
+    // Step-by-step guides for getting an API key, on the project wiki; linked next to the key fields.
+    public const string ClaudeKeyGuideUrl = "https://github.com/geeForceOne/LearningPortal/wiki/Get-a-Claude-API-key";
+    public const string OpenAiKeyGuideUrl = "https://github.com/geeForceOne/LearningPortal/wiki/Get-an-OpenAI-API-key";
+
     // The running version, e.g. "1.2.0", stamped in at build time from the release tag; "dev" for
     // local builds. Read from the app (entry) assembly, where the host project sets it.
     public static string Version { get; } = ReadVersion();

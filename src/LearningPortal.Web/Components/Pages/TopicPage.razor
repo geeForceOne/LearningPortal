@@ -133,26 +133,44 @@ else
                     </ul>
                 }
 
-                @if (_weakCount > 0)
-                {
-                    <div class="practice-row">
-                        <span class="muted small">@Format.Plural(_weakCount, "question", "questions") here you've answered wrong or only partly right.</span>
-                        <PracticeStart TopicId="TopicId" WeakCount="_weakCount" />
-                    </div>
-                }
             </section>
+
+            @if (_topic.Materials.Count > 0)
+            {
+                <section class="section">
+                    <div class="section-head"><h2>Go deeper</h2></div>
+                    <div class="tool-cards">
+                        <div class="tool-card @(_weakCount == 0 ? "is-muted" : "")">
+                            <span class="tool-card-title"><Icon Name="redo" Size="16" /> Weak questions</span>
+                            @if (_weakCount > 0)
+                            {
+                                <span class="tool-card-text">@Format.Plural(_weakCount, "question", "questions") you've answered wrong or only partly right. No AI, so it costs nothing.</span>
+                                <PracticeStart TopicId="TopicId" WeakCount="_weakCount" Label="Start" />
+                            }
+                            else
+                            {
+                                <span class="tool-card-text">Answer some exam questions first. The ones you miss show up here to practise again.</span>
+                            }
+                        </div>
+                        <a class="tool-card" href="topics/@TopicId/explain">
+                            <span class="tool-card-title"><Icon Name="text" Size="16" /> Explain it back</span>
+                            <span class="tool-card-text">Explain a concept in your own words. Recall asks a question or two, then scores it.</span>
+                        </a>
+                        <a class="tool-card" href="topics/@TopicId/map">
+                            <span class="tool-card-title"><Icon Name="chart" Size="16" /> Concept map</span>
+                            <span class="tool-card-text">See which sections you know well and which need work, and practise one.</span>
+                        </a>
+                        <a class="tool-card" href="topics/@TopicId/gaps">
+                            <span class="tool-card-title"><Icon Name="book" Size="16" /> Find gaps</span>
+                            <span class="tool-card-text">Spot what your material leaves out compared with what the subject usually covers.</span>
+                        </a>
+                    </div>
+                </section>
+            }
 
             <section class="section">
                 <div class="section-head">
                     <h2>Material<span class="count">@_topic.Materials.Count</span></h2>
-                    @if (_topic.Materials.Count > 0)
-                    {
-                        <div class="actions">
-                            <a class="btn btn-ghost btn-sm" href="topics/@TopicId/explain"><Icon Name="text" Size="14" /> Explain it back</a>
-                            <a class="btn btn-ghost btn-sm" href="topics/@TopicId/map"><Icon Name="chart" Size="14" /> Concept map</a>
-                            <a class="btn btn-ghost btn-sm" href="topics/@TopicId/gaps"><Icon Name="book" Size="14" /> Find gaps</a>
-                        </div>
-                    }
                 </div>
 
                 @if (_topic.Materials.Count == 0)

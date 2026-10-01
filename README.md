@@ -33,8 +33,6 @@ amount of study material:
 
 ![Your topics](docs/images/recall-topics.jpg)
 
-![A topic with its exams and material](docs/images/recall-topic.jpg)
-
 ## Exams
 
 Turn a topic into as many exams as you like: pick a name, a question count, the type (multiple
@@ -70,7 +68,20 @@ After each question, or at the end, you see what was right, what you picked, and
 
 ![A written answer graded as partially correct](docs/images/recall-review-written.jpg)
 
-## Explain it back
+## Go deeper
+
+Exams test what you know. The **Go deeper** section on each topic page helps you understand it:
+four tools, side by side, between the exams and the material.
+
+![A topic with its exams, the Go deeper tools and the material](docs/images/recall-topic.jpg)
+
+### Weak questions
+
+Practise exactly the questions you've answered wrong or only partly right in this topic, most
+missed first (10 by default, adjustable). No AI is involved, so it costs nothing. Keep a practice
+run as an exam if it's useful.
+
+### Explain it back
 
 The best test of understanding is explaining something in your own words. Pick a concept from
 your material, or press **Surprise me** and Recall picks one you're weak in or haven't practised.
@@ -83,7 +94,7 @@ against your own sources. Your explanations are kept per topic, so you can look 
 
 ![Explain it back: an explanation, the questions and the feedback](docs/images/recall-explain.jpg)
 
-## Concept map
+### Concept map
 
 A topic's material, section by section, as tiles: sized by how much text each section has and
 coloured by how well you do on the questions written from it (solid, shaky, weak, not practised
@@ -92,7 +103,7 @@ only, so it costs nothing.
 
 ![Concept map: sections coloured by how well you know them](docs/images/recall-concept-map.jpg)
 
-## Find gaps
+### Find gaps
 
 Your material might not cover everything a course on the topic usually does. **Find gaps**
 compares your material with the subject and lists what's missing, with a line on why each part
@@ -119,7 +130,7 @@ See what's sticking and what isn't:
 - Score over time for each exam
 - An overview per topic: average score, attempt count, last practised
 - Weak questions: the ones you get wrong most often, with **Practice weak questions** to drill
-  exactly those (10 by default, no AI cost). Keep a practice run as an exam if it's useful
+  exactly those (also on each topic page under Go deeper)
 - A breakdown by question type and difficulty
 
 ![Statistics: score over time and per topic](docs/images/recall-statistics.jpg)
