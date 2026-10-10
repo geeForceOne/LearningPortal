@@ -22,7 +22,16 @@ else
         <div class="prompt" role="heading" aria-level="1">@_session.Concept</div>
         @if (_source is not null)
         {
-            <p class="source-link" style="margin:0 0 14px"><Icon Name="file" Size="14" /> From @_source</p>
+            @if (_source.Task is not null)
+            {
+                <p class="concept-task" style="margin:0 0 10px">@_source.Task</p>
+            }
+            <p class="source-link" style="margin:0 0 14px"><Icon Name="file" Size="14" /> From @_source.Name</p>
+            @* No task from the AI (older material): what the section covers gives the bare name some context. *@
+            @if (_source.Covers is not null)
+            {
+                <p class="muted small" style="margin:-8px 0 14px">This section covers: @_source.Covers</p>
+            }
         }
 
         @if (_session.Explanation is null)
@@ -114,7 +123,7 @@ else
     private string _explanation = "";
     private string[] _replies = [];
     private string? _error;
-    private string? _source;
+    private ExplainSource? _source;
     private bool _starting;
     private SettingsView? _settings;
     private AiChoice _writeWith = default!;
@@ -128,7 +137,7 @@ else
         {
             var userId = await UserIdAsync();
             _session = await Explain.GetAsync(userId, SessionId, PageToken);
-            _source = await Explain.SourceNameAsync(userId, SessionId, PageToken);
+            _source = await Explain.SourceAsync(userId, SessionId, PageToken);
             if (_settings is null)
             {
                 _settings = await Settings.GetAsync(userId, PageToken);

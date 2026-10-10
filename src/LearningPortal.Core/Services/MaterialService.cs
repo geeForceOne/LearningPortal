@@ -171,10 +171,14 @@ public sealed class MaterialService(
                 || sections.FirstOrDefault(s => s.Index == sectionIndex) is not { } section)
                 continue;
             var cleaned = concepts.EnumerateArray()
-                .Select(c => c.ValueKind == JsonValueKind.String ? c.GetString()!.Trim() : "")
-                .Where(c => c.Length > 0)
-                .Select(c => c.Length <= ExplainSession.MaxConceptLength ? c : c[..ExplainSession.MaxConceptLength])
-                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Where(c => c.ValueKind == JsonValueKind.Object)
+                .Select(c => new
+                {
+                    name = Clip(c.TryGetProperty("name", out var n) ? n.GetString() : null, ExplainSession.MaxConceptLength),
+                    task = Clip(c.TryGetProperty("task", out var t) ? t.GetString() : null, SectionConcept.MaxTaskLength),
+                })
+                .Where(c => c.name.Length > 0)
+                .DistinctBy(c => c.name, StringComparer.OrdinalIgnoreCase)
                 .Take(MaxConceptsPerSection)
                 .ToList();
             section.ConceptsJson = JsonSerializer.Serialize(cleaned);
@@ -182,6 +186,9 @@ public sealed class MaterialService(
     }
 
     private const int MaxConceptsPerSection = 8;
+
+    private static string Clip(string? text, int max) =>
+        text is null ? "" : text.Trim() is var t && t.Length <= max ? t : text.Trim()[..max];
 
     public async Task<MaterialDetail> GetAsync(string userId, int materialId, CancellationToken ct = default)
     {

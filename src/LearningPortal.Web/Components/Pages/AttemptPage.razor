@@ -165,8 +165,8 @@ else
 
         // Answers are revealed at the end, so move straight on. A grading error stays on screen instead.
         await LoadAsync();
-        if (_error is null && _view!.AnsweredCount < _view.Answers.Count)
-            await NextAsync();
+        if (_error is null && NextOpenIndex() is >= 0 and var open)
+            await MoveToAsync(open);
     }
 
     private async Task RetryGradeAsync(int answerId)
@@ -191,11 +191,9 @@ else
         return -1;
     }
 
-    private Task NextAsync()
-    {
-        var next = NextOpenIndex();
-        return MoveToAsync(next >= 0 ? next : Math.Min(_index + 1, _view!.Answers.Count - 1));
-    }
+    // "Next" is the question after this one, answered or not. Past the last one there's no next;
+    // the button there goes to the first question still open instead (see Taking).
+    private Task NextAsync() => MoveToAsync(_index + 1);
 
     private Task PreviousAsync() => MoveToAsync(_index - 1);
 
@@ -433,10 +431,10 @@ else
                 </div>
             }
 
-            <div class="exam-actions">
-                @if (!a.IsAnswered)
-                {
-                    var canSubmit = q.Type == QuestionType.MultipleChoice ? _selected.Count > 0 : !string.IsNullOrWhiteSpace(_written);
+            @if (!a.IsAnswered)
+            {
+                var canSubmit = q.Type == QuestionType.MultipleChoice ? _selected.Count > 0 : !string.IsNullOrWhiteSpace(_written);
+                <div class="exam-actions">
                     <button type="button" class="btn btn-primary btn-lg" disabled="@(IsBusy || !canSubmit)" @onclick="SubmitAsync">
                         @(_revealImmediately ? "Check answer" : "Save answer")
                     </button>
@@ -444,40 +442,53 @@ else
                             title="Better than guessing: it counts as incorrect, and the question comes back in weak-question practice.">
                         I don't know
                     </button>
+                </div>
+            }
+
+            @* Getting around, always in the same place whatever the question's state: back on the
+               left, finishing in the middle, on to the next on the right. The one to press next is
+               the filled one. *@
+            @{
+                var last = _index == _view.Answers.Count - 1;
+                var allAnswered = _view.AnsweredCount == _view.Answers.Count;
+                // Once everything is answered, seeing the results is what's next, wherever you are.
+                var forward = a.IsAnswered && !allAnswered ? "btn-primary" : "btn-ghost";
+            }
+            <div class="exam-nav">
+                <button type="button" class="btn btn-ghost" disabled="@(IsBusy || _index == 0)" @onclick="PreviousAsync">
+                    <Icon Name="left" Size="16" /> <span>Previous<span class="long"> question</span></span>
+                </button>
+
+                <div class="exam-nav-finish">
+                    @if (!allAnswered)
+                    {
+                        <button type="button" class="btn btn-ghost" disabled="@IsBusy" @onclick="FinishAsync">Finish early</button>
+                    }
+                    else if (!last)
+                    {
+                        <button type="button" class="btn btn-primary" disabled="@IsBusy" @onclick="FinishAsync"><Icon Name="flag" Size="16" /> See results</button>
+                    }
+                </div>
+
+                @if (!last)
+                {
+                    <button type="button" class="btn @forward" disabled="@IsBusy" @onclick="NextAsync">
+                        <span>Next<span class="long"> question</span></span> <Icon Name="right" Size="16" />
+                    </button>
+                }
+                else if (allAnswered)
+                {
+                    <button type="button" class="btn btn-primary" disabled="@IsBusy" @onclick="FinishAsync"><Icon Name="flag" Size="16" /> See results</button>
                 }
                 else if (nextOpen >= 0)
                 {
-                    <button type="button" class="btn btn-primary btn-lg" disabled="@IsBusy" @onclick="NextAsync">@NextLabel(nextOpen)</button>
-                }
-
-                <span class="spacer"></span>
-
-                @if (_view.AnsweredCount == _view.Answers.Count)
-                {
-                    <button type="button" class="btn btn-primary btn-lg" disabled="@IsBusy" @onclick="FinishAsync"><Icon Name="flag" /> See results</button>
+                    <button type="button" class="btn @forward" disabled="@IsBusy" @onclick="() => MoveToAsync(nextOpen)">Go to question @(nextOpen + 1)</button>
                 }
                 else
                 {
-                    <button type="button" class="btn btn-ghost" disabled="@IsBusy" @onclick="FinishAsync">Finish early</button>
+                    <button type="button" class="btn btn-ghost" disabled><span>Next<span class="long"> question</span></span> <Icon Name="right" Size="16" /></button>
                 }
             </div>
-
-            @* Moving around without answering: back one, or on to the next open question (skipping
-               this one). Past the last question that wraps round, and the button says where to. *@
-            @if (_index > 0 || (!a.IsAnswered && nextOpen >= 0))
-            {
-                <div class="exam-actions exam-nav">
-                    @if (_index > 0)
-                    {
-                        <button type="button" class="btn btn-ghost" disabled="@IsBusy" @onclick="PreviousAsync"><Icon Name="left" Size="16" /> Previous question</button>
-                    }
-                    <span class="spacer"></span>
-                    @if (!a.IsAnswered && nextOpen >= 0)
-                    {
-                        <button type="button" class="btn btn-ghost" disabled="@IsBusy" @onclick="NextAsync">@NextLabel(nextOpen)</button>
-                    }
-                </div>
-            }
 
             <div style="margin-top:36px;padding-top:16px;border-top:1px solid var(--rule)">
                 <label class="check muted">
@@ -488,10 +499,6 @@ else
             </div>
         </div>
     };
-
-    private RenderFragment NextLabel(int nextOpen) => nextOpen > _index
-        ? @<text>Next question <Icon Name="right" Size="16" /></text>
-        : @<text>Go to question @(nextOpen + 1)</text>;
 
     private RenderFragment Results() => __builder =>
     {

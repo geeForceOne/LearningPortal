@@ -88,9 +88,9 @@ run as an exam if it's useful.
 ### Explain it back
 
 The best test of understanding is explaining something in your own words. Recall lists the
-concepts in your material, one idea at a time and grouped by section. Pick one, or press
-**Surprise me** and Recall picks one from a part you're weak in or haven't practiced. Write your
-explanation as if to someone new to the subject.
+concepts in your material, one idea at a time and grouped by section, each with a line saying
+what to explain about it. Pick one, or press **Surprise me** and Recall picks one from a part
+you're weak in or haven't practiced. Write your explanation as if to someone new to the subject.
 
 ![Explain it back: the concepts to pick from, grouped by section](docs/images/recall-explain-pick.jpg)
 

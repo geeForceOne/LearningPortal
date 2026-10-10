@@ -827,6 +827,9 @@ a.row-title:hover { text-decoration: underline; text-decoration-color: var(--rul
 /* The logo stands in for a spinner; wwwroot/js/brand-motion.js moves its dot. */
 .busy .brand-mark { flex: none; }
 .busy-note { display: block; margin-top: 2px; color: var(--pencil); font-size: var(--t-xs); }
+/* The same moving logo, small, beside a material that's being analyzed. */
+.analyzing { display: inline-flex; align-items: center; gap: 6px; }
+.analyzing .brand-mark { flex: none; }
 
 /* "Practice weak questions": a button with how many questions to take. */
 .practice-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin-top: 14px; }
@@ -908,7 +911,10 @@ a.tool-card:hover, a.tool-card:focus-visible { border-color: var(--pencil); }
 .concept-pick { text-align: left; font-weight: 700; color: var(--ink); }
 /* Explain it back: a section's name over the concepts to pick from it. */
 .concept-section { margin-bottom: 6px; font-size: var(--t-sm); color: var(--pencil); overflow-wrap: anywhere; }
-.concept-list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.concept-list { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+/* What to explain about a concept, under its name. */
+.concept-task { margin-top: 2px; color: var(--ink-soft); font-size: var(--t-sm); line-height: 1.45; overflow-wrap: anywhere; }
+.exam .concept-task { font-size: var(--t-md); }
 .explain-student { display: grid; gap: 12px; margin-top: 18px; }
 .explain-student .follow-up { display: grid; gap: 8px; }
 
@@ -1401,8 +1407,24 @@ a.tool-card:hover, a.tool-card:focus-visible { border-color: var(--pencil); }
 }
 
 .exam-actions .spacer { flex: 1; }
-/* The quieter row under the answer buttons: previous question, skip to the next. */
-.exam-nav { margin-top: 10px; }
+/* Getting around an attempt: previous on the left, finishing in the middle, next on the right.
+   Three fixed columns, so the buttons stay put whatever the question's state. */
+.exam-nav {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 10px;
+    margin-top: 24px;
+}
+
+.exam-actions + .exam-nav { margin-top: 14px; }
+.exam-nav > :first-child { justify-self: start; }
+.exam-nav > :last-child { justify-self: end; }
+.exam-nav-finish { justify-self: center; }
+
+@media (max-width: 520px) {
+    .exam-nav .long { display: none; }
+}
 
 .result-line {
     display: flex;

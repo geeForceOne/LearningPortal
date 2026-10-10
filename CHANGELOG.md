@@ -5,11 +5,11 @@
 ### New
 
 - **Print an exam**: print it or save it as a PDF to practice away from the screen, with the "Print" button on the exam page. Add the answer key, with answers and explanations, if you want it; it starts on a new page.
-- **Previous question**: go back to the question before while taking an exam. "Next question" is now always there too, so you can skip a question and come back to it. At the end, Recall lists the questions you haven't answered yet.
+- **Previous question**: go back to the question before while taking an exam. "Next question" is now always there too, so you can skip a question and come back to it, and both buttons stay in the same place. At the end, Recall lists the questions you haven't answered yet.
 
 ### Improved
 
-- **Explain it back** asks about one concept at a time. Concepts are grouped by section, and "Surprise me" picks a single one. For material you add from now on, Recall lists the concepts itself; older material can be analyzed again from the Explain it back page to get the same.
+- **Explain it back** asks about one concept at a time, with a line saying what to explain about it. Concepts are grouped by section, and "Surprise me" picks a single one. For material you add from now on, Recall lists the concepts itself; older material can be analyzed again from the Explain it back page to get the same.
 
 ### Fixed
 

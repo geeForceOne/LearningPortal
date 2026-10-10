@@ -46,28 +46,29 @@ else
     }
 
     @* Material analyzed before Recall listed the concepts itself: they're split from its outline. *@
-    @if (_older is { Count: > 0 })
+    @if (_older is { Count: > 0 } && _older.Any(m => Analysis.IsPending(m.MaterialId)))
+    {
+        @* The analysis runs in the background queue and can't be stopped, so there's no Cancel. *@
+        <div style="margin-bottom:20px">
+            <BusyBar Message="Recall is analyzing your material again..."
+                     Note="The concepts update here when it's done. You can leave this page." />
+        </div>
+    }
+    else if (_older is { Count: > 0 })
     {
         <div class="notice" style="margin-bottom:20px">
-            @if (_older.Any(m => Analysis.IsPending(m.MaterialId)))
+            <span>@OlderText() come from an older outline, so some can read oddly.</span>
+            <button type="button" class="link-button" @onclick="AnalyzeAgainAsync">@(_older.Count == 1 ? "Analyze it again" : "Analyze them again")</button>
+            <span>to have Recall list them properly@(AnalyzeCost() is { } cost ? $" ({cost})" : "").</span>
+            @if (_older.FirstOrDefault(m => m.Error is not null) is { } failed)
             {
-                <span>Recall is analyzing your material again. The concepts update here when it's done.</span>
+                <div style="margin-top:6px;color:var(--wrong)">The last try failed: @failed.Error</div>
             }
-            else
+            @if (_settings is { AdvancedModels: true })
             {
-                <span>@OlderText() come from an older outline, so some can read oddly.</span>
-                <button type="button" class="link-button" @onclick="AnalyzeAgainAsync">@(_older.Count == 1 ? "Analyze it again" : "Analyze them again")</button>
-                <span>to have Recall list them properly@(AnalyzeCost() is { } cost ? $" ({cost})" : "").</span>
-                @if (_older.FirstOrDefault(m => m.Error is not null) is { } failed)
-                {
-                    <div style="margin-top:6px;color:var(--wrong)">The last try failed: @failed.Error</div>
-                }
-                @if (_settings is { AdvancedModels: true })
-                {
-                    <div style="margin-top:10px;max-width:520px">
-                        <AiModelSelect Label="Outline with" Value="_outlineWith" ValueChanged="SetOutlineModel" Available="_settings.HasKey" Inline="true" />
-                    </div>
-                }
+                <div style="margin-top:10px;max-width:520px">
+                    <AiModelSelect Label="Outline with" Value="_outlineWith" ValueChanged="SetOutlineModel" Available="_settings.HasKey" Inline="true" />
+                </div>
             }
         </div>
     }
@@ -95,6 +96,10 @@ else
                                         var concept = c;
                                         <li @key="concept.Label">
                                             <button type="button" class="link-button concept-pick" disabled="@_starting" @onclick="() => StartAsync(concept)">@concept.Label</button>
+                                            @if (concept.Task is not null)
+                                            {
+                                                <div class="concept-task">@concept.Task</div>
+                                            }
                                         </li>
                                     }
                                 </ul>

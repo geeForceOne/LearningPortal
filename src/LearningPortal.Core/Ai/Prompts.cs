@@ -21,7 +21,18 @@ public static class Prompts
                 "type": "object",
                 "properties": {
                   "section_index": { "type": "integer" },
-                  "concepts": { "type": "array", "items": { "type": "string" } }
+                  "concepts": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "name": { "type": "string" },
+                        "task": { "type": "string" }
+                      },
+                      "required": ["name", "task"],
+                      "additionalProperties": false
+                    }
+                  }
                 },
                 "required": ["section_index", "concepts"],
                 "additionalProperties": false
@@ -53,10 +64,13 @@ public static class Prompts
             which parts of the material to ask about, not to replace the material.
 
             Separately, in "concepts", list for every section the concepts a student should be able
-            to explain in their own words: up to 6 per section, the most important first. Each one is
-            a short phrase that names a single idea and makes sense on its own, without seeing the
-            section: "The Three Assurances in safer-sex talks", not "Vulnerability" or "Questions
-            16-20". Give a section an empty list when it has nothing to explain, such as a table of
+            to explain in their own words: up to 6 per section, the most important first. Each has:
+            - "name": a short phrase that names a single idea.
+            - "task": one sentence telling the student what to explain about it, with the context
+              the bare name lacks, so it makes sense to someone who can't see the section. It says
+              what to cover, never the answer. For the name "Safety warnings": "Explain which
+              warnings the manual gives for charging the battery, and why each one matters."
+            Give a section an empty list when it has nothing to explain, such as a table of
             contents, an index or a list of references.
             """);
         return sb.ToString();

@@ -131,6 +131,38 @@ public sealed class Material
     public List<MaterialSection> Sections { get; set; } = [];
 }
 
+// One idea to explain: its name, and a line saying what to explain about it (with the context
+// the bare name lacks, but not the answer).
+public sealed record SectionConcept(string Name, string? Task)
+{
+    public const int MaxTaskLength = 300;
+
+    public static IReadOnlyList<SectionConcept>? Parse(string? json)
+    {
+        if (json is null)
+            return null;
+        var list = new List<SectionConcept>();
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(json);
+            foreach (var item in doc.RootElement.EnumerateArray())
+            {
+                // A bare string is a name without a task (lists written by early 1.11.0 builds).
+                if (item.ValueKind == System.Text.Json.JsonValueKind.String)
+                    list.Add(new SectionConcept(item.GetString()!, null));
+                else if (item.ValueKind == System.Text.Json.JsonValueKind.Object && item.TryGetProperty("name", out var name))
+                    list.Add(new SectionConcept(name.GetString() ?? "",
+                        item.TryGetProperty("task", out var task) && !string.IsNullOrWhiteSpace(task.GetString()) ? task.GetString() : null));
+            }
+        }
+        catch (Exception ex) when (ex is System.Text.Json.JsonException or InvalidOperationException)
+        {
+            return null;
+        }
+        return list.Where(c => c.Name.Length > 0).ToList();
+    }
+}
+
 public sealed class MaterialSection
 {
     public int Id { get; set; }
@@ -140,14 +172,16 @@ public sealed class MaterialSection
     public string Text { get; set; } = "";
     public int TokenEstimate { get; set; }
     // The concepts in this section worth explaining in one's own words, listed by the AI along
-    // with the outline, as a JSON string array. Null for material analyzed before 1.11.0; an
-    // empty list means the section has nothing to explain (a table of contents, references).
+    // with the outline, as JSON: [{"name": "...", "task": "..."}]. Null for material analyzed
+    // before 1.11.0; an empty list means the section has nothing to explain (a table of contents,
+    // references).
     public string? ConceptsJson { get; set; }
 
     public Material? Material { get; set; }
 
-    public IReadOnlyList<string>? Concepts =>
-        ConceptsJson is null ? null : System.Text.Json.JsonSerializer.Deserialize<List<string>>(ConceptsJson) ?? [];
+    // Read from ConceptsJson; not a table of its own.
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+    public IReadOnlyList<SectionConcept>? Concepts => SectionConcept.Parse(ConceptsJson);
 }
 
 // A question in a topic's bank. Exams reference bank questions rather than owning copies, so a

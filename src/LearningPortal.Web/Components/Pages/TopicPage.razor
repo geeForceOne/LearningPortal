@@ -342,14 +342,16 @@ else
         });
     }
 
+    // Being analyzed comes first: material that's already outlined can be analyzed again (from
+    // Explain it back), and shows it here too.
     private RenderFragment AnalysisState(MaterialSummary m) => m.AnalysisStatus switch
     {
+        _ when Analysis.IsPending(m.Id) => @<span class="analyzing"><BrandMark Size="18" Busy="true" /> Analyzing...</span>,
         AnalysisStatus.Done => @<span></span>,
         AnalysisStatus.Failed => @<span style="color:var(--wrong)">
             Analysis failed: @m.AnalysisError
             <button type="button" class="link-button" @onclick="() => Reanalyze(m.Id)">Try again</button>@CostHint(m.TokenEstimate)
         </span>,
-        _ when Analysis.IsPending(m.Id) => @<span>Analyzing...</span>,
         _ => @<span>Not analyzed <button type="button" class="link-button" @onclick="() => Reanalyze(m.Id)">Analyze now</button>@CostHint(m.TokenEstimate)</span>,
     };
 

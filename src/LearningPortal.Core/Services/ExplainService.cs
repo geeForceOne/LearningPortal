@@ -10,7 +10,12 @@ namespace LearningPortal.Core.Services;
 // A concept the user can explain: one idea from a section of the material. The AI lists them per
 // section when it outlines the material; material analyzed before that gets the key concepts of
 // its outline line, split at the commas, or the section's name when there's no outline.
-public sealed record ExplainConcept(int SectionId, string MaterialTitle, string SectionName, string Label, string State);
+// Task: the AI's line on what to explain about it; null for a concept from the fallback.
+public sealed record ExplainConcept(int SectionId, string MaterialTitle, string SectionName, string Label, string? Task, string State);
+
+// Where a session's concept comes from ("Material / Section"), what to explain about it, and,
+// when the AI wrote no task for it, what else its section covers, for context.
+public sealed record ExplainSource(string Name, string? Task, string? Covers);
 
 // Material whose concepts still come from splitting its outline; analyzing it again lists them properly.
 // Error: why the last try at that failed.
@@ -41,10 +46,10 @@ public sealed class ExplainService(
         {
             foreach (var s in material.Sections)
             {
-                IReadOnlyList<string> labels = listed.TryGetValue(s.SectionId, out var fromAi) ? fromAi
-                    : SectionNames.SplitConcepts(s.Concepts) is { Count: > 0 } split ? split
-                    : [s.Name];
-                concepts.AddRange(labels.Select(label => new ExplainConcept(s.SectionId, material.Title, s.Name, Truncate(label), StateOf(s))));
+                IReadOnlyList<SectionConcept> found = listed.GetValueOrDefault(s.SectionId) is { } fromAi ? fromAi
+                    : SectionNames.SplitConcepts(s.Concepts) is { Count: > 0 } split ? split.Select(c => new SectionConcept(c, null)).ToList()
+                    : [new SectionConcept(s.Name, null)];
+                concepts.AddRange(found.Select(c => new ExplainConcept(s.SectionId, material.Title, s.Name, Truncate(c.Name), c.Task, StateOf(s))));
             }
         }
         return concepts;
@@ -55,7 +60,7 @@ public sealed class ExplainService(
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         return await db.Materials.AsNoTracking()
             .Where(m => m.UserId == userId && m.TopicId == topicId && m.Outline != null
-                && m.Sections.Any(s => s.ConceptsJson == null))
+                && m.Sections.Any(s => s.ConceptsJson == null || s.ConceptsJson.StartsWith("[\"")))
             .OrderBy(m => m.CreatedAt)
             .Select(m => new ConceptRefresh(m.Id, m.Title, m.TokenEstimate,
                 m.AnalysisStatus == AnalysisStatus.Failed ? m.AnalysisError : null))
@@ -102,24 +107,36 @@ public sealed class ExplainService(
             .FirstOrDefaultAsync(s => s.Id == sessionId && s.UserId == userId, ct) ?? throw new NotFoundException();
     }
 
-    // "Material / Section" for the section a session's concept comes from; null when the material
-    // has since been deleted.
-    public async Task<string?> SourceNameAsync(string userId, int sessionId, CancellationToken ct = default)
+    // Null when the material has since been deleted.
+    public async Task<ExplainSource?> SourceAsync(string userId, int sessionId, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var sectionId = await db.ExplainSessions.Where(s => s.Id == sessionId && s.UserId == userId).Select(s => s.SectionId).FirstOrDefaultAsync(ct);
+        var session = await db.ExplainSessions.AsNoTracking().Where(s => s.Id == sessionId && s.UserId == userId)
+            .Select(s => new { s.SectionId, s.Concept }).FirstOrDefaultAsync(ct);
+        if (session?.SectionId is not { } sectionId)
+            return null;
         var material = await db.Materials.AsNoTracking()
             .Where(m => m.UserId == userId && m.Sections.Any(s => s.Id == sectionId))
             .Select(m => new Material
             {
                 Id = m.Id, Title = m.Title, Outline = m.Outline,
-                Sections = m.Sections.Select(s => new MaterialSection { Id = s.Id, MaterialId = s.MaterialId, Index = s.Index, Heading = s.Heading }).ToList(),
+                Sections = m.Sections.Select(s => new MaterialSection { Id = s.Id, MaterialId = s.MaterialId, Index = s.Index, Heading = s.Heading, ConceptsJson = s.ConceptsJson }).ToList(),
             })
             .FirstOrDefaultAsync(ct);
-        return material?.Sections.FirstOrDefault(s => s.Id == sectionId) is { } section
-            ? QuestionGenerationService.SourceLabel(material, section)
+        if (material?.Sections.FirstOrDefault(s => s.Id == sectionId) is not { } section)
+            return null;
+
+        var task = TaskFor(section.Concepts, session.Concept);
+        var covers = task is null
+            ? SectionNames.For(material.Title, material.Outline, material.Sections.Select(s => (s.Index, s.Heading)))[section.Index].Concepts
             : null;
+        return new ExplainSource(QuestionGenerationService.SourceLabel(material, section), task, covers);
     }
+
+    // The session keeps only the concept's name; its task is looked up, so it's gone if a later
+    // analysis renamed the concept.
+    private static string? TaskFor(IReadOnlyList<SectionConcept>? concepts, string concept) =>
+        concepts?.FirstOrDefault(c => Truncate(c.Name).Equals(concept, StringComparison.OrdinalIgnoreCase))?.Task;
 
     public async Task<IReadOnlyList<ExplainSummary>> ListAsync(string userId, int topicId, CancellationToken ct = default)
     {
@@ -151,13 +168,13 @@ public sealed class ExplainService(
         var session = await LoadAsync(db, userId, sessionId, ct);
         if (session.Questions.Count > 0)
             throw new InvalidOperationException("This explanation already has its questions.");
-        var (language, source) = await ContextAsync(db, session, ct);
+        var (language, source, concept) = await ContextAsync(db, session, ct);
 
         var connection = await settings.GetConnectionAsync(userId, AiTask.Generation, choice, ct);
         var json = await AiClientFactory.Create(connection).CompleteJsonAsync(new AiRequest
         {
             System = Prompts.ExplainQuestionsSystem(language),
-            Prompt = Prompts.ExplainPrompt(session.Concept, source, text),
+            Prompt = Prompts.ExplainPrompt(concept, source, text),
             SchemaName = "explain_questions",
             Schema = Prompts.ExplainQuestionsSchema,
             MaxTokens = 2_000,
@@ -197,13 +214,13 @@ public sealed class ExplainService(
             throw new InvalidOperationException("Write your explanation first.");
         if (session.CompletedAt is not null)
             throw new InvalidOperationException("This explanation has already been assessed.");
-        var (language, source) = await ContextAsync(db, session, ct);
+        var (language, source, concept) = await ContextAsync(db, session, ct);
 
         var connection = await settings.GetConnectionAsync(userId, AiTask.Generation, choice, ct);
         var json = await AiClientFactory.Create(connection).CompleteJsonAsync(new AiRequest
         {
             System = Prompts.ExplainAssessmentSystem(language),
-            Prompt = Prompts.ExplainPrompt(session.Concept, source, session.Explanation, session.Questions, cleaned),
+            Prompt = Prompts.ExplainPrompt(concept, source, session.Explanation, session.Questions, cleaned),
             SchemaName = "explain_assessment",
             Schema = Prompts.ExplainAssessmentSchema,
             MaxTokens = 4_000,
@@ -229,13 +246,16 @@ public sealed class ExplainService(
     private static async Task<ExplainSession> LoadAsync(AppDbContext db, string userId, int sessionId, CancellationToken ct) =>
         await db.ExplainSessions.FirstOrDefaultAsync(s => s.Id == sessionId && s.UserId == userId, ct) ?? throw new NotFoundException();
 
-    private static async Task<(string Language, string? Source)> ContextAsync(AppDbContext db, ExplainSession session, CancellationToken ct)
+    // The concept as the AI sees it: with its task, when there is one, so it judges the same
+    // thing the user was asked to explain.
+    private static async Task<(string Language, string? Source, string Concept)> ContextAsync(AppDbContext db, ExplainSession session, CancellationToken ct)
     {
         var language = await db.Topics.Where(t => t.Id == session.TopicId).Select(t => t.Language).FirstAsync(ct);
-        var source = session.SectionId is { } sid
-            ? await db.MaterialSections.Where(s => s.Id == sid).Select(s => s.Text).FirstOrDefaultAsync(ct)
+        var section = session.SectionId is { } sid
+            ? await db.MaterialSections.AsNoTracking().Where(s => s.Id == sid).Select(s => new MaterialSection { Text = s.Text, ConceptsJson = s.ConceptsJson }).FirstOrDefaultAsync(ct)
             : null;
-        return (language, source);
+        var concept = TaskFor(section?.Concepts, session.Concept) is { } task ? $"{session.Concept}\n{task}" : session.Concept;
+        return (language, section?.Text, concept);
     }
 
     private static string StateOf(SectionScore s) => s.QuestionCount == 0 ? "empty"
