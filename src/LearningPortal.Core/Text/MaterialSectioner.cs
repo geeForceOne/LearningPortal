@@ -7,7 +7,7 @@ public sealed record SectionDraft(string Heading, string Text);
 
 // Splits a material's text into sections that can be sent to the AI on their own: at headings
 // (Markdown or LaTeX) where the material has them, by size where it doesn't. Tiny sections are
-// merged into their neighbour and oversized ones are cut at paragraph breaks, so every section
+// merged into their neighbor and oversized ones are cut at paragraph breaks, so every section
 // lands near the target size.
 public static partial class MaterialSectioner
 {

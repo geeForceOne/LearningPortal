@@ -177,13 +177,47 @@ else
         await LoadAsync();
     }
 
-    private async Task NextAsync()
+    // The next unanswered question after this one, wrapping round to the start; -1 when there's
+    // no other one.
+    private int NextOpenIndex()
     {
-        var next = _view!.Answers.ToList().FindIndex(_index + 1, a => !a.IsAnswered);
-        if (next < 0) next = _view.Answers.ToList().FindIndex(a => !a.IsAnswered);
-        GoTo(next >= 0 ? next : Math.Min(_index + 1, _view.Answers.Count - 1));
+        var answers = _view!.Answers;
+        for (var step = 1; step < answers.Count; step++)
+        {
+            var i = (_index + step) % answers.Count;
+            if (!answers[i].IsAnswered)
+                return i;
+        }
+        return -1;
+    }
+
+    private Task NextAsync()
+    {
+        var next = NextOpenIndex();
+        return MoveToAsync(next >= 0 ? next : Math.Min(_index + 1, _view!.Answers.Count - 1));
+    }
+
+    private Task PreviousAsync() => MoveToAsync(_index - 1);
+
+    // Leaving a question unanswered (skipping it, or going back) keeps the time spent on it.
+    private async Task MoveToAsync(int index)
+    {
+        if (!Current.IsAnswered && ElapsedSeconds() is > 0 and var seconds)
+        {
+            try { await Attempts.AddActiveTimeAsync(await UserIdAsync(), AttemptId, seconds); }
+            catch { /* best effort */ }
+        }
+        GoTo(index);
         await ScrollTopAsync();
     }
+
+    // "2", "2 and 5", "2, 4 and 5"
+    private static string NumberList(IReadOnlyList<int> numbers) => numbers.Count switch
+    {
+        0 => "",
+        1 => $"{numbers[0]}",
+        _ => $"{string.Join(", ", numbers.Take(numbers.Count - 1))} and {numbers[^1]}",
+    };
 
     private async Task SetRevealPreference(bool value)
     {
@@ -194,9 +228,16 @@ else
 
     private async Task FinishAsync()
     {
-        var open = _view!.Answers.Count(a => !a.IsAnswered);
-        if (open > 0 && !await Ui.Confirm.AskAsync("Finish the exam?",
-                $"{Format.Plural(open, "question is", "questions are")} still unanswered and will count as incorrect.",
+        var open = _view!.Answers.Select((a, i) => (Answer: a, Number: i + 1)).Where(x => !x.Answer.IsAnswered).Select(x => x.Number).ToList();
+        // A few are named; a long list (finishing early) is just counted.
+        var which = open.Count switch
+        {
+            1 => $"Question {open[0]} is",
+            <= 5 => $"Questions {NumberList(open)} are",
+            _ => $"{open.Count} questions are",
+        };
+        if (open.Count > 0 && !await Ui.Confirm.AskAsync("Finish the exam?",
+                $"{which} still unanswered and will count as incorrect.",
                 "Finish exam"))
             return;
 
@@ -281,6 +322,7 @@ else
     {
         var q = CurrentQuestion;
         var a = Current;
+        var nextOpen = NextOpenIndex();
         <div class="exam">
             <div class="exam-top">
                 <a href="@ExamHref" class="muted" style="text-decoration:none">&larr; @_view!.Exam.Name</a>
@@ -375,6 +417,22 @@ else
                 <div style="margin-top:16px"><BusyBar Message="@BusyMessage" /></div>
             }
 
+            @* At the end, skipped questions are easy to forget: name them, each a way back. *@
+            @if (_index == _view.Answers.Count - 1 && nextOpen >= 0)
+            {
+                var skipped = Enumerable.Range(0, _view.Answers.Count).Where(i => i != _index && !_view.Answers[i].IsAnswered).ToList();
+                <div class="notice" style="margin-top:16px">
+                    @(skipped.Count == 1 ? "Question" : "Questions")
+                    @for (var i = 0; i < skipped.Count; i++)
+                    {
+                        var target = skipped[i];
+                        var separator = i == 0 ? " " : i == skipped.Count - 1 ? " and " : ", ";
+                        @separator<button type="button" class="link-button" disabled="@IsBusy" @onclick="() => MoveToAsync(target)">@(target + 1)</button>
+                    }
+                    @(skipped.Count == 1 ? " isn't answered yet." : " aren't answered yet.")
+                </div>
+            }
+
             <div class="exam-actions">
                 @if (!a.IsAnswered)
                 {
@@ -387,10 +445,9 @@ else
                         I don't know
                     </button>
                 }
-
-                @if (a.IsAnswered && _view.AnsweredCount < _view.Answers.Count)
+                else if (nextOpen >= 0)
                 {
-                    <button type="button" class="btn btn-primary btn-lg" @onclick="NextAsync">Next question <Icon Name="right" /></button>
+                    <button type="button" class="btn btn-primary btn-lg" disabled="@IsBusy" @onclick="NextAsync">@NextLabel(nextOpen)</button>
                 }
 
                 <span class="spacer"></span>
@@ -405,6 +462,23 @@ else
                 }
             </div>
 
+            @* Moving around without answering: back one, or on to the next open question (skipping
+               this one). Past the last question that wraps round, and the button says where to. *@
+            @if (_index > 0 || (!a.IsAnswered && nextOpen >= 0))
+            {
+                <div class="exam-actions exam-nav">
+                    @if (_index > 0)
+                    {
+                        <button type="button" class="btn btn-ghost" disabled="@IsBusy" @onclick="PreviousAsync"><Icon Name="left" Size="16" /> Previous question</button>
+                    }
+                    <span class="spacer"></span>
+                    @if (!a.IsAnswered && nextOpen >= 0)
+                    {
+                        <button type="button" class="btn btn-ghost" disabled="@IsBusy" @onclick="NextAsync">@NextLabel(nextOpen)</button>
+                    }
+                </div>
+            }
+
             <div style="margin-top:36px;padding-top:16px;border-top:1px solid var(--rule)">
                 <label class="check muted">
                     <input type="checkbox" checked="@_revealImmediately" @onchange="e => SetRevealPreference((bool)e.Value!)" />
@@ -414,6 +488,10 @@ else
             </div>
         </div>
     };
+
+    private RenderFragment NextLabel(int nextOpen) => nextOpen > _index
+        ? @<text>Next question <Icon Name="right" Size="16" /></text>
+        : @<text>Go to question @(nextOpen + 1)</text>;
 
     private RenderFragment Results() => __builder =>
     {
@@ -456,7 +534,7 @@ else
                     <a class="btn btn-ghost" href="topics/@_view.Topic.Id">Back to topic</a>
                     <a class="btn btn-ghost" href="statistics?topic=@_view.Topic.Id">Statistics</a>
                 </div>
-                <p class="muted small">Practising again picks your weakest questions as they are then. "Save as exam" keeps these questions as an exam you can repeat and edit.</p>
+                <p class="muted small">Practicing again picks your weakest questions as they are then. "Save as exam" keeps these questions as an exam you can repeat and edit.</p>
             }
             else
             {

@@ -80,7 +80,7 @@ else
                         }
                         else
                         {
-                            <p>No exams yet. Create one to start practising.</p>
+                            <p>No exams yet. Create one to start practicing.</p>
                             <a class="btn btn-primary" href="topics/@TopicId/exams/new"><Icon Name="plus" /> Create an exam</a>
                         }
                     </div>
@@ -149,7 +149,7 @@ else
                             }
                             else
                             {
-                                <span class="tool-card-text">Answer some exam questions first. The ones you miss show up here to practise again.</span>
+                                <span class="tool-card-text">Answer some exam questions first. The ones you miss show up here to practice again.</span>
                             }
                         </div>
                         <a class="tool-card" href="topics/@TopicId/explain">
@@ -158,7 +158,7 @@ else
                         </a>
                         <a class="tool-card" href="topics/@TopicId/map">
                             <span class="tool-card-title"><Icon Name="chart" Size="16" /> Concept map</span>
-                            <span class="tool-card-text">See which sections you know well and which need work, and practise one.</span>
+                            <span class="tool-card-text">See which sections you know well and which need work, and practice one.</span>
                         </a>
                         <a class="tool-card" href="topics/@TopicId/gaps">
                             <span class="tool-card-title"><Icon Name="book" Size="16" /> Find gaps</span>
@@ -349,8 +349,8 @@ else
             Analysis failed: @m.AnalysisError
             <button type="button" class="link-button" @onclick="() => Reanalyze(m.Id)">Try again</button>@CostHint(m.TokenEstimate)
         </span>,
-        _ when Analysis.IsPending(m.Id) => @<span>Analysing...</span>,
-        _ => @<span>Not analysed <button type="button" class="link-button" @onclick="() => Reanalyze(m.Id)">Analyse now</button>@CostHint(m.TokenEstimate)</span>,
+        _ when Analysis.IsPending(m.Id) => @<span>Analyzing...</span>,
+        _ => @<span>Not analyzed <button type="button" class="link-button" @onclick="() => Reanalyze(m.Id)">Analyze now</button>@CostHint(m.TokenEstimate)</span>,
     };
 
     private void SetOutlineModel(AiChoice choice)
@@ -412,8 +412,8 @@ else
     }
 
     // Analysis sends the whole material to the AI, billed to the user's key. Normal-sized material
-    // is analysed right away; unusually large material is confirmed first, and if declined it stays
-    // "Not analysed" with an "Analyse now" link.
+    // is analyzed right away; unusually large material is confirmed first, and if declined it stays
+    // "Not analyzed" with an "Analyze now" link.
     private async Task StartAnalysisAsync(string userId, List<(string Name, AddedMaterial Material)> added, string what)
     {
         var started = new List<AddedMaterial>();
@@ -422,10 +422,10 @@ else
             if (Options.IsLargeGeneration(material.TokenEstimate, _model))
             {
                 var cost = Format.AnalysisCost(material.TokenEstimate, _model);
-                var go = await Ui.Confirm.AskAsync("This is a large file to analyse",
+                var go = await Ui.Confirm.AskAsync("This is a large file to analyze",
                     $"\"{name}\" is about {Format.Tokens(material.TokenEstimate)}. The AI reads all of it once to outline it" +
-                    (cost is null ? "" : $", {cost}") + ". That's billed to your API key. You can also analyse it later. Analyse now?",
-                    "Analyse now");
+                    (cost is null ? "" : $", {cost}") + ". That's billed to your API key. You can also analyze it later. Analyze now?",
+                    "Analyze now");
                 if (!go)
                     continue;
             }
@@ -435,14 +435,14 @@ else
 
         if (started.Count == 0)
         {
-            Ui.Toast.Success($"{what}. It isn't analysed yet; use Analyse now when you're ready.");
+            Ui.Toast.Success($"{what}. It isn't analyzed yet; use Analyze now when you're ready.");
             return;
         }
 
         // The cost is mentioned only when it's worth noticing; a few cents isn't.
         var them = started.Count == 1 ? "it" : "them";
-        var estimate = Format.CostHint(started.Sum(m => m.TokenEstimate), _model) is { } c ? $" Analysing {them} takes {c}." : "";
-        Ui.Toast.Success($"{what}.{estimate} Recall is analysing {them} now.");
+        var estimate = Format.CostHint(started.Sum(m => m.TokenEstimate), _model) is { } c ? $" Analyzing {them} takes {c}." : "";
+        Ui.Toast.Success($"{what}.{estimate} Recall is analyzing {them} now.");
     }
 
     private async Task Reanalyze(int materialId)

@@ -53,7 +53,7 @@
     private ElementReference _emailInput;
     private TaskCompletionSource<bool>? _tcs;
 
-    // Resolves to true once create succeeded (it returns no errors), false if cancelled.
+    // Resolves to true once create succeeded (it returns no errors), false if canceled.
     public Task<bool> AskAsync(bool emailOn, Func<NewAccount, Task<IReadOnlyList<string>>> create)
     {
         _tcs?.TrySetResult(false);

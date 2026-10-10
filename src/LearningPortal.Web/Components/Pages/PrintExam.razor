@@ -1,0 +1,171 @@
+@page "/exams/{ExamId:int}/print"
+@inherits AppPage
+@inject ExamService Exams
+@inject IJSRuntime JS
+
+<PageTitle>@(_detail?.Exam.Name ?? "Print exam") - @AppInfo.Name</PageTitle>
+
+@* An exam on paper, for practicing away from the screen: the browser's print dialog prints it or
+   saves it as a PDF. On screen only the sheet (.paper) is a preview; in print everything else on
+   the page is hidden (see "Print" in app.css). Options keep their stored order, so the answer key
+   matches whichever copy was printed. Answers on paper aren't entered back. *@
+@if (_detail is null)
+{
+    <p class="page-loading">Loading...</p>
+}
+else
+{
+    var exam = _detail.Exam;
+
+    <nav class="crumbs" aria-label="Breadcrumb">
+        <a href="">Topics</a><span class="sep">/</span><a href="topics/@exam.TopicId">@_detail.Topic.Name</a><span class="sep">/</span><a href="exams/@exam.Id">@exam.Name</a>
+    </nav>
+
+    <div class="page-head">
+        <div>
+            <h1>Print exam</h1>
+            <p class="page-sub">This is how the exam looks on paper. Print it, or choose "Save as PDF" in the print dialog to keep it as a file.</p>
+        </div>
+        <div class="actions">
+            <button type="button" class="btn btn-primary btn-lg" disabled="@(_detail.Questions.Count == 0)" @onclick="PrintAsync"><Icon Name="print" /> Print or save as PDF</button>
+            <a class="btn btn-ghost btn-lg" href="exams/@exam.Id">Back to exam</a>
+        </div>
+    </div>
+
+    <div class="print-options">
+        <label class="check">
+            <input type="checkbox" @bind="_withKey" />
+            Add the answer key
+        </label>
+        <span class="muted small">The answers and explanations, starting on a new page after the questions.</span>
+    </div>
+
+    @if (_detail.Questions.Count == 0)
+    {
+        <div class="empty"><p>This exam has no questions yet.</p></div>
+    }
+    else
+    {
+        <article class="paper">
+            <header class="paper-head">
+                <h1>@exam.Name</h1>
+                <div class="paper-facts">
+                    <span>@_detail.Topic.Name</span>
+                    <span>@Format.Plural(_detail.Questions.Count, "question", "questions")</span>
+                    <span>@Format.Label(exam.Difficulty)</span>
+                </div>
+                <div class="paper-fill">
+                    <span>Name</span>
+                    <span>Date</span>
+                    <span>Score</span>
+                </div>
+            </header>
+
+            <ol class="paper-questions">
+                @foreach (var q in _detail.Questions)
+                {
+                    <li @key="q.Id">
+                        <div class="paper-kind">@Kind(q)</div>
+                        <RichText Class="prompt" Text="@q.Prompt" />
+                        @if (q.Type == QuestionType.MultipleChoice)
+                        {
+                            <ul class="paper-options @(q.AllowsMultiple ? "multi" : "")">
+                                @for (var i = 0; i < q.Options.Count; i++)
+                                {
+                                    <li>
+                                        <span class="paper-box" aria-hidden="true"></span>
+                                        <span class="paper-letter">@Letter(i)</span>
+                                        <RichText Text="@q.Options[i].Text" />
+                                    </li>
+                                }
+                            </ul>
+                        }
+                        else
+                        {
+                            <div class="paper-lines" aria-hidden="true">
+                                @for (var i = 0; i < WrittenLines; i++)
+                                {
+                                    <span></span>
+                                }
+                            </div>
+                        }
+                    </li>
+                }
+            </ol>
+
+            @if (_withKey)
+            {
+                <section class="paper-key">
+                    <h2>Answer key</h2>
+                    <p class="paper-facts"><span>@exam.Name</span></p>
+                    <ol class="paper-questions">
+                        @foreach (var q in _detail.Questions)
+                        {
+                            <li @key="q.Id">
+                                @if (q.Type == QuestionType.MultipleChoice)
+                                {
+                                    <div class="paper-answer">
+                                        <strong>@CorrectLetters(q)</strong>
+                                    </div>
+                                    <ul class="paper-options is-key">
+                                        @for (var i = 0; i < q.Options.Count; i++)
+                                        {
+                                            if (!q.Options[i].IsCorrect) continue;
+                                            <li>
+                                                <span class="paper-letter">@Letter(i)</span>
+                                                <RichText Text="@q.Options[i].Text" />
+                                            </li>
+                                        }
+                                    </ul>
+                                }
+                                else
+                                {
+                                    <div class="paper-kind">Reference answer</div>
+                                    <RichText Class="reading" Text="@q.ReferenceAnswer" />
+                                }
+                                <div class="paper-kind">Explanation</div>
+                                <RichText Class="reading" Text="@q.Explanation" />
+                            </li>
+                        }
+                    </ol>
+                </section>
+            }
+        </article>
+    }
+}
+
+@code {
+    // Room for a short written answer by hand.
+    private const int WrittenLines = 8;
+
+    [Parameter] public int ExamId { get; set; }
+
+    private ExamDetail? _detail;
+    private bool _withKey;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            _detail = await Exams.GetAsync(await UserIdAsync(), ExamId, PageToken);
+        }
+        catch (NotFoundException)
+        {
+            Nav.NavigateTo("not-found");
+        }
+    }
+
+    private async Task PrintAsync()
+    {
+        try { await JS.InvokeVoidAsync("learningPortal.print"); } catch (JSException) { }
+    }
+
+    private static string Kind(Question q) => q.Type != QuestionType.MultipleChoice ? "Written answer"
+        : q.AllowsMultiple ? "Choose all that apply" : "Choose one";
+
+    // A, B, C ... on paper, so the key can name the right options.
+    private static string Letter(int index) => index < 26 ? ((char)('A' + index)).ToString() : (index + 1).ToString();
+
+    private static string CorrectLetters(Question q) =>
+        string.Join(", ", q.Options.Select((o, i) => (o, i)).Where(x => x.o.IsCorrect).Select(x => Letter(x.i)));
+}

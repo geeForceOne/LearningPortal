@@ -139,8 +139,15 @@ public sealed class MaterialSection
     public string Heading { get; set; } = "";
     public string Text { get; set; } = "";
     public int TokenEstimate { get; set; }
+    // The concepts in this section worth explaining in one's own words, listed by the AI along
+    // with the outline, as a JSON string array. Null for material analyzed before 1.11.0; an
+    // empty list means the section has nothing to explain (a table of contents, references).
+    public string? ConceptsJson { get; set; }
 
     public Material? Material { get; set; }
+
+    public IReadOnlyList<string>? Concepts =>
+        ConceptsJson is null ? null : System.Text.Json.JsonSerializer.Deserialize<List<string>>(ConceptsJson) ?? [];
 }
 
 // A question in a topic's bank. Exams reference bank questions rather than owning copies, so a

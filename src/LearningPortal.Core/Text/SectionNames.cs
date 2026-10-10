@@ -52,6 +52,55 @@ public static partial class SectionNames
         return names;
     }
 
+    // A heading that was the material's title ("Notes", "Notes (part 2)") follows the title when
+    // the material is renamed; a heading of its own stays.
+    public static string Retitle(string heading, string oldTitle, string newTitle)
+    {
+        var trimmed = heading.Trim();
+        var baseHeading = BaseHeading(trimmed);
+        return baseHeading.Equals(oldTitle.Trim(), StringComparison.OrdinalIgnoreCase)
+            ? newTitle.Trim() + trimmed[baseHeading.Length..]
+            : heading;
+    }
+
+    // The key concepts of an outline line ("Body acceptance, STI risk factors, and the Three
+    // Assurances.") one by one, for material analyzed before the AI listed them itself. Commas
+    // inside brackets don't split.
+    public static List<string> SplitConcepts(string? concepts)
+    {
+        var result = new List<string>();
+        if (string.IsNullOrWhiteSpace(concepts))
+            return result;
+
+        var text = concepts.Trim().TrimEnd('.');
+        var depth = 0;
+        var start = 0;
+        for (var i = 0; i <= text.Length; i++)
+        {
+            var c = i < text.Length ? text[i] : ',';
+            if (c is '(' or '[')
+                depth++;
+            else if (c is ')' or ']')
+                depth = Math.Max(0, depth - 1);
+            else if ((c is ',' or ';' && depth == 0) || i == text.Length)
+            {
+                var part = text[start..i].Trim();
+                foreach (var joiner in Joiners)
+                {
+                    if (part.StartsWith(joiner, StringComparison.OrdinalIgnoreCase))
+                        part = part[joiner.Length..].TrimStart();
+                }
+                if (part.Length > 1 && !result.Contains(part, StringComparer.OrdinalIgnoreCase))
+                    result.Add(char.ToUpper(part[0]) + part[1..]);
+                start = i + 1;
+            }
+        }
+        return result;
+    }
+
+    // What a list's last item starts with after the comma, in the languages topics are mostly in.
+    private static readonly string[] Joiners = ["and ", "or ", "und ", "oder "];
+
     // "Bonds (part 2)" -> "Bonds"
     private static string BaseHeading(string heading) => PartSuffixRegex().Replace(heading.Trim(), "");
 

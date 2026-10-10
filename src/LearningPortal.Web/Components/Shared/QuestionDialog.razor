@@ -1,4 +1,4 @@
-@* Edit a question, or write your own. Resolves to a draft, or null when cancelled. *@
+@* Edit a question, or write your own. Resolves to a draft, or null when canceled. *@
 @if (_visible)
 {
     <div class="modal-backdrop">
@@ -31,7 +31,7 @@
                 {
                     <div class="field">
                         <span class="field-label">Options</span>
-                        <span class="field-hint">Tick every correct option. With more than one ticked, the question becomes "choose all that apply".</span>
+                        <span class="field-hint">Select every correct option. With more than one selected, the question becomes "choose all that apply".</span>
                         <div class="option-editor">
                             @for (var i = 0; i < _options.Count; i++)
                             {

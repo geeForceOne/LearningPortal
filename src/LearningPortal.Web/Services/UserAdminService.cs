@@ -58,7 +58,7 @@ public sealed class UserAdminService(IServiceScopeFactory scopes)
         return await users.FindByNameAsync(login);
     }
 
-    // Rotates the security stamp, so the caller must re-issue the sign-in cookie afterwards
+    // Rotates the security stamp, so the caller must re-issue the sign-in cookie afterward
     // (see /account/refresh-signin) or the person is signed out at the next revalidation.
     public async Task<IReadOnlyList<string>> ChangePasswordAsync(string userId, string currentPassword, string newPassword)
     {

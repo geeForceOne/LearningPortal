@@ -98,7 +98,7 @@ await using (var scope = app.Services.CreateAsyncScope())
     if (!await roles.RoleExistsAsync(Roles.Admin))
         await roles.CreateAsync(new IdentityRole(Roles.Admin));
 
-    await scope.ServiceProvider.GetRequiredService<MaterialService>().RefreshPartSourceLabelsAsync();
+    await scope.ServiceProvider.GetRequiredService<MaterialService>().RefreshSourceLabelsAsync();
 }
 
 if (!app.Environment.IsDevelopment())

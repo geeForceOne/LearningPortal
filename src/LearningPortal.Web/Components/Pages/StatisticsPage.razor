@@ -48,11 +48,11 @@ else
         </div>
         <div class="kpi">
             <div class="kpi-value">@Format.Duration(_report.TotalActiveSeconds)</div>
-            <div class="kpi-label">Time practising</div>
+            <div class="kpi-label">Time practicing</div>
         </div>
         <div class="kpi">
             <div class="kpi-value">@_report.Exams.Count</div>
-            <div class="kpi-label">Exams practised</div>
+            <div class="kpi-label">Exams practiced</div>
         </div>
     </div>
 
@@ -89,7 +89,7 @@ else
                         <th>Topic</th>
                         <th>Average score</th>
                         <th class="num">Attempts</th>
-                        <th>Last practised</th>
+                        <th>Last practiced</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -207,7 +207,7 @@ else
         Nav.NavigateTo(string.IsNullOrEmpty(value) ? "statistics" : $"statistics?topic={value}");
     }
 
-    // A bar for the score, coloured by grade band, with the number beside it in ink.
+    // A bar for the score, colored by grade band, with the number beside it in ink.
     private static RenderFragment Meter(double score) => @<div class="meter">
         <div class="meter-track"><div class="meter-fill @Format.VerdictClass(score)" style="width:@(Math.Clamp(score, 0, 100).ToString("0.#", System.Globalization.CultureInfo.InvariantCulture))%"></div></div>
         <span class="meter-value">@Format.Percent(score)</span>

@@ -7,9 +7,14 @@ using Microsoft.EntityFrameworkCore;
 
 namespace LearningPortal.Core.Services;
 
-// A concept the user can explain: one line of a material's outline (a section's subject and key
-// concepts), or the section's heading when the material has no outline.
-public sealed record ExplainConcept(int SectionId, string MaterialTitle, string Label, string State);
+// A concept the user can explain: one idea from a section of the material. The AI lists them per
+// section when it outlines the material; material analyzed before that gets the key concepts of
+// its outline line, split at the commas, or the section's name when there's no outline.
+public sealed record ExplainConcept(int SectionId, string MaterialTitle, string SectionName, string Label, string State);
+
+// Material whose concepts still come from splitting its outline; analyzing it again lists them properly.
+// Error: why the last try at that failed.
+public sealed record ConceptRefresh(int MaterialId, string Title, int TokenEstimate, string? Error);
 
 public sealed record ExplainSummary(int Id, string Concept, int? Score, DateTime CreatedAt, bool Completed);
 
@@ -26,39 +31,57 @@ public sealed class ExplainService(
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         if (!await db.Topics.AnyAsync(t => t.Id == topicId && t.UserId == userId, ct))
             throw new NotFoundException();
-        var outlines = await db.Materials.AsNoTracking()
-            .Where(m => m.UserId == userId && m.TopicId == topicId)
-            .Select(m => new { m.Id, m.Outline })
-            .ToDictionaryAsync(m => m.Id, m => m.Outline, ct);
+        var listed = await db.MaterialSections.AsNoTracking()
+            .Where(s => s.Material!.UserId == userId && s.Material.TopicId == topicId && s.ConceptsJson != null)
+            .Select(s => new MaterialSection { Id = s.Id, ConceptsJson = s.ConceptsJson })
+            .ToDictionaryAsync(s => s.Id, s => s.Concepts!, ct);
 
         var concepts = new List<ExplainConcept>();
         foreach (var material in await statistics.GetSectionMapAsync(userId, topicId, ct))
         {
-            var lines = SectionNames.ParseOutline(outlines.GetValueOrDefault(material.MaterialId));
             foreach (var s in material.Sections)
             {
-                var label = lines.GetValueOrDefault(s.Index)?.Line ?? s.Name;
-                concepts.Add(new ExplainConcept(s.SectionId, material.Title, Truncate(label), StateOf(s)));
+                IReadOnlyList<string> labels = listed.TryGetValue(s.SectionId, out var fromAi) ? fromAi
+                    : SectionNames.SplitConcepts(s.Concepts) is { Count: > 0 } split ? split
+                    : [s.Name];
+                concepts.AddRange(labels.Select(label => new ExplainConcept(s.SectionId, material.Title, s.Name, Truncate(label), StateOf(s))));
             }
         }
         return concepts;
     }
 
-    // Picks a concept at random, favouring the ones the user does worst on or hasn't practised.
+    public async Task<IReadOnlyList<ConceptRefresh>> WithoutConceptListsAsync(string userId, int topicId, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        return await db.Materials.AsNoTracking()
+            .Where(m => m.UserId == userId && m.TopicId == topicId && m.Outline != null
+                && m.Sections.Any(s => s.ConceptsJson == null))
+            .OrderBy(m => m.CreatedAt)
+            .Select(m => new ConceptRefresh(m.Id, m.Title, m.TokenEstimate,
+                m.AnalysisStatus == AnalysisStatus.Failed ? m.AnalysisError : null))
+            .ToListAsync(ct);
+    }
+
+    // Picks a section at random, favoring the ones the user does worst on or hasn't practiced,
+    // then one of its concepts.
     public async Task<ExplainConcept?> SurpriseAsync(string userId, int topicId, CancellationToken ct = default)
     {
-        var concepts = await GetConceptsAsync(userId, topicId, ct);
-        if (concepts.Count == 0)
+        var sections = (await GetConceptsAsync(userId, topicId, ct)).GroupBy(c => c.SectionId).Select(g => g.ToList()).ToList();
+        if (sections.Count == 0)
             return null;
-        var weights = concepts.Select(c => c.State switch { "weak" => 4, "new" or "empty" => 3, "shaky" => 2, _ => 1 }).ToList();
+        var weights = sections.Select(s => s[0].State switch { "weak" => 4, "new" or "empty" => 3, "shaky" => 2, _ => 1 }).ToList();
         var pick = Random.Shared.Next(weights.Sum());
-        for (var i = 0; i < concepts.Count; i++)
+        var section = sections[^1];
+        for (var i = 0; i < sections.Count; i++)
         {
             pick -= weights[i];
             if (pick < 0)
-                return concepts[i];
+            {
+                section = sections[i];
+                break;
+            }
         }
-        return concepts[^1];
+        return section[Random.Shared.Next(section.Count)];
     }
 
     public async Task<int> StartAsync(string userId, int topicId, int sectionId, string concept, CancellationToken ct = default)
@@ -77,6 +100,25 @@ public sealed class ExplainService(
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         return await db.ExplainSessions.AsNoTracking().Include(s => s.Topic)
             .FirstOrDefaultAsync(s => s.Id == sessionId && s.UserId == userId, ct) ?? throw new NotFoundException();
+    }
+
+    // "Material / Section" for the section a session's concept comes from; null when the material
+    // has since been deleted.
+    public async Task<string?> SourceNameAsync(string userId, int sessionId, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var sectionId = await db.ExplainSessions.Where(s => s.Id == sessionId && s.UserId == userId).Select(s => s.SectionId).FirstOrDefaultAsync(ct);
+        var material = await db.Materials.AsNoTracking()
+            .Where(m => m.UserId == userId && m.Sections.Any(s => s.Id == sectionId))
+            .Select(m => new Material
+            {
+                Id = m.Id, Title = m.Title, Outline = m.Outline,
+                Sections = m.Sections.Select(s => new MaterialSection { Id = s.Id, MaterialId = s.MaterialId, Index = s.Index, Heading = s.Heading }).ToList(),
+            })
+            .FirstOrDefaultAsync(ct);
+        return material?.Sections.FirstOrDefault(s => s.Id == sectionId) is { } section
+            ? QuestionGenerationService.SourceLabel(material, section)
+            : null;
     }
 
     public async Task<IReadOnlyList<ExplainSummary>> ListAsync(string userId, int topicId, CancellationToken ct = default)

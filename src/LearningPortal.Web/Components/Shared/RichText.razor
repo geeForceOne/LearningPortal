@@ -1,6 +1,6 @@
 @inject IJSRuntime JS
 
-@* AI-written text with code formatting (see Services/RichTextHtml). Code blocks get syntax colouring
+@* AI-written text with code formatting (see Services/RichTextHtml). Code blocks get syntax coloring
    in the browser after each render. *@
 <div class="rich @Class" @ref="_element">@((MarkupString)RichTextHtml.ToHtml(Text))</div>
 
@@ -20,7 +20,7 @@
         }
         catch (JSDisconnectedException)
         {
-            // The browser left; nothing to colour.
+            // The browser left; nothing to color.
         }
     }
 }

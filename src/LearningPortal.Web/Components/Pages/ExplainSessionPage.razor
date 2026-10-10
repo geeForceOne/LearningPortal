@@ -20,6 +20,10 @@ else
     <div class="exam" style="max-width:760px">
         <p class="question-number" style="margin-bottom:6px">Explain this in your own words</p>
         <div class="prompt" role="heading" aria-level="1">@_session.Concept</div>
+        @if (_source is not null)
+        {
+            <p class="source-link" style="margin:0 0 14px"><Icon Name="file" Size="14" /> From @_source</p>
+        }
 
         @if (_session.Explanation is null)
         {
@@ -110,6 +114,7 @@ else
     private string _explanation = "";
     private string[] _replies = [];
     private string? _error;
+    private string? _source;
     private bool _starting;
     private SettingsView? _settings;
     private AiChoice _writeWith = default!;
@@ -123,6 +128,7 @@ else
         {
             var userId = await UserIdAsync();
             _session = await Explain.GetAsync(userId, SessionId, PageToken);
+            _source = await Explain.SourceNameAsync(userId, SessionId, PageToken);
             if (_settings is null)
             {
                 _settings = await Settings.GetAsync(userId, PageToken);

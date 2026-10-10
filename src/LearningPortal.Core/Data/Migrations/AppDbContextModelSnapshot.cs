@@ -490,6 +490,9 @@ namespace LearningPortal.Core.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("ConceptsJson")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Heading")
                         .IsRequired()
                         .HasColumnType("TEXT");

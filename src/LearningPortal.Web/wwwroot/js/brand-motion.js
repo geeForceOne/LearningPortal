@@ -1,6 +1,6 @@
 // Animates the yellow dot in the logo (Components/Shared/BrandMark.razor). Three motions, picked
 // at random for each play and never the same twice in a row:
-//   trip  - the dot travels out to a neighbouring node, lights it up and comes back;
+//   trip  - the dot travels out to a neighboring node, lights it up and comes back;
 //   rim   - it leaves the hub, runs once around the outer ring and returns;
 //   pulse - it swells in place while a wave of light passes out to the other nodes.
 // The header and sign-in logos play one motion when hovered or focused; a mark with
@@ -144,7 +144,7 @@
                 }
             }
 
-            // Away from the hub the dot shrinks, so it reads as travelling rather than the whole node moving.
+            // Away from the hub the dot shrinks, so it reads as traveling rather than the whole node moving.
             const away = Math.min(1, dist(pos, hub) / 10);
             s.net.dot.setAttribute("cx", pos[0].toFixed(2));
             s.net.dot.setAttribute("cy", pos[1].toFixed(2));

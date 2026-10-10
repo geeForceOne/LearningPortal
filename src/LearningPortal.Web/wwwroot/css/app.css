@@ -4,7 +4,7 @@
    A study desk rather than a dashboard: slate "paper", chalk-white ink, and one
    highlighter yellow that is only ever used where learning happens - a revealed
    correct answer, the question you're on, the score you earned. Grading has its
-   own three colours (right / partial / wrong) and nothing else competes with them.
+   own three colors (right / partial / wrong) and nothing else competes with them.
 
    Type: Atkinson Hyperlegible Next for the interface (built for legibility),
    Literata for anything you read to learn - questions, explanations, material.
@@ -29,7 +29,7 @@
     --marker-ink: #1d2213;
     --marker-soft: rgba(245, 220, 92, 0.14);
 
-    /* The logo's colours only; the UI accent stays the highlighter yellow. */
+    /* The logo's colors only; the UI accent stays the highlighter yellow. */
     --brand: #8b7cf6;
     --brand-lit: #f5dc5c;
 
@@ -40,8 +40,8 @@
     --wrong: #ef7a6f;
     --wrong-soft: rgba(239, 122, 111, 0.13);
 
-    /* Syntax colouring for code in questions. Blues and violets only, so code never borrows the
-       highlighter or the grading colours. */
+    /* Syntax coloring for code in questions. Blues and violets only, so code never borrows the
+       highlighter or the grading colors. */
     --syn-keyword: #b3a6ff;
     --syn-type: #9cc2f0;
     --syn-string: #86cfd9;
@@ -78,7 +78,8 @@
     --tabbar-h: 0px;
 }
 
-:root[data-theme="light"] {
+/* Also the printed exam's sheet (.paper), which is ink on white whatever the theme. */
+:root[data-theme="light"], .paper {
     color-scheme: light;
 
     --paper: #f4f6f5;
@@ -125,7 +126,7 @@
     scrollbar-color: var(--rule-strong) transparent;
 }
 
-/* Always reserve the scrollbar's space, so the centred layout doesn't jump sideways when a page
+/* Always reserve the scrollbar's space, so the centered layout doesn't jump sideways when a page
    grows past the window height after loading. Overlay scrollbars (phones) are unaffected. */
 html { -webkit-text-size-adjust: 100%; scrollbar-gutter: stable; }
 
@@ -857,7 +858,7 @@ a.tool-card:hover, a.tool-card:focus-visible { border-color: var(--pencil); }
     .tool-cards { grid-template-columns: minmax(0, 1fr); }
 }
 
-/* Concept map: a topic's sections as tiles, coloured by how well their questions go. */
+/* Concept map: a topic's sections as tiles, colored by how well their questions go. */
 .map-legend { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-bottom: 22px; font-size: var(--t-sm); color: var(--pencil); }
 .map-legend span { display: inline-flex; align-items: center; gap: 6px; }
 .map-swatch { display: inline-block; width: 14px; height: 14px; border-radius: 3px; border: 1px solid var(--rule-strong); }
@@ -905,6 +906,9 @@ a.tool-card:hover, a.tool-card:focus-visible { border-color: var(--pencil); }
 
 /* Explain it back. */
 .concept-pick { text-align: left; font-weight: 700; color: var(--ink); }
+/* Explain it back: a section's name over the concepts to pick from it. */
+.concept-section { margin-bottom: 6px; font-size: var(--t-sm); color: var(--pencil); overflow-wrap: anywhere; }
+.concept-list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
 .explain-student { display: grid; gap: 12px; margin-top: 18px; }
 .explain-student .follow-up { display: grid; gap: 8px; }
 
@@ -1211,7 +1215,7 @@ a.tool-card:hover, a.tool-card:focus-visible { border-color: var(--pencil); }
     color: var(--pencil);
 }
 
-/* One tick per question. Filled with the grade colour once answered; the current one gets the
+/* One tick per question. Filled with the grade color once answered; the current one gets the
    highlighter underneath. It's a real sequence, so it's also how you jump between questions. */
 .rail {
     display: flex;
@@ -1354,7 +1358,7 @@ a.tool-card:hover, a.tool-card:focus-visible { border-color: var(--pencil); }
 .options.locked .option:hover { border-color: var(--rule-strong); }
 
 /* Revealed: right answers get a green edge and tint, picks that were wrong a red one. Both stay
-   dark in the dark theme, so text and inline code keep their normal colours. The ":has(checked)"
+   dark in the dark theme, so text and inline code keep their normal colors. The ":has(checked)"
    variants beat the neutral "picked" style above. */
 .option.is-key,
 .option.is-key:has(input:checked) { border-color: var(--right); background: var(--right-soft); }
@@ -1397,6 +1401,8 @@ a.tool-card:hover, a.tool-card:focus-visible { border-color: var(--pencil); }
 }
 
 .exam-actions .spacer { flex: 1; }
+/* The quieter row under the answer buttons: previous question, skip to the next. */
+.exam-nav { margin-top: 10px; }
 
 .result-line {
     display: flex;
@@ -1606,7 +1612,7 @@ details.q-more[open] summary { margin-bottom: 8px; }
 .sort-button:hover { color: var(--ink); }
 .sort-mark { display: inline-block; min-width: 1em; }
 
-/* Admin accounts table; on phones each account becomes a card with labelled values. */
+/* Admin accounts table; on phones each account becomes a card with labeled values. */
 .users-table { margin-top: 12px; }
 .users-table td { vertical-align: middle; }
 .users-name { display: block; font-weight: 600; color: var(--ink); }
@@ -1636,7 +1642,7 @@ details.q-more[open] summary { margin-bottom: 8px; }
     .users-actions { position: absolute; top: 10px; right: 0; width: auto; }
 }
 
-/* Heat cell: the bar is the average score, coloured by grade band. */
+/* Heat cell: the bar is the average score, colored by grade band. */
 .meter { display: flex; align-items: center; gap: 10px; min-width: 140px; }
 .meter-track { flex: 1; height: 8px; border-radius: 4px; background: var(--sheet-2); overflow: hidden; }
 .meter-fill { height: 100%; border-radius: 4px; }
@@ -1720,6 +1726,112 @@ details.q-more[open] summary { margin-bottom: 8px; }
     .auth-brand svg { width: 56px; height: 56px; }
     .auth-name { font-size: 2.2rem; }
     .auth-dedication { margin: 6px 0 0 70px; }
+}
+
+/* ---------- Print: an exam on paper ---------- */
+
+.print-options {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 14px;
+    margin-bottom: 20px;
+}
+
+/* The sheet. On screen it's a preview; in print it's all that's left of the page. */
+.paper {
+    padding: clamp(20px, 4vw, 48px);
+    background: var(--sheet);
+    color: var(--ink);
+    border: 1px solid var(--rule);
+    border-radius: var(--r-md);
+    font-family: var(--font-read);
+}
+
+.paper-head { margin-bottom: 28px; padding-bottom: 16px; border-bottom: 2px solid var(--ink); }
+.paper-head h1 { font-size: var(--t-2xl); overflow-wrap: anywhere; }
+
+.paper-facts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 18px;
+    margin: 6px 0 0;
+    font-family: var(--font-ui);
+    font-size: var(--t-sm);
+    color: var(--pencil);
+}
+
+/* Name, date and score, each with a line to write on. */
+.paper-fill {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px 28px;
+    margin-top: 22px;
+    font-family: var(--font-ui);
+    font-size: var(--t-sm);
+    color: var(--pencil);
+}
+
+.paper-fill span { flex: 1 1 140px; display: flex; align-items: flex-end; gap: 8px; }
+.paper-fill span::after { content: ""; flex: 1; border-bottom: 1px solid var(--rule-strong); }
+.paper-fill span:first-child { flex-grow: 3; }
+
+.paper-questions { margin: 0; padding-left: 1.6em; }
+.paper-questions > li { margin-bottom: 26px; padding-left: 4px; break-inside: avoid; }
+.paper-questions > li::marker { font-family: var(--font-ui); font-weight: 700; }
+.paper-questions .prompt { margin: 0 0 12px; font-size: var(--t-md); }
+
+.paper-kind {
+    margin-bottom: 4px;
+    font-family: var(--font-ui);
+    font-size: var(--t-xs);
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--pencil);
+}
+
+.paper-key .rich + .paper-kind { margin-top: 12px; }
+
+.paper-options { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.paper-options li { display: flex; align-items: flex-start; gap: 10px; break-inside: avoid; }
+.paper-options .rich { flex: 1; overflow-wrap: anywhere; }
+.paper-options.is-key { margin-bottom: 12px; }
+
+/* A circle to fill in for "choose one", a square for "choose all that apply". */
+.paper-box {
+    flex: none;
+    width: 16px;
+    height: 16px;
+    margin-top: 4px;
+    border: 1.5px solid var(--ink);
+    border-radius: 50%;
+}
+
+.paper-options.multi .paper-box { border-radius: 3px; }
+.paper-letter { flex: none; min-width: 1.2em; font-family: var(--font-ui); font-weight: 700; }
+.paper-answer { margin-bottom: 6px; font-family: var(--font-ui); }
+
+.paper-lines { display: grid; }
+.paper-lines span { height: 2.1em; border-bottom: 1px solid var(--rule-strong); }
+
+.paper-key { margin-top: 40px; padding-top: 24px; border-top: 2px solid var(--ink); break-before: page; }
+.paper-key h2 { font-size: var(--t-xl); }
+.paper-key > .paper-facts { margin-bottom: 22px; }
+
+@page { margin: 16mm 15mm; }
+
+@media print {
+    html { scrollbar-gutter: auto; }
+    html, body, .shell, .main { background: #fff !important; }
+    .topbar, .tabbar, #blazor-error-ui { display: none !important; }
+    .shell, .main { display: block; min-height: 0; max-width: none; margin: 0; padding: 0; }
+
+    /* The page with the sheet prints the sheet and nothing else. */
+    .main:has(.paper) > :not(.paper) { display: none !important; }
+    .paper { padding: 0; border: 0; border-radius: 0; background: #fff; font-size: 11pt; }
+    .paper .rich pre { white-space: pre-wrap; overflow: visible; break-inside: avoid; }
+    .paper-key { margin-top: 0; padding-top: 0; border-top: 0; }
 }
 
 /* ---------- Blazor chrome ---------- */

@@ -6,7 +6,7 @@ public enum AiProvider
     OpenAi,
 }
 
-// The colour theme. System follows the device's light/dark setting.
+// The color theme. System follows the device's light/dark setting.
 public enum Theme
 {
     Dark,

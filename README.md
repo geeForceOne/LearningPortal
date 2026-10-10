@@ -46,9 +46,13 @@ questions work with code (40% by default); the rest are theory.
 - Reveal each answer right away or wait until the end. Every answer comes with a thorough
   explanation and a link to the part of the material it came from
 - Still unsure? **Ask the AI a follow-up** about a revealed answer ("why isn't B right?"), up to
-  three per question. The replies are saved with the attempt
+  10 per answer. The replies are saved with the attempt
 - There's no timer, but every attempt's duration is recorded. Answers are saved as you go, so you
   can leave and resume an attempt later
+- Go back with **Previous question**, or skip a question and come back to it: at the end, Recall
+  lists the ones you haven't answered yet
+- **Print an exam** or save it as a PDF to practice away from the screen, with or without the
+  answer key
 - Repeat an exam as often as you like, with the question order and the options shuffled
 - Amend an exam later: edit its settings, remove or replace a question, edit a question by hand,
   or add your own
@@ -59,7 +63,7 @@ questions work with code (40% by default); the rest are theory.
 
 ![Answering a code question](docs/images/recall-take-exam.jpg)
 
-Code shows up as code, with syntax colouring, in questions, options, answers and explanations.
+Code shows up as code, with syntax coloring, in questions, options, answers and explanations.
 After each question, or at the end, you see what was right, what you picked, and why:
 
 ![Results of an attempt](docs/images/recall-results.jpg)
@@ -77,15 +81,18 @@ four tools, side by side, between the exams and the material.
 
 ### Weak questions
 
-Practise exactly the questions you've answered wrong or only partly right in this topic, most
+Practice exactly the questions you've answered wrong or only partly right in this topic, most
 missed first (10 by default, adjustable). No AI is involved, so it costs nothing. Keep a practice
 run as an exam if it's useful.
 
 ### Explain it back
 
-The best test of understanding is explaining something in your own words. Pick a concept from
-your material, or press **Surprise me** and Recall picks one you're weak in or haven't practised.
-Write your explanation as if to someone new to the subject.
+The best test of understanding is explaining something in your own words. Recall lists the
+concepts in your material, one idea at a time and grouped by section. Pick one, or press
+**Surprise me** and Recall picks one from a part you're weak in or haven't practiced. Write your
+explanation as if to someone new to the subject.
+
+![Explain it back: the concepts to pick from, grouped by section](docs/images/recall-explain-pick.jpg)
 
 Recall then asks one or two questions like a curious student would: about what was unclear,
 missing or not quite right. Answer them, and you get a score and feedback on what you explained
@@ -97,12 +104,12 @@ against your own sources. Your explanations are kept per topic, so you can look 
 ### Concept map
 
 A topic's material, section by section, as tiles: sized by how much text each section has and
-coloured by how well you do on the questions written from it (solid, shaky, weak, not practised
+colored by how well you do on the questions written from it (solid, shaky, weak, not practiced
 yet, or no questions yet). Material without headings, like most PDFs, gets its section names
-from the outline Recall made when you uploaded it. Pick a section and practise just that part. The
+from the outline Recall made when you uploaded it. Pick a section and practice just that part. The
 map uses your results only, so it costs nothing.
 
-![Concept map: sections coloured by how well you know them](docs/images/recall-concept-map.jpg)
+![Concept map: sections colored by how well you know them](docs/images/recall-concept-map.jpg)
 
 ### Find gaps
 
@@ -129,7 +136,7 @@ gets close to what its material can support, Recall tells you.
 See what's sticking and what isn't:
 
 - Score over time for each exam
-- An overview per topic: average score, attempt count, last practised
+- An overview per topic: average score, attempt count, last practiced
 - Weak questions: the ones you get wrong most often, with **Practice weak questions** to drill
   exactly those (also on each topic page under Go deeper)
 - A breakdown by question type and difficulty

@@ -112,7 +112,7 @@ else
                 {
                     var included = !Model.Excluded.Contains(m.Id);
                     <label class="check" @key="m.Id">
-                        @* The last ticked material can't be unticked: there'd be nothing to write from. *@
+                        @* The last selected material can't be deselected: there'd be nothing to write from. *@
                         <input type="checkbox" checked="@included" disabled="@(included && used == 1)" @onchange="e => SetIncluded(m.Id, (bool)e.Value!)" />
                         <span>@m.Title</span>
                         <span class="muted small">@Format.Tokens(m.TokenEstimate)</span>
@@ -120,7 +120,7 @@ else
                 }
             </div>
             <span class="field-hint">
-                The AI writes questions only from the ticked material, and only its questions are reused from the bank.
+                The AI writes questions only from the selected material, and only its questions are reused from the bank.
                 Material you add to the topic later is included.
             </span>
         </details>

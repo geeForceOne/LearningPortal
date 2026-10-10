@@ -251,7 +251,7 @@ else
     private async Task CreateTokenAsync()
     {
         if (_tokenCreatedAt is not null && !await Ui.Confirm.AskAsync("Replace the token?",
-                "The current token stops working straight away. Put the new one in your Homepage config.", "Replace token"))
+                "The current token stops working right away. Put the new one in your Homepage config.", "Replace token"))
             return;
         _newToken = await Homepage.CreateTokenAsync(PageToken);
         _tokenCreatedAt = await Homepage.GetTokenCreatedAtAsync(PageToken);
@@ -260,7 +260,7 @@ else
     private async Task RevokeTokenAsync()
     {
         if (!await Ui.Confirm.AskAsync("Turn off the Homepage widget?",
-                "The token stops working straight away, and the widget shows an error until you create a new one.", "Turn off"))
+                "The token stops working right away, and the widget shows an error until you create a new one.", "Turn off"))
             return;
         await Homepage.RevokeTokenAsync(PageToken);
         _tokenCreatedAt = null;
@@ -291,7 +291,7 @@ else
         Ui.Toast.Success(notify ? "You'll get an email about account requests." : "No more emails about account requests.");
     }
 
-    // Saved straight away, like the other on/off preferences.
+    // Saved right away, like the other on/off preferences.
     private async Task SetNotifyAsync(bool notify)
     {
         _notifyInviteAccepted = notify;

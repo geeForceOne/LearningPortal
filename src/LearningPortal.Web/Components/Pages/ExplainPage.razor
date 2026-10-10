@@ -2,6 +2,9 @@
 @inherits AppPage
 @inject TopicService Topics
 @inject ExplainService Explain
+@inject SettingsService Settings
+@inject AnalysisQueue Analysis
+@inject LearningPortalOptions Options
 
 <PageTitle>Explain it back - @AppInfo.Name</PageTitle>
 
@@ -39,20 +42,64 @@ else
     }
     else
     {
-        <p class="muted small">"Surprise me" favours the parts of your material you do worst on or haven't practised yet.</p>
+        <p class="muted small">"Surprise me" favors the parts of your material you do worst on or haven't practiced yet.</p>
+    }
+
+    @* Material analyzed before Recall listed the concepts itself: they're split from its outline. *@
+    @if (_older is { Count: > 0 })
+    {
+        <div class="notice" style="margin-bottom:20px">
+            @if (_older.Any(m => Analysis.IsPending(m.MaterialId)))
+            {
+                <span>Recall is analyzing your material again. The concepts update here when it's done.</span>
+            }
+            else
+            {
+                <span>@OlderText() come from an older outline, so some can read oddly.</span>
+                <button type="button" class="link-button" @onclick="AnalyzeAgainAsync">@(_older.Count == 1 ? "Analyze it again" : "Analyze them again")</button>
+                <span>to have Recall list them properly@(AnalyzeCost() is { } cost ? $" ({cost})" : "").</span>
+                @if (_older.FirstOrDefault(m => m.Error is not null) is { } failed)
+                {
+                    <div style="margin-top:6px;color:var(--wrong)">The last try failed: @failed.Error</div>
+                }
+                @if (_settings is { AdvancedModels: true })
+                {
+                    <div style="margin-top:10px;max-width:520px">
+                        <AiModelSelect Label="Outline with" Value="_outlineWith" ValueChanged="SetOutlineModel" Available="_settings.HasKey" Inline="true" />
+                    </div>
+                }
+            }
+        </div>
+    }
+
+    @if (_concepts.Count > 0)
+    {
         @foreach (var group in _concepts.GroupBy(c => c.MaterialTitle))
         {
             <section class="section" @key="group.Key">
                 <div class="section-head"><h2>@group.Key</h2></div>
                 <ul class="rows">
-                    @foreach (var c in group)
+                    @foreach (var s in group.GroupBy(c => c.SectionId))
                     {
-                        var concept = c;
-                        <li class="row" @key="concept.SectionId">
+                        var first = s.First();
+                        <li class="row" @key="s.Key">
                             <div class="row-main">
-                                <button type="button" class="link-button concept-pick" disabled="@_starting" @onclick="() => StartAsync(concept)">@concept.Label</button>
+                                @* A section whose only concept is its own name needs no heading. *@
+                                @if (s.Count() > 1 || first.Label != first.SectionName)
+                                {
+                                    <div class="concept-section">@first.SectionName</div>
+                                }
+                                <ul class="concept-list">
+                                    @foreach (var c in s)
+                                    {
+                                        var concept = c;
+                                        <li @key="concept.Label">
+                                            <button type="button" class="link-button concept-pick" disabled="@_starting" @onclick="() => StartAsync(concept)">@concept.Label</button>
+                                        </li>
+                                    }
+                                </ul>
                             </div>
-                            <div class="row-aside"><span class="map-swatch is-@concept.State" title="@StateLabel(concept.State)"></span> <span class="small muted">@StateLabel(concept.State)</span></div>
+                            <div class="row-aside"><span class="map-swatch is-@first.State" title="@StateLabel(first.State)"></span> <span class="small muted">@StateLabel(first.State)</span></div>
                         </li>
                     }
                 </ul>
@@ -96,22 +143,94 @@ else
     private TopicDetail? _topic;
     private IReadOnlyList<ExplainConcept>? _concepts;
     private IReadOnlyList<ExplainSummary>? _history;
+    private IReadOnlyList<ConceptRefresh>? _older;
+    private SettingsView? _settings;
+    // The model that analyzes material again from here; starts at the uploads default.
+    private AiChoice _outlineWith = default!;
+    private AiModelInfo? _model;
+
+    // Passed to the analysis only in advanced mode; in simple mode the one model does everything.
+    private AiChoice? Choice => _settings?.AdvancedModels == true ? _outlineWith : null;
     private bool _starting;
     private bool _notFound;
 
     protected override async Task OnParametersSetAsync()
     {
+        Analysis.MaterialAnalyzed -= OnMaterialAnalyzed;
+        Analysis.MaterialAnalyzed += OnMaterialAnalyzed;
         try
         {
             var userId = await UserIdAsync();
             _topic = await Topics.GetAsync(userId, TopicId, PageToken);
-            _concepts = await Explain.GetConceptsAsync(userId, TopicId, PageToken);
             _history = await Explain.ListAsync(userId, TopicId, PageToken);
+            if (_settings is null)
+            {
+                _settings = await Settings.GetAsync(userId, PageToken);
+                SetOutlineModel(_settings.Default(AiTask.Analysis));
+            }
+            await LoadConceptsAsync(userId);
         }
         catch (NotFoundException)
         {
             _notFound = true;
         }
+    }
+
+    private async Task LoadConceptsAsync(string userId)
+    {
+        _concepts = await Explain.GetConceptsAsync(userId, TopicId, PageToken);
+        _older = await Explain.WithoutConceptListsAsync(userId, TopicId, PageToken);
+    }
+
+    private void OnMaterialAnalyzed(string userId, int materialId)
+    {
+        if (_older?.Any(m => m.MaterialId == materialId) != true)
+            return;
+        _ = InvokeAsync(async () =>
+        {
+            await LoadConceptsAsync(userId);
+            StateHasChanged();
+        });
+    }
+
+    public override void Dispose()
+    {
+        Analysis.MaterialAnalyzed -= OnMaterialAnalyzed;
+        base.Dispose();
+    }
+
+    private void SetOutlineModel(AiChoice choice)
+    {
+        _outlineWith = choice;
+        _model = AiModels.Find(choice);
+    }
+
+    private string OlderText() => _older!.Count == 1
+        ? $"The concepts for \"{_older[0].Title}\""
+        : $"The concepts for {_older.Count} of your materials";
+
+    // Mentioned only when it's worth noticing; a few cents isn't.
+    private string? AnalyzeCost() => Format.CostHint(_older!.Sum(m => m.TokenEstimate), _model);
+
+    // Sends the material to the AI again, billed to the user's key, so a large one is confirmed first.
+    private async Task AnalyzeAgainAsync()
+    {
+        var older = _older!;
+        var tokens = older.Sum(m => m.TokenEstimate);
+        if (Options.IsLargeGeneration(tokens, _model))
+        {
+            var cost = Format.AnalysisCost(tokens, _model);
+            var go = await Ui.Confirm.AskAsync("This is a lot of material to analyze",
+                $"It's about {Format.Tokens(tokens)}. The AI reads all of it once more" +
+                (cost is null ? "" : $", {cost}") + ". That's billed to your API key. Analyze it again?",
+                "Analyze again");
+            if (!go)
+                return;
+        }
+
+        var userId = await UserIdAsync();
+        foreach (var material in older)
+            Analysis.Enqueue(userId, material.MaterialId, Choice);
     }
 
     private async Task SurpriseAsync()
@@ -140,7 +259,7 @@ else
         "solid" => "Solid",
         "shaky" => "Shaky",
         "weak" => "Weak",
-        "new" => "Not practised yet",
+        "new" => "Not practiced yet",
         _ => "No questions yet",
     };
 }

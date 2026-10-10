@@ -24,8 +24,8 @@ else
         <div>
             <h1>Concept map</h1>
             <p class="page-sub">
-                Each tile is a section of your material, sized by how much text it has and coloured by how well you do
-                on the questions written from it. Pick a section to practise it.
+                Each tile is a section of your material, sized by how much text it has and colored by how well you do
+                on the questions written from it. Pick a section to practice it.
             </p>
         </div>
     </div>
@@ -34,7 +34,7 @@ else
         <span><i class="map-swatch is-solid"></i> Solid (80% or more)</span>
         <span><i class="map-swatch is-shaky"></i> Shaky (50-79%)</span>
         <span><i class="map-swatch is-weak"></i> Weak (under 50%)</span>
-        <span><i class="map-swatch is-new"></i> Not practised yet</span>
+        <span><i class="map-swatch is-new"></i> Not practiced yet</span>
         <span><i class="map-swatch is-empty"></i> No questions yet</span>
     </div>
 
@@ -74,8 +74,8 @@ else
                     @if (sel.QuestionCount > 0)
                     {
                         <div class="practice-start">
-                            <button type="button" class="btn btn-primary btn-sm" disabled="@_starting" @onclick="PractiseAsync">
-                                <Icon Name="redo" Size="14" /> Practise this section
+                            <button type="button" class="btn btn-primary btn-sm" disabled="@_starting" @onclick="PracticeAsync">
+                                <Icon Name="redo" Size="14" /> Practice this section
                             </button>
                             <label class="practice-size">
                                 <input type="number" class="input" min="1" max="@MaxSize(sel)" @bind="_size" aria-label="How many questions" />
@@ -121,7 +121,7 @@ else
             _size = Math.Min(PracticeService.DefaultSize, MaxSize(_selected));
     }
 
-    private async Task PractiseAsync()
+    private async Task PracticeAsync()
     {
         _starting = true;
         try
@@ -155,7 +155,7 @@ else
 
     private static string Facts(SectionScore s) => s.QuestionCount == 0 ? "No questions yet"
         : s.AverageScore is { } avg ? $"{Format.Percent(avg)} · missed {s.Missed} of {s.Answered}"
-        : $"{Format.Plural(s.QuestionCount, "question", "questions")}, not practised";
+        : $"{Format.Plural(s.QuestionCount, "question", "questions")}, not practiced";
 
     private static string Detail(SectionScore s) => s.QuestionCount == 0
         ? "No questions have been written from this section yet. New exams spread their questions across the sections covered least."

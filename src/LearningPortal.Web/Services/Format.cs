@@ -66,7 +66,7 @@ public static class Format
 
     public static string? CostHint(GenerationEstimate e) => e.Calls == 0 ? null : CostHint(e.TotalInputTokens, e.Model);
 
-    // "roughly $0.37 on Claude Opus 5" for analysing material of this size, or null when the
+    // "roughly $0.37 on Claude Opus 5" for analyzing material of this size, or null when the
     // chosen model's price isn't known (a custom model ID).
     public static string? AnalysisCost(int tokens, AiModelInfo? model) =>
         model is null ? null

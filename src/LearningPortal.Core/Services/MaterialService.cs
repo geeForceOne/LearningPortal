@@ -9,7 +9,7 @@ namespace LearningPortal.Core.Services;
 
 public sealed record MaterialDetail(Material Material, IReadOnlyList<MaterialSection> Sections);
 
-// A newly stored material and its size, so the caller can say what analysing it will cost.
+// A newly stored material and its size, so the caller can say what analyzing it will cost.
 public sealed record AddedMaterial(int Id, int TokenEstimate);
 
 // Ingests study material: stores the file, extracts its text once, splits it into sections and
@@ -124,8 +124,8 @@ public sealed class MaterialService(
             for (var i = 0; i < batches.Count; i++)
             {
                 progress?.Report(batches.Count == 1
-                    ? $"Analysing {material.Title}..."
-                    : $"Analysing {material.Title} (part {i + 1} of {batches.Count})...");
+                    ? $"Analyzing {material.Title}..."
+                    : $"Analyzing {material.Title} (part {i + 1} of {batches.Count})...");
 
                 var json = await client.CompleteJsonAsync(new AiRequest
                 {
@@ -133,11 +133,12 @@ public sealed class MaterialService(
                     Prompt = Prompts.OutlinePrompt(material.Title, batches[i]),
                     SchemaName = "material_outline",
                     Schema = Prompts.OutlineSchema,
-                    MaxTokens = 8_000,
+                    MaxTokens = 12_000,
                 }, ct);
 
                 using var doc = JsonDocument.Parse(json);
                 outlines.Add(doc.RootElement.GetProperty("outline").GetString() ?? "");
+                ReadConcepts(doc.RootElement, batches[i]);
             }
 
             material.Outline = string.Join("\n", outlines).Trim();
@@ -152,7 +153,35 @@ public sealed class MaterialService(
         }
 
         await db.SaveChangesAsync(CancellationToken.None);
+        // Question source labels use the outline's subjects for sections without a heading.
+        if (material.AnalysisStatus == AnalysisStatus.Done)
+            await RefreshSourceLabelsAsync(db, materialId, CancellationToken.None);
     }
+
+    // The concepts to explain, per section (see Prompts.OutlinePrompt). A section the AI left out
+    // keeps what it had, so Explain it back falls back to the outline line for it.
+    private static void ReadConcepts(JsonElement root, IReadOnlyList<MaterialSection> sections)
+    {
+        if (!root.TryGetProperty("concepts", out var lists) || lists.ValueKind != JsonValueKind.Array)
+            return;
+        foreach (var item in lists.EnumerateArray())
+        {
+            if (!item.TryGetProperty("section_index", out var index) || !index.TryGetInt32(out var sectionIndex)
+                || !item.TryGetProperty("concepts", out var concepts) || concepts.ValueKind != JsonValueKind.Array
+                || sections.FirstOrDefault(s => s.Index == sectionIndex) is not { } section)
+                continue;
+            var cleaned = concepts.EnumerateArray()
+                .Select(c => c.ValueKind == JsonValueKind.String ? c.GetString()!.Trim() : "")
+                .Where(c => c.Length > 0)
+                .Select(c => c.Length <= ExplainSession.MaxConceptLength ? c : c[..ExplainSession.MaxConceptLength])
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(MaxConceptsPerSection)
+                .ToList();
+            section.ConceptsJson = JsonSerializer.Serialize(cleaned);
+        }
+    }
+
+    private const int MaxConceptsPerSection = 8;
 
     public async Task<MaterialDetail> GetAsync(string userId, int materialId, CancellationToken ct = default)
     {
@@ -166,13 +195,38 @@ public sealed class MaterialService(
         return new MaterialDetail(material, sections);
     }
 
-    // Before 1.10.0, questions from material without headings were labelled "Title / Title (part 3)".
-    // Relabels those with the section's name from the outline; a no-op once they're fixed.
-    public async Task RefreshPartSourceLabelsAsync(CancellationToken ct = default)
+    // Questions store where they came from as text ("Title / Section"), and sections of material
+    // without headings are named after the material's first title. Both are brought back in step
+    // here: for material renamed before 1.11.0 (a file's first title is its file name), and for
+    // labels written before 1.10.0 ("Title / Title (part 3)"). A no-op once they're fixed.
+    public async Task RefreshSourceLabelsAsync(CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var files = await db.Materials.AsNoTracking()
+            .Where(m => m.OriginalFileName != null)
+            .Select(m => new { m.Id, m.Title, m.OriginalFileName })
+            .ToListAsync(ct);
+        foreach (var file in files)
+        {
+            var firstTitle = Path.GetFileNameWithoutExtension(file.OriginalFileName!);
+            if (string.Equals(firstTitle, file.Title, StringComparison.OrdinalIgnoreCase))
+                continue;
+            var headings = await db.MaterialSections.Where(s => s.MaterialId == file.Id).Select(s => new { s.Id, s.Heading }).ToListAsync(ct);
+            foreach (var h in headings)
+            {
+                var retitled = SectionNames.Retitle(h.Heading, firstTitle, file.Title);
+                if (retitled != h.Heading)
+                    await db.MaterialSections.Where(s => s.Id == h.Id).ExecuteUpdateAsync(u => u.SetProperty(s => s.Heading, retitled), ct);
+            }
+        }
+
+        await RefreshSourceLabelsAsync(db, null, ct);
+    }
+
+    private static async Task RefreshSourceLabelsAsync(AppDbContext db, int? materialId, CancellationToken ct)
+    {
         var questions = await db.Questions
-            .Where(q => q.SourceSectionId != null && q.SourceMaterialId != null && q.SourceLabel != null && q.SourceLabel.Contains(" (part "))
+            .Where(q => q.SourceSectionId != null && q.SourceMaterialId != null && (materialId == null || q.SourceMaterialId == materialId))
             .ToListAsync(ct);
         if (questions.Count == 0)
             return;
@@ -191,17 +245,28 @@ public sealed class MaterialService(
         {
             if (materials.TryGetValue(q.SourceMaterialId!.Value, out var material)
                 && material.Sections.FirstOrDefault(s => s.Id == q.SourceSectionId) is { } section)
-                q.SourceLabel = QuestionGenerationService.SourceLabel(material, section);
+            {
+                var label = QuestionGenerationService.SourceLabel(material, section);
+                if (q.SourceLabel != label)
+                    q.SourceLabel = label;
+            }
         }
         await db.SaveChangesAsync(ct);
     }
 
+    // Renaming also renames what was named after the material: its sections without a heading of
+    // their own, and the "From ..." label on the questions written from it.
     public async Task RenameAsync(string userId, int materialId, string title, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var material = await db.Materials.FirstOrDefaultAsync(m => m.Id == materialId && m.UserId == userId, ct) ?? throw new NotFoundException();
+        var material = await db.Materials.Include(m => m.Sections)
+            .FirstOrDefaultAsync(m => m.Id == materialId && m.UserId == userId, ct) ?? throw new NotFoundException();
+        var oldTitle = material.Title;
         material.Title = title.Trim();
+        foreach (var section in material.Sections)
+            section.Heading = SectionNames.Retitle(section.Heading, oldTitle, material.Title);
         await db.SaveChangesAsync(ct);
+        await RefreshSourceLabelsAsync(db, materialId, ct);
     }
 
     public async Task DeleteAsync(string userId, int materialId, CancellationToken ct = default)

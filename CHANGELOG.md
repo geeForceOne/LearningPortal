@@ -1,10 +1,25 @@
 # Release notes
 
+## 1.11.0 - 2026-10-10
+
+### New
+
+- **Print an exam**: print it or save it as a PDF to practice away from the screen, with the "Print" button on the exam page. Add the answer key, with answers and explanations, if you want it; it starts on a new page.
+- **Previous question**: go back to the question before while taking an exam. "Next question" is now always there too, so you can skip a question and come back to it. At the end, Recall lists the questions you haven't answered yet.
+
+### Improved
+
+- **Explain it back** asks about one concept at a time. Concepts are grouped by section, and "Surprise me" picks a single one. For material you add from now on, Recall lists the concepts itself; older material can be analyzed again from the Explain it back page to get the same.
+
+### Fixed
+
+- Minor fixes and updates.
+
 ## 1.10.0 - 2026-10-01
 
 ### New
 
-- **I don't know**: instead of guessing, say you don't know. It counts as incorrect, so the question comes back when you practise your weak questions, and the results show which ones you didn't know.
+- **I don't know**: instead of guessing, say you don't know. It counts as incorrect, so the question comes back when you practice your weak questions, and the results show which ones you didn't know.
 - **Homepage widget**: admins can show the number of accounts and active users on a [Homepage](https://gethomepage.dev) dashboard, with a token created under Admin settings. "Email settings" is now called "Admin settings".
 
 ### Improved
@@ -30,7 +45,7 @@
 
 ### New
 
-- Each topic page has a new **Go deeper** section with four study tools side by side: practise your weak questions, Explain it back, the concept map and Find gaps.
+- Each topic page has a new **Go deeper** section with four study tools side by side: practice your weak questions, Explain it back, the concept map and Find gaps.
 - Settings links to step-by-step guides for getting a Claude or an OpenAI API key.
 
 ### Improved
@@ -64,7 +79,7 @@
 ### New
 
 - Questions are now written in the background. You can leave the page or close the browser while the AI writes them; they're there when you come back, and the topic page shows which exam is still being written.
-- Concept map: each topic's material, section by section, coloured by how well you do on its questions. Pick a section to practise it.
+- Concept map: each topic's material, section by section, colored by how well you do on its questions. Pick a section to practice it.
 - Explain it back: pick a concept from your material (or "Surprise me") and explain it in your own words. The AI asks one or two questions like a curious student, then tells you what you explained well and what was missing.
 - Gap finder: the AI lists what a course on your topic usually covers that your material doesn't, and can write a short study note for each gap. These come from the AI's general knowledge, so they're clearly marked and can be wrong.
 
@@ -113,7 +128,7 @@
 ### New
 
 - Settings has two model modes. Simple uses one model for everything. Advanced has one model for outlining uploads and one for questions and grading, and lets you pick another model each time you upload material or generate questions.
-- When a topic has more than one material, you can choose which material an exam uses. The AI writes questions only from the ticked material, and only its questions are reused from the question bank.
+- When a topic has more than one material, you can choose which material an exam uses. The AI writes questions only from the selected material, and only its questions are reused from the question bank.
 
 ### Improved
 

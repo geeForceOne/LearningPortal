@@ -24,7 +24,7 @@ public abstract class AppPage : ComponentBase, IDisposable
     protected string? BusyMessage { get; private set; }
     protected bool IsBusy => BusyMessage is not null;
 
-    // Cancelled when the user leaves the page.
+    // Canceled when the user leaves the page.
     protected CancellationToken PageToken => _pageCts.Token;
 
     protected async Task<string> UserIdAsync()
@@ -38,7 +38,7 @@ public abstract class AppPage : ComponentBase, IDisposable
         return _userId;
     }
 
-    // Runs work that reports progress. Returns false when it failed or was cancelled; the error
+    // Runs work that reports progress. Returns false when it failed or was canceled; the error
     // (already in user-facing words) goes to onError.
     protected async Task<bool> RunBusyAsync(
         string initialMessage,

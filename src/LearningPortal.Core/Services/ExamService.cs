@@ -175,7 +175,7 @@ public sealed class ExamService(
 
     // Applies new settings. Questions that no longer match the type or difficulty are dropped
     // from the exam (they stay in the bank), extras beyond the new count are trimmed; call
-    // FillAsync afterwards to top it up. The code/theory share is only enforced on existing
+    // FillAsync afterward to top it up. The code/theory share is only enforced on existing
     // questions when it was changed, so saving a new name doesn't swap (and pay for) questions.
     // Questions from materials the exam now leaves out are dropped too.
     public async Task UpdateSettingsAsync(string userId, int examId, ExamSettings settings, CancellationToken ct = default)

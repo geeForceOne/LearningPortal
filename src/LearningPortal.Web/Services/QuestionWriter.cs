@@ -17,7 +17,7 @@ public sealed class QuestionWriter(ExamService exams, IHostApplicationLifetime l
         public required Kind Kind { get; init; }
         public string Message { get; internal set; } = "";
         public bool Finished { get; internal set; }
-        public bool Cancelled { get; internal set; }
+        public bool Canceled { get; internal set; }
         public FillResult? Result { get; internal set; }
         public string? Error { get; internal set; }
         public DateTime FinishedAt { get; internal set; }
@@ -107,7 +107,7 @@ public sealed class QuestionWriter(ExamService exams, IHostApplicationLifetime l
         }
         catch (OperationCanceledException)
         {
-            job.Cancelled = true;
+            job.Canceled = true;
         }
         catch (Exception ex) when (ex is AiException or ArgumentException or InvalidOperationException or NotFoundException)
         {
@@ -144,7 +144,7 @@ public sealed class QuestionWriter(ExamService exams, IHostApplicationLifetime l
         }
     }
 
-    // Reports straight away on the job's thread; Progress<T> would post to a context there isn't.
+    // Reports right away on the job's thread; Progress<T> would post to a context there isn't.
     private sealed class Reporter(Action<string> report) : IProgress<string>
     {
         public void Report(string value) => report(value);

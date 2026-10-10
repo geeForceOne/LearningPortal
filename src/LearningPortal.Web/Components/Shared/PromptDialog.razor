@@ -38,7 +38,7 @@
     private ElementReference _input;
     private TaskCompletionSource<string?>? _tcs;
 
-    // Resolves to the trimmed text, or null if cancelled. allowEmpty: for optional text, OK works
+    // Resolves to the trimmed text, or null if canceled. allowEmpty: for optional text, OK works
     // with an empty box (and resolves to "").
     public Task<string?> AskAsync(string title, string label, string initialValue = "", string okLabel = "Save",
         string? hint = null, bool multiline = false, bool allowEmpty = false)

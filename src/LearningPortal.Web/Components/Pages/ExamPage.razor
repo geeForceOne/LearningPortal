@@ -47,6 +47,7 @@ else
                         <Icon Name="play" /> @(_attempts.Count > 0 ? "Take again" : "Start exam")
                     </button>
                 }
+                <a class="btn btn-ghost btn-lg" href="exams/@exam.Id/print" title="Print this exam or save it as a PDF"><Icon Name="print" /> Print</a>
             }
         </div>
     </div>
@@ -327,7 +328,7 @@ else
         _job = Writer.Get(userId, ExamId);
         if (_job is not { Finished: true } done) return;
 
-        if (done.Cancelled)
+        if (done.Canceled)
             Ui.Toast.Success("Stopped. Questions Recall had already finished are kept.");
         else if (done.Error is not null)
             _error = done.Error;

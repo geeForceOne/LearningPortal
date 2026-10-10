@@ -20,12 +20,15 @@ window.learningPortal = {
         return ios && !navigator.standalone;
     },
 
+    // The browser's print dialog, which also saves as PDF.
+    print: () => window.print(),
+
     // Resolves to false when the browser refuses (no permission, insecure context).
     copyText: async (text) => {
         try { await navigator.clipboard.writeText(text); return true; } catch { return false; }
     },
 
-    // Syntax colouring for the code blocks inside one RichText element. Blocks already coloured are
+    // Syntax coloring for the code blocks inside one RichText element. Blocks already colored are
     // skipped; an unknown language falls back to auto-detection, which is harmless if it's wrong.
     highlightCode: (element) => {
         if (!element || !window.hljs) return;
