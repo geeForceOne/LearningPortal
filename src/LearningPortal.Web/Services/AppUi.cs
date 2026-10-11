@@ -9,4 +9,7 @@ public sealed class AppUi
     public ConfirmDialog Confirm { get; internal set; } = default!;
     public PromptDialog Prompt { get; internal set; } = default!;
     public Toast Toast { get; internal set; } = default!;
+
+    // The key reminder above the page, so Settings can refresh it when the keys in use change.
+    public KeyExpiryBanner KeyBanner { get; internal set; } = default!;
 }

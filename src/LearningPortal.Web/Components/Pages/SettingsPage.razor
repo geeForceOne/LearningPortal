@@ -50,15 +50,15 @@ else
         {
             <section class="setting">
                 <div class="setting-intro">
-                    <h2>Key in use</h2>
+                    <h2>API keys in use</h2>
                     <p>Your admin shares an API key with you. Use that one or your own keys: @AppInfo.Name never mixes the two.</p>
                 </div>
                 <div class="setting-body">
                     <div class="field">
                         <span class="field-label" id="key-source-label">@AppInfo.Name uses</span>
                         <div class="segmented" role="radiogroup" aria-labelledby="key-source-label">
-                            <label><input type="radio" name="key-source" checked="@_view.UsingShared" @onchange="() => SetUseSharedAsync(true)" /> Key from your admin</label>
-                            <label><input type="radio" name="key-source" checked="@(!_view.UsingShared)" @onchange="() => SetUseSharedAsync(false)" /> My own keys</label>
+                            <label><input type="radio" name="key-source" checked="@_view.UsingShared" disabled="@_switchingKey" @onchange="() => SetUseSharedAsync(true)" /> Key from your admin</label>
+                            <label><input type="radio" name="key-source" checked="@(!_view.UsingShared)" disabled="@_switchingKey" @onchange="() => SetUseSharedAsync(false)" /> My own keys</label>
                         </div>
                         <span class="field-hint">
                             Saved as soon as you pick it. When the admin's key runs out or expires, @AppInfo.Name stops and tells you;
@@ -84,51 +84,51 @@ else
             </section>
         }
 
-        <section class="setting">
-            <div class="setting-intro">
-                <h2>API keys</h2>
-                <p>Your own key for Claude, OpenAI or both. Requests are billed to your account with that provider.</p>
-            </div>
-            <div class="setting-body">
-                @if (_view.UsingShared)
-                {
-                    <div class="notice">Not in use while @AppInfo.Name uses the key from your admin. You can still save your own keys for later.</div>
-                }
-                <div class="notice notice-warn" role="note">
-                    <strong>@AppInfo.KeySafetyTitle</strong>
-                    <p class="key-safety">@AppInfo.KeySafety</p>
-                    <p class="key-safety">
-                        For Claude: set a monthly spend limit under Settings &rsaquo; Billing &rsaquo; Spend limits in the Claude Console, and choose an
-                        expiration when you <a href="https://platform.claude.com/settings/keys" target="_blank" rel="noopener noreferrer">create the key</a>.
-                    </p>
-                    <p class="key-safety">
-                        For OpenAI: set a monthly spend limit, enforced as a hard limit, under Limits in your organization or project
-                        settings, and choose an expiration when you <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer">create the key</a>.
-                    </p>
+        @* On the admin's key the user's own keys play no part, so their fields stay out of the way. *@
+        @if (!_view.UsingShared)
+        {
+            <section class="setting">
+                <div class="setting-intro">
+                    <h2>API keys</h2>
+                    <p>Your own key for Claude, OpenAI or both. Requests are billed to your account with that provider.</p>
                 </div>
+                <div class="setting-body">
+                    <div class="notice notice-warn" role="note">
+                        <strong>@AppInfo.KeySafetyTitle</strong>
+                        <p class="key-safety">@AppInfo.KeySafety</p>
+                        <p class="key-safety">
+                            For Claude: set a monthly spend limit under Settings &rsaquo; Billing &rsaquo; Spend limits in the Claude Console, and choose an
+                            expiration when you <a href="https://platform.claude.com/settings/keys" target="_blank" rel="noopener noreferrer">create the key</a>.
+                        </p>
+                        <p class="key-safety">
+                            For OpenAI: set a monthly spend limit, enforced as a hard limit, under Limits in your organization or project
+                            settings, and choose an expiration when you <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer">create the key</a>.
+                        </p>
+                    </div>
 
-                <KeyField Label="Anthropic API key (Claude)" Status="_view.ClaudeKey" Value="@_claudeKey" ValueChanged="v => KeyTyped(AiProvider.Claude, v)"
-                          OnRemove="() => Remove(AiProvider.Claude)" Removing="_removeClaude" Placeholder="sk-ant-..."
-                          ShowExpiry="HasKeyAfterSave(AiProvider.Claude)" @bind-ExpiresOn="_claudeExpires" SavedExpiresOn="_view.ClaudeKeyExpiresOn">
-                    <Hint>
-                        Create one at <a href="https://platform.claude.com/settings/keys" target="_blank" rel="noopener noreferrer">platform.claude.com</a> under API keys.
-                        New to API keys? <a href="@AppInfo.ClaudeKeyGuideUrl" target="_blank" rel="noopener noreferrer">Step-by-step guide</a>.
-                    </Hint>
-                </KeyField>
-                <KeyField Label="OpenAI API key (ChatGPT)" Status="_view.OpenAiKey" Value="@_openAiKey" ValueChanged="v => KeyTyped(AiProvider.OpenAi, v)"
-                          OnRemove="() => Remove(AiProvider.OpenAi)" Removing="_removeOpenAi" Placeholder="sk-..."
-                          ShowExpiry="HasKeyAfterSave(AiProvider.OpenAi)" @bind-ExpiresOn="_openAiExpires" SavedExpiresOn="_view.OpenAiKeyExpiresOn">
-                    <Hint>
-                        Create one at <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer">platform.openai.com</a> under API keys.
-                        New to API keys? <a href="@AppInfo.OpenAiKeyGuideUrl" target="_blank" rel="noopener noreferrer">Step-by-step guide</a>.
-                    </Hint>
-                </KeyField>
+                    <KeyField Label="Anthropic API key (Claude)" Status="_view.ClaudeKey" Value="@_claudeKey" ValueChanged="v => KeyTyped(AiProvider.Claude, v)"
+                              OnRemove="() => Remove(AiProvider.Claude)" Removing="_removeClaude" Placeholder="sk-ant-..."
+                              ShowExpiry="HasKeyAfterSave(AiProvider.Claude)" @bind-ExpiresOn="_claudeExpires" SavedExpiresOn="_view.ClaudeKeyExpiresOn">
+                        <Hint>
+                            Create one at <a href="https://platform.claude.com/settings/keys" target="_blank" rel="noopener noreferrer">platform.claude.com</a> under API keys.
+                            New to API keys? <a href="@AppInfo.ClaudeKeyGuideUrl" target="_blank" rel="noopener noreferrer">Step-by-step guide</a>.
+                        </Hint>
+                    </KeyField>
+                    <KeyField Label="OpenAI API key (ChatGPT)" Status="_view.OpenAiKey" Value="@_openAiKey" ValueChanged="v => KeyTyped(AiProvider.OpenAi, v)"
+                              OnRemove="() => Remove(AiProvider.OpenAi)" Removing="_removeOpenAi" Placeholder="sk-..."
+                              ShowExpiry="HasKeyAfterSave(AiProvider.OpenAi)" @bind-ExpiresOn="_openAiExpires" SavedExpiresOn="_view.OpenAiKeyExpiresOn">
+                        <Hint>
+                            Create one at <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer">platform.openai.com</a> under API keys.
+                            New to API keys? <a href="@AppInfo.OpenAiKeyGuideUrl" target="_blank" rel="noopener noreferrer">Step-by-step guide</a>.
+                        </Hint>
+                    </KeyField>
 
-                <div class="actions">
-                    <button type="button" class="btn btn-primary" disabled="@(_savingKeys || !KeysChanged)" @onclick="SaveKeysAsync">Save API keys</button>
+                    <div class="actions">
+                        <button type="button" class="btn btn-primary" disabled="@(_savingKeys || !KeysChanged)" @onclick="SaveKeysAsync">Save API keys</button>
+                    </div>
                 </div>
-            </div>
-        </section>
+            </section>
+        }
 
         <section class="setting">
             <div class="setting-intro">
@@ -217,12 +217,25 @@ else
         _generation = _view.Usable(_view.Generation);
     }
 
+    private bool _switchingKey;
+
     private async Task SetUseSharedAsync(bool useShared)
     {
-        await Settings.SetUseSharedKeyAsync(await UserIdAsync(), useShared, PageToken);
-        await LoadViewAsync();
-        ShowSavedModels();
-        Ui.Toast.Success(useShared ? $"{AppInfo.Name} now uses the key from your admin." : $"{AppInfo.Name} now uses your own keys.");
+        // One switch at a time, so quick clicks can't save and reload out of order.
+        if (_switchingKey || _view!.UsingShared == useShared) return;
+        _switchingKey = true;
+        try
+        {
+            await Settings.SetUseSharedKeyAsync(await UserIdAsync(), useShared, PageToken);
+            await LoadViewAsync();
+            ShowSavedModels();
+            await Ui.KeyBanner.RefreshAsync();
+            Ui.Toast.Success(useShared ? $"{AppInfo.Name} now uses the key from your admin." : $"{AppInfo.Name} now uses your own keys.");
+        }
+        finally
+        {
+            _switchingKey = false;
+        }
     }
 
     private async Task SetThemeAsync(Theme theme)
@@ -308,6 +321,7 @@ else
                 _removeOpenAi ? "" : string.IsNullOrWhiteSpace(_openAiKey) ? null : _openAiKey,
                 _claudeExpires, _openAiExpires, PageToken);
             await LoadViewAsync();
+            await Ui.KeyBanner.RefreshAsync();
 
             // The saved models only change when the user saves them, so a switch here needs a save.
             if (!_view!.UsingShared && MoveOffUnavailable())

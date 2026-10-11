@@ -1,5 +1,16 @@
 # Release notes
 
+## 1.12.1 - 2026-10-11
+
+### Improved
+
+- **New logo motions**: the logo has four new animations. Its dots gather in the center and spring back, light spreads through the network, the dots scatter and snap back, or the lines draw themselves again. You see them when you hover over the logo, on the sign-in page and while Recall is working.
+- **Simpler Settings on a shared key**: the section is now called "API keys in use". While you use the key from your admin, the fields for your own keys are hidden; switch to "My own keys" to see them. The reminder about a low or expiring key updates as soon as you switch.
+
+### Fixed
+
+- A page could stop responding when the same message appeared twice in quick succession, for example when switching quickly between the key from your admin and your own keys.
+
 ## 1.12.0 - 2026-10-11
 
 ### New

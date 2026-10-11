@@ -11,7 +11,13 @@
 </div>
 
 @code {
-    private sealed record Item(string Message, string Kind);
+    // A class, not a record: each toast is its own @key, so the same message can show twice at
+    // once (two equal records would be duplicate keys, which ends the circuit).
+    private sealed class Item(string message, string kind)
+    {
+        public string Message => message;
+        public string Kind => kind;
+    }
 
     private readonly List<Item> _toasts = [];
     private readonly CancellationTokenSource _cts = new();

@@ -38,11 +38,21 @@
     {
         var state = AuthState is null ? null : await AuthState;
         _userId = state?.User.FindFirstValue(ClaimTypes.NameIdentifier);
-        if (_userId is not null)
-        {
-            _reminders = await Settings.GetKeyRemindersAsync(_userId, Today);
-            _shared = await Settings.GetSharedKeyReminderAsync(_userId, Today);
-        }
+        await LoadAsync();
+    }
+
+    // Called by Settings after the keys in use changed, so the banner doesn't wait for a reload.
+    public async Task RefreshAsync()
+    {
+        await LoadAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (_userId is null) return;
+        _reminders = await Settings.GetKeyRemindersAsync(_userId, Today);
+        _shared = await Settings.GetSharedKeyReminderAsync(_userId, Today);
     }
 
     private SharedKeyGrantView? _shared;
