@@ -1,0 +1,154 @@
+@using System.Globalization
+@* The admin's form for one person's grant on the shared AI key: its limits, and for an existing
+   grant what was spent, with resetting the used balance and taking the key back. The page
+   carries out what comes back. *@
+@if (_visible)
+{
+    <div class="modal-backdrop">
+        <div class="modal" role="dialog" aria-modal="true" aria-labelledby="shared-key-title">
+            <h2 id="shared-key-title">Shared key for @_name</h2>
+            <form class="form" @onsubmit="Submit" @onsubmit:preventDefault="true">
+                @if (!_keySaved)
+                {
+                    <div class="notice notice-warn">No shared key is saved yet. Add one under Admin settings, or this won't do anything.</div>
+                }
+                @if (_existing is not null)
+                {
+                    <p class="small" style="margin:0">
+                        Spent so far (estimated): @Format.Usd(_existing.MonthSpent) this month, @Format.Usd(_existing.TotalSpent) in total.
+                    </p>
+                }
+                else
+                {
+                    <p class="small" style="margin:0">
+                        They can use your key within the limits below. With no keys of their own they use it right away;
+                        otherwise they switch to it in Settings.
+                    </p>
+                }
+
+                <div class="field">
+                    <span class="field-label" id="grant-limit-label">Spending limit</span>
+                    <div class="segmented" role="radiogroup" aria-labelledby="grant-limit-label" style="justify-self:start">
+                        <label><input type="radio" name="grant-limit" checked="@(_limit == Limit.None)" @onchange="() => _limit = Limit.None" /> None</label>
+                        <label><input type="radio" name="grant-limit" checked="@(_limit == Limit.OneTime)" @onchange="() => _limit = Limit.OneTime" /> One-time</label>
+                        <label><input type="radio" name="grant-limit" checked="@(_limit == Limit.Monthly)" @onchange="() => _limit = Limit.Monthly" /> Monthly</label>
+                    </div>
+                </div>
+
+                @if (_limit != Limit.None)
+                {
+                    <label class="field">
+                        <span>@(_limit == Limit.Monthly ? "Balance per month (USD)" : "Balance (USD)")</span>
+                        <input class="input" type="number" min="0.01" step="0.01" inputmode="decimal" style="max-width:160px"
+                               @bind="_amount" @bind:event="oninput" @onkeydown="OnKeyDown" placeholder="5.00" />
+                        <span class="field-hint">
+                            @if (_limit == Limit.Monthly)
+                            {
+                                <text>Full again on the 1st of each month (UTC). What isn't used doesn't carry over.</text>
+                            }
+                            else if (_existing is { Balance: not null, Monthly: false })
+                            {
+                                <text>@Format.Usd(_existing.BalanceSpent) of it is used. Raise the amount to top it up.</text>
+                            }
+                            else
+                            {
+                                <text>Once it's used up, the key stops until you raise the amount.</text>
+                            }
+                        </span>
+                    </label>
+                }
+
+                <label class="field">
+                    <span>Expires on <span class="muted">(optional)</span></span>
+                    <input class="input" type="date" style="max-width:200px" value="@_expiresOn?.ToString("yyyy-MM-dd")"
+                           @onchange="e => _expiresOn = DateOnly.TryParse(e.Value?.ToString(), out var d) ? d : null" />
+                    <span class="field-hint">The last day the key works for them. Leave empty for no expiry date.</span>
+                </label>
+
+                @if (_error is not null)
+                {
+                    <div class="field-error">@_error</div>
+                }
+
+                <div class="modal-actions">
+                    @if (_existing is not null)
+                    {
+                        <button type="button" class="btn btn-danger" style="margin-right:auto" @onclick="() => Resolve(new Result(Outcome.Revoke, null))">Take key back</button>
+                        @if (_existing is { Balance: not null, BalanceSpent: > 0 })
+                        {
+                            <button type="button" class="btn btn-ghost" title="Makes the full balance available again" @onclick="() => Resolve(new Result(Outcome.ResetBalance, null))">Reset used balance</button>
+                        }
+                    }
+                    <button type="button" class="btn btn-ghost" @onclick="() => Resolve(null)">Cancel</button>
+                    <button type="submit" class="btn btn-primary">@(_existing is null ? "Share key" : "Save")</button>
+                </div>
+            </form>
+        </div>
+    </div>
+}
+
+@code {
+    public enum Outcome { Save, ResetBalance, Revoke }
+
+    // Update is set for Save.
+    public sealed record Result(Outcome Outcome, SharedKeyGrantUpdate? Update);
+
+    private enum Limit { None, OneTime, Monthly }
+
+    private bool _visible;
+    private string _name = "";
+    private SharedKeyGrantView? _existing;
+    private bool _keySaved;
+    private Limit _limit;
+    private string _amount = "";
+    private DateOnly? _expiresOn;
+    private string? _error;
+    private TaskCompletionSource<Result?>? _tcs;
+
+    // Resolves to what the admin chose, or null if canceled.
+    public Task<Result?> AskAsync(string name, SharedKeyGrantView? existing, bool keySaved)
+    {
+        _tcs?.TrySetResult(null);
+        _name = name;
+        _existing = existing;
+        _keySaved = keySaved;
+        _limit = existing?.Balance is null ? Limit.None : existing.Monthly ? Limit.Monthly : Limit.OneTime;
+        _amount = existing?.Balance?.ToString("0.00", CultureInfo.InvariantCulture) ?? "";
+        _expiresOn = existing?.ExpiresOn;
+        _error = null;
+        _visible = true;
+        _tcs = new TaskCompletionSource<Result?>();
+        StateHasChanged();
+        return _tcs.Task;
+    }
+
+    private void OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+            Resolve(null);
+    }
+
+    private void Submit()
+    {
+        decimal? balance = null;
+        if (_limit != Limit.None)
+        {
+            if (!decimal.TryParse(_amount, NumberStyles.Number, CultureInfo.InvariantCulture, out var amount) || amount < 0.01m || amount > 100_000m)
+            {
+                _error = "Enter the balance in dollars, for example 5.00.";
+                return;
+            }
+            balance = Math.Round(amount, 2);
+        }
+        Resolve(new Result(Outcome.Save, new SharedKeyGrantUpdate(_expiresOn, balance, _limit == Limit.Monthly)));
+    }
+
+    private void Resolve(Result? result)
+    {
+        _visible = false;
+        var tcs = _tcs;
+        _tcs = null;
+        StateHasChanged();
+        tcs?.TrySetResult(result);
+    }
+}

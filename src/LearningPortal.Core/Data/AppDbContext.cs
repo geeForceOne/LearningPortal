@@ -21,6 +21,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
     public DbSet<ExplainSession> ExplainSessions => Set<ExplainSession>();
     public DbSet<SiteSettings> SiteSettings => Set<SiteSettings>();
     public DbSet<AccountRequest> AccountRequests => Set<AccountRequest>();
+    public DbSet<SharedKeyGrant> SharedKeyGrants => Set<SharedKeyGrant>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -105,6 +106,12 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
         });
 
         b.Entity<SiteSettings>(e => e.Property(x => x.Id).ValueGeneratedNever());
+
+        b.Entity<SharedKeyGrant>(e =>
+        {
+            e.HasKey(x => x.UserId);
+            e.HasOne<AppUser>().WithOne().HasForeignKey<SharedKeyGrant>(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
 
         b.Entity<AccountRequest>(e =>
         {

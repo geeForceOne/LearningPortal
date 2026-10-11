@@ -19,6 +19,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<EmailSender>();
         services.AddDbContextFactory<AppDbContext>(o => o.UseSqlite(connectionString));
         services.AddSingleton<SecretProtector>();
+        services.AddSingleton<SharedKeyService>();
         services.AddSingleton<SettingsService>();
         services.AddSingleton<TopicService>();
         services.AddSingleton<MaterialService>();

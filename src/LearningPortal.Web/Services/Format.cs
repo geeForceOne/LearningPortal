@@ -40,14 +40,47 @@ public static class Format
     public static string Tokens(int tokens) => TokenEstimator.Format(tokens);
 
     // The confirmation shown before a generation that sends a lot of material.
-    public static string LargeGeneration(GenerationEstimate e)
+    public static string LargeGeneration(GenerationEstimate e, SettingsView? settings = null)
     {
         var text = $"This takes about {Plural(e.Calls, "AI request", "AI requests")} and sends roughly {Tokens(e.TotalInputTokens)} of material in total";
         if (e is { Model: { } model, InputCost: { } cost })
             text += $", roughly {Money(cost)} on {model.Name} plus a little for the AI's reply (less if the provider caches the material).";
         else
             text += " (less if the provider caches it).";
-        return text + " That's billed to your API key. Go ahead?";
+        return text + $" {BilledTo(settings)} Go ahead?";
+    }
+
+    // Who pays for a costly AI action: the user's own key, or their grant on the admin's key.
+    public static string BilledTo(SettingsView? settings) =>
+        settings is { UsingShared: true } ? "That counts against the key from your admin." : "That's billed to your API key.";
+
+    // An exact dollar amount, for balances and spend ("$0.00" rather than Money's "less than $0.01").
+    public static string Usd(decimal amount) => "$" + amount.ToString("0.00", CultureInfo.InvariantCulture);
+
+    // A grant's limits in a few words: "$5.00 a month, until 31 Dec 2026".
+    public static string GrantLimits(SharedKeyGrantView g)
+    {
+        var balance = g.Balance is { } b ? Usd(b) + (g.Monthly ? " a month" : " in total") : null;
+        var until = g.ExpiresOn is { } date ? $"{(balance is null ? "Until" : "until")} {Day(date)}" : null;
+        return balance is null && until is null ? "Unlimited" : string.Join(", ", new[] { balance, until }.Where(p => p is not null));
+    }
+
+    // Where a grant stands right now, as a sentence or two for the person using it.
+    public static string GrantStatus(SharedKeyGrantView g)
+    {
+        switch (g.State)
+        {
+            case GrantState.Expired:
+                return $"It expired on {Day(g.ExpiresOn!.Value)}.";
+            case GrantState.UsedUp when g.Monthly:
+                return $"This month's balance of {Usd(g.Balance!.Value)} is used up. It's full again on {Day(SharedKeyGrantView.NextReset)}.";
+            case GrantState.UsedUp:
+                return $"The balance of {Usd(g.Balance!.Value)} is used up.";
+        }
+        var balance = g.Balance is not { } b ? "No spending limit."
+            : g.Monthly ? $"{Usd(g.Remaining!.Value)} of {Usd(b)} left this month; it's full again on {Day(SharedKeyGrantView.NextReset)}."
+            : $"{Usd(g.Remaining!.Value)} of {Usd(b)} left.";
+        return balance + (g.ExpiresOn is { } date ? $" Works until {Day(date)}." : " No expiry date.");
     }
 
     // Costs below this aren't worth mentioning in the UI; above it, AI actions show tokens and cost.

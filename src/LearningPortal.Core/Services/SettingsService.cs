@@ -8,6 +8,8 @@ namespace LearningPortal.Core.Services;
 
 // What Settings shows. Deliberately carries no key material: only whether each key is set,
 // missing, or stored but unreadable. Every choice has its model resolved (never blank).
+// Shared is the user's grant on the admin's key, when they have one; UseShared is their choice
+// between that key and their own. HasKey, Default and IsConfigured describe the key in use.
 public sealed record SettingsView(
     SecretStatus ClaudeKey,
     SecretStatus OpenAiKey,
@@ -16,17 +18,29 @@ public sealed record SettingsView(
     AiChoice Analysis,
     AiChoice Generation,
     DateOnly? ClaudeKeyExpiresOn = null,
-    DateOnly? OpenAiKeyExpiresOn = null)
+    DateOnly? OpenAiKeyExpiresOn = null,
+    SharedKeyStatus? Shared = null,
+    bool UseShared = false)
 {
+    public bool UsingShared => Shared is not null && UseShared;
+
+    // The models the pickers may offer; null means any, including custom model IDs.
+    public IReadOnlySet<string>? AllowedModels => UsingShared ? Shared!.AllowedModels : null;
+
     public DateOnly? KeyExpiresOn(AiProvider provider) => provider == AiProvider.Claude ? ClaudeKeyExpiresOn : OpenAiKeyExpiresOn;
 
     public SecretStatus KeyStatus(AiProvider provider) => provider == AiProvider.Claude ? ClaudeKey : OpenAiKey;
 
-    public bool HasKey(AiProvider provider) => KeyStatus(provider) == SecretStatus.Set;
+    public bool HasOwnKey(AiProvider provider) => KeyStatus(provider) == SecretStatus.Set;
+
+    public bool HasKey(AiProvider provider) => UsingShared ? Shared!.HasKey(provider) : HasOwnKey(provider);
 
     // The model a task uses unless the user picks another one for that action.
     public AiChoice Default(AiTask task) =>
-        !AdvancedModels ? Simple : task == AiTask.Analysis ? Analysis : Generation;
+        Usable(!AdvancedModels ? Simple : task == AiTask.Analysis ? Analysis : Generation);
+
+    // On the admin's key, a saved model that isn't allowed there gives way to one that is.
+    public AiChoice Usable(AiChoice choice) => UsingShared ? Shared!.Usable(choice) ?? choice : choice;
 
     public bool IsConfigured => HasKey(Default(AiTask.Analysis).Provider) && HasKey(Default(AiTask.Generation).Provider);
 }
@@ -38,7 +52,7 @@ public sealed record ModelsUpdate(
     AiChoice Analysis,
     AiChoice Generation);
 
-public sealed class SettingsService(IDbContextFactory<AppDbContext> dbFactory, SecretProtector protector)
+public sealed class SettingsService(IDbContextFactory<AppDbContext> dbFactory, SecretProtector protector, SharedKeyService sharedKeys)
 {
     public async Task<SettingsView> GetAsync(string userId, CancellationToken ct = default)
     {
@@ -52,7 +66,32 @@ public sealed class SettingsService(IDbContextFactory<AppDbContext> dbFactory, S
             Choice(s.AnalysisProvider, s.AnalysisModel),
             Choice(s.GenerationProvider, s.GenerationModel),
             s.ClaudeKeyExpiresOn,
-            s.OpenAiKeyExpiresOn);
+            s.OpenAiKeyExpiresOn,
+            await sharedKeys.GetStatusAsync(userId, ct),
+            s.UseSharedKey);
+    }
+
+    // The user's choice between the admin's key and their own keys. Saved on its own, as soon
+    // as it's picked.
+    public async Task SetUseSharedKeyAsync(string userId, bool useShared, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var s = await GetOrAddAsync(db, userId, ct);
+        s.UseSharedKey = useShared;
+        await db.SaveChangesAsync(ct);
+    }
+
+    // The grant to tell the user about today, while they use the admin's key: expired, used up,
+    // running low, or expiring within ReminderDays. Null otherwise, or when they closed today's
+    // reminder.
+    public async Task<SharedKeyGrantView?> GetSharedKeyReminderAsync(string userId, DateOnly today, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var s = await db.UserSettings.AsNoTracking().FirstOrDefaultAsync(x => x.UserId == userId, ct);
+        if (s is null || !s.UseSharedKey || s.KeyReminderDismissedOn == today)
+            return null;
+        var grant = (await sharedKeys.GetStatusAsync(userId, ct))?.Grant;
+        return grant is not null && (grant.State != GrantState.Active || grant.IsLow || grant.DaysLeft <= ReminderDays) ? grant : null;
     }
 
     // A key whose expiry date is near or past: shown from ReminderDays before the date on.
@@ -159,11 +198,21 @@ public sealed class SettingsService(IDbContextFactory<AppDbContext> dbFactory, S
         var s = await db.UserSettings.AsNoTracking().FirstOrDefaultAsync(x => x.UserId == userId, ct)
             ?? throw new AiNotConfiguredException();
 
-        var picked = s.AdvancedModels && choice is not null
-            ? Choice(choice.Provider, choice.Model)
+        var explicitChoice = s.AdvancedModels && choice is not null;
+        var picked = explicitChoice
+            ? Choice(choice!.Provider, choice.Model)
             : !s.AdvancedModels ? Choice(s.Provider, s.Model)
             : task == AiTask.Analysis ? Choice(s.AnalysisProvider, s.AnalysisModel)
             : Choice(s.GenerationProvider, s.GenerationModel);
+
+        // The admin's key or the user's own, never one as a fallback for the other.
+        if (s.UseSharedKey && await sharedKeys.GetStatusAsync(userId, ct) is { } shared)
+        {
+            if (explicitChoice && !shared.Allows(picked))
+                throw new AiException(
+                    $"{AiModels.DisplayName(picked.Model)} isn't available with the key from your admin. Pick another model.");
+            return await sharedKeys.ConnectAsync(userId, shared.Usable(picked) ?? throw new AiException(SharedKeyService.NotSetUp), ct);
+        }
 
         var key = protector.Read(picked.Provider == AiProvider.Claude ? s.ClaudeApiKeyProtected : s.OpenAiApiKeyProtected);
         return key.Status switch

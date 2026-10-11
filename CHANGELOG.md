@@ -1,5 +1,11 @@
 # Release notes
 
+## 1.12.0 - 2026-10-11
+
+### New
+
+- **Shared AI key**: admins can share an API key of their own with selected people, so they don't need one themselves. Save the key under Admin settings and choose there which models it may be used with, then give it to people on the Users page: without a limit, until a date, or with a balance in dollars that is one-time or per month. Recall estimates what each person has used and stops when the balance is spent or the date has passed. Someone with a shared key sees what's left in Settings and can switch between it and their own keys there.
+
 ## 1.11.0 - 2026-10-10
 
 ### New

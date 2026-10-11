@@ -10,8 +10,10 @@
     <div>
         <h1>Settings</h1>
         <p class="page-sub">
-            How Recall looks, your AI keys, and which models outline your material, write your exams and grade them. You use
-            your own API keys: requests are billed to your account with each provider.
+            How Recall looks, your AI keys, and which models outline your material, write your exams and grade them.
+            @(_view is { UsingShared: true }
+                ? "Right now you use the key your admin shares with you."
+                : "You use your own API keys: requests are billed to your account with each provider.")
         </p>
     </div>
 </div>
@@ -44,12 +46,54 @@ else
             </div>
         </section>
 
+        @if (_view.Shared is { } shared)
+        {
+            <section class="setting">
+                <div class="setting-intro">
+                    <h2>Key in use</h2>
+                    <p>Your admin shares an API key with you. Use that one or your own keys: @AppInfo.Name never mixes the two.</p>
+                </div>
+                <div class="setting-body">
+                    <div class="field">
+                        <span class="field-label" id="key-source-label">@AppInfo.Name uses</span>
+                        <div class="segmented" role="radiogroup" aria-labelledby="key-source-label">
+                            <label><input type="radio" name="key-source" checked="@_view.UsingShared" @onchange="() => SetUseSharedAsync(true)" /> Key from your admin</label>
+                            <label><input type="radio" name="key-source" checked="@(!_view.UsingShared)" @onchange="() => SetUseSharedAsync(false)" /> My own keys</label>
+                        </div>
+                        <span class="field-hint">
+                            Saved as soon as you pick it. When the admin's key runs out or expires, @AppInfo.Name stops and tells you;
+                            it doesn't switch to your own keys by itself.
+                        </span>
+                    </div>
+
+                    <div class="notice @(shared.Grant.State != GrantState.Active || shared.Grant.IsLow ? "notice-warn" : _view.UsingShared ? "notice-good" : "")" role="status">
+                        <strong>Key from your admin</strong>
+                        <div>@Format.GrantStatus(shared.Grant)</div>
+                        @if (!Enum.GetValues<AiProvider>().Any(shared.HasKey))
+                        {
+                            <div>Your admin hasn't saved a key or allowed any models yet, so it can't be used right now.</div>
+                        }
+                        @if (shared.Grant.Balance is not null)
+                        {
+                            <div class="small muted">
+                                Amounts are @(AppInfo.Name)'s estimate from the tokens each request used, so they can differ a little from the provider's bill.
+                            </div>
+                        }
+                    </div>
+                </div>
+            </section>
+        }
+
         <section class="setting">
             <div class="setting-intro">
                 <h2>API keys</h2>
                 <p>Your own key for Claude, OpenAI or both. Requests are billed to your account with that provider.</p>
             </div>
             <div class="setting-body">
+                @if (_view.UsingShared)
+                {
+                    <div class="notice">Not in use while @AppInfo.Name uses the key from your admin. You can still save your own keys for later.</div>
+                }
                 <div class="notice notice-warn" role="note">
                     <strong>@AppInfo.KeySafetyTitle</strong>
                     <p class="key-safety">@AppInfo.KeySafety</p>
@@ -107,20 +151,24 @@ else
 
                 @if (_advanced)
                 {
-                    <AiModelSelect Label="Uploads (outline)" @bind-Value="_analysis" Available="Available" AllowCustom="true">
+                    <AiModelSelect Label="Uploads (outline)" @bind-Value="_analysis" Available="Available" AllowedModels="_view.AllowedModels" AllowCustom="true">
                         <Hint><span class="field-hint">Reads each file you add once to outline it. A cheaper model is usually enough.</span></Hint>
                     </AiModelSelect>
-                    <AiModelSelect Label="Questions & grading" @bind-Value="_generation" Available="Available" AllowCustom="true">
+                    <AiModelSelect Label="Questions & grading" @bind-Value="_generation" Available="Available" AllowedModels="_view.AllowedModels" AllowCustom="true">
                         <Hint><span class="field-hint">Writes and replaces questions, and grades written answers.</span></Hint>
                     </AiModelSelect>
                 }
                 else
                 {
-                    <AiModelSelect Label="Model" @bind-Value="_simple" Available="Available" AllowCustom="true">
+                    <AiModelSelect Label="Model" @bind-Value="_simple" Available="Available" AllowedModels="_view.AllowedModels" AllowCustom="true">
                         <Hint><span class="field-hint">Outlines your uploads, writes questions and grades written answers.</span></Hint>
                     </AiModelSelect>
                 }
 
+                @if (_view.UsingShared)
+                {
+                    <span class="field-hint">On the key from your admin, you pick from the models your admin allows.</span>
+                }
                 <span class="field-hint">
                     Prices are per million input / output tokens, as of @AiModels.PricesAsOf. Current prices:
                     <a href="@AiModels.ClaudePricingUrl" target="_blank" rel="noopener noreferrer">Claude</a>,
@@ -158,9 +206,23 @@ else
         _theme = await Settings.GetThemeAsync(await UserIdAsync(), PageToken);
         await LoadViewAsync();
         _advanced = _view!.AdvancedModels;
-        _simple = _view.Simple;
-        _analysis = _view.Analysis;
-        _generation = _view.Generation;
+        ShowSavedModels();
+    }
+
+    // On the admin's key, a saved model that isn't allowed there shows as the one used instead.
+    private void ShowSavedModels()
+    {
+        _simple = _view!.Usable(_view.Simple);
+        _analysis = _view.Usable(_view.Analysis);
+        _generation = _view.Usable(_view.Generation);
+    }
+
+    private async Task SetUseSharedAsync(bool useShared)
+    {
+        await Settings.SetUseSharedKeyAsync(await UserIdAsync(), useShared, PageToken);
+        await LoadViewAsync();
+        ShowSavedModels();
+        Ui.Toast.Success(useShared ? $"{AppInfo.Name} now uses the key from your admin." : $"{AppInfo.Name} now uses your own keys.");
     }
 
     private async Task SetThemeAsync(Theme theme)
@@ -192,8 +254,8 @@ else
     // The expiry date belongs to a key, so it's offered while one is saved (and not being removed)
     // or being typed in.
     private bool HasKeyAfterSave(AiProvider provider) => provider == AiProvider.Claude
-        ? !string.IsNullOrWhiteSpace(_claudeKey) || (!_removeClaude && _view!.HasKey(AiProvider.Claude))
-        : !string.IsNullOrWhiteSpace(_openAiKey) || (!_removeOpenAi && _view!.HasKey(AiProvider.OpenAi));
+        ? !string.IsNullOrWhiteSpace(_claudeKey) || (!_removeClaude && _view!.HasOwnKey(AiProvider.Claude))
+        : !string.IsNullOrWhiteSpace(_openAiKey) || (!_removeOpenAi && _view!.HasOwnKey(AiProvider.OpenAi));
 
     private void KeyTyped(AiProvider provider, string value)
     {
@@ -248,7 +310,7 @@ else
             await LoadViewAsync();
 
             // The saved models only change when the user saves them, so a switch here needs a save.
-            if (MoveOffUnavailable())
+            if (!_view!.UsingShared && MoveOffUnavailable())
                 Ui.Toast.Success("API keys saved. Models switched to a provider you have a key for: click Save models to keep it.");
             else
                 Ui.Toast.Success("API keys saved.");
@@ -268,7 +330,9 @@ else
 
             var inUse = _advanced ? new[] { _analysis, _generation } : [_simple];
             if (inUse.FirstOrDefault(c => !Available(c.Provider)) is { } missing)
-                Ui.Toast.Error($"Models saved, but there's no {AiModels.ProviderName(missing.Provider)} API key for the model you picked.");
+                Ui.Toast.Error(_view!.UsingShared
+                    ? $"Models saved, but {AiModels.ProviderName(missing.Provider)} isn't available with the key from your admin."
+                    : $"Models saved, but there's no {AiModels.ProviderName(missing.Provider)} API key for the model you picked.");
             else
                 Ui.Toast.Success("Models saved.");
         }

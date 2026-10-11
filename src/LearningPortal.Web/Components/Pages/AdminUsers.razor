@@ -5,6 +5,7 @@
 @inject AccountMailService Mail
 @inject AccountRequestService Requests
 @inject AdminStatisticsService Stats
+@inject SharedKeyService SharedKeys
 @inject IJSRuntime JS
 
 <PageTitle>Users - @AppInfo.Name</PageTitle>
@@ -79,6 +80,7 @@
                 @SortHeader("Name", Column.Name)
                 @SortHeader("Role", Column.Role)
                 @SortHeader("Last active", Column.LastActive)
+                @SortHeader("Shared key", Column.SharedKey)
                 @SortHeader("Topics", Column.Topics, numeric: true)
                 @SortHeader("Exams", Column.Exams, numeric: true)
                 @SortHeader("Bank questions", Column.Questions, numeric: true)
@@ -109,6 +111,27 @@
                     <td data-label="Last active" class="nowrap" title="@(usage.LastActiveAt is { } at ? Format.Date(at) : "")">
                         @(usage.LastActiveAt is { } active ? Format.Ago(active) : "Not yet")
                     </td>
+                    <td data-label="Shared key" class="users-shared">
+                        @if (_grants.GetValueOrDefault(u.Id) is { } grant)
+                        {
+                            <span class="nowrap">@Format.GrantLimits(grant)</span>
+                            <span class="muted small users-email" title="Estimated from the tokens used">
+                                @Format.Usd(grant.MonthSpent) this month · @Format.Usd(grant.TotalSpent) total
+                            </span>
+                            @if (grant.State != GrantState.Active)
+                            {
+                                <span class="tag">@(grant.State == GrantState.Expired ? "Expired" : "Used up")</span>
+                            }
+                            else if (grant.Remaining is { } left)
+                            {
+                                <span class="muted small users-email">@Format.Usd(left) left</span>
+                            }
+                        }
+                        else
+                        {
+                            <span class="muted">-</span>
+                        }
+                    </td>
                     <td data-label="Topics" class="num">@usage.Topics</td>
                     <td data-label="Exams" class="num">@usage.Exams</td>
                     <td data-label="Bank questions" class="num">@usage.BankQuestions</td>
@@ -124,6 +147,10 @@
                                     <div class="menu-note">Created @Format.Ago(u.CreatedAt)</div>
                                     <button type="button" disabled="@_sending" @onclick="() => SendLinkAsync(u)">@(u.HasPassword ? "Send reset link" : "Resend invite")</button>
                                     <button type="button" @onclick="() => EditEmailAsync(u)">@(u.Email is null ? "Add email" : "Change email")</button>
+                                    @if (!u.IsAdmin)
+                                    {
+                                        <button type="button" @onclick="() => SharedKeyAsync(u)">@(_grants.ContainsKey(u.Id) ? "Shared key..." : "Share key...")</button>
+                                    }
                                     @if (!isMe)
                                     {
                                         <button type="button" @onclick="() => ToggleAdminAsync(u)">@(u.IsAdmin ? "Remove admin" : "Make admin")</button>
@@ -141,13 +168,47 @@
 </section>
 
 <CreateAccountDialog @ref="_createDialog" />
+<SharedKeyDialog @ref="_sharedKeyDialog" />
 
 @code {
     [CascadingParameter] private AppUi Ui { get; set; } = default!;
 
     private sealed record LinkToShare(string Title, string Reason, string Url, string Validity);
 
-    private enum Column { Name, Role, LastActive, Topics, Exams, Questions, Attempts }
+    private enum Column { Name, Role, LastActive, SharedKey, Topics, Exams, Questions, Attempts }
+
+    private IReadOnlyDictionary<string, SharedKeyGrantView> _grants = new Dictionary<string, SharedKeyGrantView>();
+    private bool _sharedKeySaved;
+    private SharedKeyDialog _sharedKeyDialog = default!;
+
+    // Gives, changes or takes back one person's use of the shared AI key.
+    private async Task SharedKeyAsync(UserRow u)
+    {
+        var result = await _sharedKeyDialog.AskAsync(u.ShownName, _grants.GetValueOrDefault(u.Id), _sharedKeySaved);
+        if (result is null) return;
+
+        switch (result.Outcome)
+        {
+            case SharedKeyDialog.Outcome.Save:
+                await SharedKeys.SaveGrantAsync(u.Id, result.Update!, PageToken);
+                Ui.Toast.Success($"{u.ShownName} can use the shared key: {LowerFirst(Format.GrantLimits((await ReloadGrantsAsync())[u.Id]))}.");
+                return;
+            case SharedKeyDialog.Outcome.ResetBalance:
+                await SharedKeys.ResetBalanceAsync(u.Id, PageToken);
+                Ui.Toast.Success($"{u.ShownName} has the full balance again.");
+                break;
+            case SharedKeyDialog.Outcome.Revoke:
+                await SharedKeys.RevokeAsync(u.Id, PageToken);
+                Ui.Toast.Success($"{u.ShownName} no longer has the shared key and is back on their own keys.");
+                break;
+        }
+        await ReloadGrantsAsync();
+    }
+
+    private static string LowerFirst(string s) => char.ToLowerInvariant(s[0]) + s[1..];
+
+    private async Task<IReadOnlyDictionary<string, SharedKeyGrantView>> ReloadGrantsAsync() =>
+        _grants = await SharedKeys.ListGrantsAsync(PageToken);
 
     private IReadOnlyList<UserRow> _users = [];
     private IReadOnlyDictionary<string, UserUsage> _usage = new Dictionary<string, UserUsage>();
@@ -168,6 +229,8 @@
         _usage = await Stats.GetUsageAsync(PageToken);
         _emailOn = await Mail.EmailConfiguredAsync();
         _requests = await Requests.ListAsync(PageToken);
+        _sharedKeySaved = (await SharedKeys.GetAdminViewAsync(PageToken)).HasAnyKey;
+        await ReloadGrantsAsync();
     }
 
     // A new account has no usage row until the page reloads; it shows as nothing done yet.
@@ -179,6 +242,7 @@
         {
             Column.Role => u => u.IsAdmin ? 0 : 1,
             Column.LastActive => u => Usage(u).LastActiveAt ?? DateTime.MinValue,
+            Column.SharedKey => u => _grants.GetValueOrDefault(u.Id)?.MonthSpent ?? -1,
             Column.Topics => u => Usage(u).Topics,
             Column.Exams => u => Usage(u).Exams,
             Column.Questions => u => Usage(u).BankQuestions,
@@ -367,6 +431,7 @@
             return;
         await Users.SetAdminAsync(u.Id, !u.IsAdmin);
         _users = await Users.ListAsync();
+        await ReloadGrantsAsync();
     }
 
     private async Task DeleteAsync(UserRow u)

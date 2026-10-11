@@ -610,6 +610,40 @@ namespace LearningPortal.Core.Data.Migrations
                     b.ToTable("QuestionOptions");
                 });
 
+            modelBuilder.Entity("LearningPortal.Core.Models.SharedKeyGrant", b =>
+                {
+                    b.Property<string>("UserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("BalanceMicros")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("BalanceSpentMicros")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly?>("ExpiresOn")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Month")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("MonthSpentMicros")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("Monthly")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("TotalSpentMicros")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("UserId");
+
+                    b.ToTable("SharedKeyGrants");
+                });
+
             modelBuilder.Entity("LearningPortal.Core.Models.SiteSettings", b =>
                 {
                     b.Property<int>("Id")
@@ -622,6 +656,15 @@ namespace LearningPortal.Core.Data.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<string>("HomepageTokenHash")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SharedAllowedModels")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SharedClaudeKeyProtected")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SharedOpenAiKeyProtected")
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
@@ -710,6 +753,9 @@ namespace LearningPortal.Core.Data.Migrations
                         .HasColumnType("INTEGER");
 
                     b.Property<int>("Theme")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("UseSharedKey")
                         .HasColumnType("INTEGER");
 
                     b.HasKey("UserId");
@@ -977,6 +1023,15 @@ namespace LearningPortal.Core.Data.Migrations
                     b.HasOne("LearningPortal.Core.Models.Question", null)
                         .WithMany("Options")
                         .HasForeignKey("QuestionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("LearningPortal.Core.Models.SharedKeyGrant", b =>
+                {
+                    b.HasOne("LearningPortal.Core.Models.AppUser", null)
+                        .WithOne()
+                        .HasForeignKey("LearningPortal.Core.Models.SharedKeyGrant", "UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

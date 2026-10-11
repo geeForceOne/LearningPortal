@@ -51,6 +51,8 @@ public sealed class AttemptService(
     {
         var exam = await db.Exams
             .Include(e => e.Questions).ThenInclude(eq => eq.Question!).ThenInclude(q => q.Options)
+            // One statement on purpose: an exam's questions and their options are a small result.
+            .AsSingleQuery()
             .FirstOrDefaultAsync(e => e.Id == examId && e.UserId == userId, ct) ?? throw new NotFoundException();
         if (exam.Questions.Count == 0)
             throw new InvalidOperationException("This exam has no questions yet.");

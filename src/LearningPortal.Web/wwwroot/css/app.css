@@ -742,6 +742,10 @@ a.row-title:hover { text-decoration: underline; text-decoration-color: var(--rul
 
 .field-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 18px; }
 
+/* Admin settings: the models allowed on the shared key, one column of checkboxes per provider. */
+.model-checks { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px 32px; }
+.check-list { display: grid; gap: 8px; align-content: start; justify-items: start; }
+
 /* Segmented choice: a row of radio buttons that look like one control. */
 .segmented {
     display: inline-flex;
@@ -1655,6 +1659,7 @@ details.q-more[open] summary { margin-bottom: 8px; }
     }
     .users-table td, .users-table td.num { padding: 0; border: 0; text-align: left; }
     .users-table td:first-child { grid-column: 1 / -1; padding-right: 44px; }
+    .users-table td.users-shared { grid-column: 1 / -1; }
     .users-table td:not(:first-child):not(.users-actions)::before {
         content: attr(data-label);
         display: block;

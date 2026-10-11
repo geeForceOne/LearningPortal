@@ -8,7 +8,7 @@ namespace LearningPortal.Core.Ai;
 
 // Claude via the official Anthropic SDK. Uses the beta Messages endpoint because server-side
 // refusal fallbacks are a beta feature; structured outputs and prompt caching work the same there.
-public sealed class ClaudeAiClient(string apiKey, string model) : IAiClient
+public sealed class ClaudeAiClient(string apiKey, string model, IAiMeter? meter = null) : IAiClient
 {
     private const string FallbackBeta = "server-side-fallback-2026-06-01";
 
@@ -44,6 +44,9 @@ public sealed class ClaudeAiClient(string apiKey, string model) : IAiClient
             parameters = parameters with { Betas = [FallbackBeta], Fallbacks = new List<BetaFallbackParam> { new() { Model = "claude-opus-4-8" } } };
         }
 
+        if (meter is not null)
+            await meter.CheckAsync(ct);
+
         BetaMessage response;
         try
         {
@@ -51,11 +54,13 @@ public sealed class ClaudeAiClient(string apiKey, string model) : IAiClient
         }
         catch (AnthropicUnauthorizedException)
         {
-            throw new AiException("The AI provider rejected your API key. Check it in Settings.");
+            throw new AiException(meter is null
+                ? "The AI provider rejected your API key. Check it in Settings."
+                : "The AI provider rejected the key from your admin. Let your admin know, or switch to your own keys in Settings.");
         }
         catch (AnthropicRateLimitException)
         {
-            throw new AiException("The AI provider is rate-limiting your key. Wait a minute and try again.");
+            throw new AiException($"The AI provider is rate-limiting {(meter is null ? "your key" : "the key from your admin")}. Wait a minute and try again.");
         }
         catch (AnthropicNotFoundException)
         {
@@ -69,6 +74,14 @@ public sealed class ClaudeAiClient(string apiKey, string model) : IAiClient
         {
             throw new AiException($"Couldn't reach the AI provider: {ex.Message}");
         }
+
+        // input_tokens leaves out what was written to or read from the cache.
+        if (meter is not null)
+            await meter.RecordAsync(new AiUsage(
+                response.Usage.InputTokens,
+                response.Usage.CacheCreationInputTokens ?? 0,
+                response.Usage.CacheReadInputTokens ?? 0,
+                response.Usage.OutputTokens));
 
         var stop = response.StopReason?.ToString();
         if (stop == "refusal")

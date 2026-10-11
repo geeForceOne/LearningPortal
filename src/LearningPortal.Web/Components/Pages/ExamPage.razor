@@ -220,7 +220,7 @@ else
                 @if (_settings is { AdvancedModels: true })
                 {
                     <div style="margin-top:16px">
-                        <AiModelSelect Label="Write with" @bind-Value="_writeWith" Available="_settings.HasKey" Inline="true">
+                        <AiModelSelect Label="Write with" @bind-Value="_writeWith" Available="_settings.HasKey" AllowedModels="_settings.AllowedModels" Inline="true">
                             <Hint><span class="field-hint">Used when the AI adds, rewrites or replaces questions here.</span></Hint>
                         </AiModelSelect>
                     </div>
@@ -406,7 +406,7 @@ else
         var estimate = await Generator.EstimateAsync(await UserIdAsync(), exam.TopicId, questionCount, exam.ExcludedMaterialIds, _writeWith, PageToken);
         return !Options.IsLargeGeneration(estimate.TotalInputTokens, estimate.Model) ||
                await Ui.Confirm.AskAsync("This is a large generation",
-                   Format.LargeGeneration(estimate),
+                   Format.LargeGeneration(estimate, _settings),
                    "Generate questions");
     }
 

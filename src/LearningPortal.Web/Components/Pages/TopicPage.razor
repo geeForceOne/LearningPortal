@@ -229,7 +229,7 @@ else
                 @if (_settings is { AdvancedModels: true })
                 {
                     <div style="margin-bottom:14px">
-                        <AiModelSelect Label="Outline with" Value="_outlineWith" ValueChanged="SetOutlineModel" Available="_settings.HasKey" Inline="true">
+                        <AiModelSelect Label="Outline with" Value="_outlineWith" ValueChanged="SetOutlineModel" Available="_settings.HasKey" AllowedModels="_settings.AllowedModels" Inline="true">
                             <Hint><span class="field-hint">Used for files and pasted text you add here.</span></Hint>
                         </AiModelSelect>
                     </div>
@@ -426,7 +426,7 @@ else
                 var cost = Format.AnalysisCost(material.TokenEstimate, _model);
                 var go = await Ui.Confirm.AskAsync("This is a large file to analyze",
                     $"\"{name}\" is about {Format.Tokens(material.TokenEstimate)}. The AI reads all of it once to outline it" +
-                    (cost is null ? "" : $", {cost}") + ". That's billed to your API key. You can also analyze it later. Analyze now?",
+                    (cost is null ? "" : $", {cost}") + $". {Format.BilledTo(_settings)} You can also analyze it later. Analyze now?",
                     "Analyze now");
                 if (!go)
                     continue;

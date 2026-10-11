@@ -46,7 +46,7 @@ else
         @if (_settings is { AdvancedModels: true })
         {
             <div style="margin-bottom:14px;max-width:520px">
-                <AiModelSelect Label="Write with" @bind-Value="_writeWith" Available="_settings.HasKey" Inline="true">
+                <AiModelSelect Label="Write with" @bind-Value="_writeWith" Available="_settings.HasKey" AllowedModels="_settings.AllowedModels" Inline="true">
                     <Hint><span class="field-hint">Used for finding gaps and for the study notes.</span></Hint>
                 </AiModelSelect>
             </div>

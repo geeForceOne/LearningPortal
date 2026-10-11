@@ -57,6 +57,8 @@ public sealed class ExamService(
         var exam = await db.Exams.AsNoTracking()
             .Include(e => e.Topic)
             .Include(e => e.Questions).ThenInclude(eq => eq.Question!).ThenInclude(q => q.Options)
+            // One statement on purpose: an exam's questions and their options are a small result.
+            .AsSingleQuery()
             .FirstOrDefaultAsync(e => e.Id == examId && e.UserId == userId, ct) ?? throw new NotFoundException();
 
         var questions = exam.Questions.OrderBy(eq => eq.Order).Select(eq => eq.Question!).ToList();

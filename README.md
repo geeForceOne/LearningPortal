@@ -15,6 +15,8 @@ stays yours.
 - **Built for technical subjects too.** Programming topics mix real code questions with theory
 - **Private by design.** Self-hosted, one account per person, nothing shared
 - **No surprise bills.** You see the expected cost before the AI writes anything
+- **Shared AI key.** An admin can share their API key with selected people, with an expiry date
+  or a one-time or monthly budget
 
 ## Topics and material
 
@@ -163,8 +165,14 @@ bookmark-style shortcut. There's no offline mode: like the website, the app need
 ## AI and costs
 
 Each user brings their own **Claude or ChatGPT API key**, set in Settings. Keys are stored
-encrypted and never sent to the browser. There's no shared key, and usage is billed to that
-user's own account.
+encrypted and never sent to the browser, and usage is billed to that user's own account.
+
+An admin can also share a key of their own with selected users (Admin settings, then the Users
+page): unlimited, until a date, or with a USD balance that is one-time or per month. The admin
+picks which models it may be used with. Recall estimates each person's spend from the tokens
+their requests used, so treat the balance as a soft budget and set a spend limit with the
+provider too. Someone with a shared key chooses in Settings between it and their own keys; the
+two are never mixed.
 
 Because it's your money, Recall shows the expected tokens and cost for your chosen model next to
 anything that costs noticeably, and asks before an unusually large generation. When a topic fits

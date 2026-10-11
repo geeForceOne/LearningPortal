@@ -5,6 +5,7 @@
 @inject AccountMailService Mail
 @inject AccountRequestService Requests
 @inject HomepageStatsService Homepage
+@inject SharedKeyService SharedKeys
 @inject IJSRuntime JS
 @using LearningPortal.Core.Email
 @using LearningPortal.Core.Models
@@ -16,7 +17,7 @@
         <h1>Admin settings</h1>
         <p class="page-sub">
             Settings for the whole of @AppInfo.Name: the mail server for invites and password reset links, account requests,
-            the emails you get as an admin, and the Homepage widget. Without email, you get the links on the Users page to pass on yourself.
+            the emails you get as an admin, the shared AI key, and the Homepage widget. Without email, you get the links on the Users page to pass on yourself.
         </p>
     </div>
 </div>
@@ -171,6 +172,65 @@ else
             </div>
         </section>
 
+        @if (_shared is not null)
+        {
+            <section class="setting">
+                <div class="setting-intro">
+                    <h2>Shared AI key</h2>
+                    <p>
+                        An API key of yours for people who don't have their own. Nobody gets it by default: you choose who may
+                        use it, and how much, on the <a href="admin/users">Users page</a>. Admins keep using their own keys.
+                    </p>
+                </div>
+                <div class="setting-body">
+                    <div class="notice notice-warn" role="note">
+                        <strong>Set a spend limit with the provider too.</strong>
+                        <div>
+                            @AppInfo.Name adds up each person's spend from the tokens their requests used and its own price list
+                            (as of @AiModels.PricesAsOf). That's an estimate and can differ from your bill, so treat the balances
+                            as a soft budget. The real cap is a monthly spend limit on the key in the provider's console. A separate
+                            key just for @AppInfo.Name keeps its usage apart from anything else.
+                        </div>
+                    </div>
+
+                    <KeyField Label="Anthropic API key (Claude)" Status="_shared.ClaudeKey" @bind-Value="_sharedClaude"
+                              OnRemove="() => _removeSharedClaude = true" Removing="_removeSharedClaude" Placeholder="sk-ant-..." />
+                    <KeyField Label="OpenAI API key (ChatGPT)" Status="_shared.OpenAiKey" @bind-Value="_sharedOpenAi"
+                              OnRemove="() => _removeSharedOpenAi = true" Removing="_removeSharedOpenAi" Placeholder="sk-..." />
+
+                    <div class="field">
+                        <span class="field-label">Models people may use with it</span>
+                        <div class="model-checks">
+                            @foreach (var provider in Enum.GetValues<AiProvider>())
+                            {
+                                <div class="check-list">
+                                    <span class="muted small">@AiModels.ProviderName(provider)</span>
+                                    @foreach (var m in AiModels.For(provider))
+                                    {
+                                        var model = m;
+                                        <label class="check">
+                                            <input type="checkbox" checked="@_allowedModels.Contains(model.Id)"
+                                                   @onchange="e => { if ((bool)e.Value!) _allowedModels.Add(model.Id); else _allowedModels.Remove(model.Id); }" />
+                                            <span>@model.Name <span class="muted small nowrap">@Format.Usd(model.InputPrice) / @Format.Usd(model.OutputPrice)</span></span>
+                                        </label>
+                                    }
+                                </div>
+                            }
+                        </div>
+                        <span class="field-hint">
+                            Prices are per million input / output tokens. The same list applies to everyone on the shared key. Custom model
+                            IDs can't be used with it, since @AppInfo.Name has no price for them, and models added by a later update
+                            start out unticked.
+                        </span>
+                    </div>
+
+                    <div class="actions">
+                        <button type="button" class="btn btn-primary" disabled="@_savingShared" @onclick="SaveSharedAsync">Save shared key</button>
+                    </div>
+                </div>
+            </section>
+        }
+
         <section class="setting">
             <div class="setting-intro">
                 <h2>Homepage widget</h2>
@@ -240,7 +300,47 @@ else
         _notifyRequests = await Mail.GetNotifyAccountRequestsAsync(await UserIdAsync());
         _requestsOpen = await Requests.IsOpenAsync(PageToken);
         _tokenCreatedAt = await Homepage.GetTokenCreatedAtAsync(PageToken);
+        await LoadSharedAsync();
         await LoadAsync();
+    }
+
+    private SharedKeyAdminView? _shared;
+    private string _sharedClaude = "";
+    private string _sharedOpenAi = "";
+    private bool _removeSharedClaude;
+    private bool _removeSharedOpenAi;
+    private HashSet<string> _allowedModels = [];
+    private bool _savingShared;
+
+    private async Task LoadSharedAsync()
+    {
+        _shared = await SharedKeys.GetAdminViewAsync(PageToken);
+        _allowedModels = _shared.AllowedModels.ToHashSet();
+        _sharedClaude = "";
+        _sharedOpenAi = "";
+        _removeSharedClaude = false;
+        _removeSharedOpenAi = false;
+    }
+
+    private async Task SaveSharedAsync()
+    {
+        _savingShared = true;
+        try
+        {
+            // A typed key replaces the stored one; an empty box leaves it alone; "Remove" clears it.
+            await SharedKeys.SaveAsync(
+                _removeSharedClaude ? "" : string.IsNullOrWhiteSpace(_sharedClaude) ? null : _sharedClaude,
+                _removeSharedOpenAi ? "" : string.IsNullOrWhiteSpace(_sharedOpenAi) ? null : _sharedOpenAi,
+                _allowedModels, PageToken);
+            await LoadSharedAsync();
+            Ui.Toast.Success(_shared!.HasAnyKey
+                ? "Shared key saved. Choose who may use it on the Users page."
+                : "Saved. Without a key, nobody can use the shared key.");
+        }
+        finally
+        {
+            _savingShared = false;
+        }
     }
 
     private bool _notifyRequests;

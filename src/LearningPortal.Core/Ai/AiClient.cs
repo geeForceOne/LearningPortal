@@ -10,8 +10,24 @@ public sealed class AiNotConfiguredException()
     : AiException("AI isn't set up yet. Add your AI provider and API key in Settings.");
 
 // Which provider, key and model a user's requests go to. Built by SettingsService from the
-// user's decrypted settings and never sent to the browser.
-public sealed record AiConnection(AiProvider Provider, string ApiKey, string Model);
+// user's decrypted settings and never sent to the browser. Meter is set when the key is the
+// admin's shared one, whose use is limited and tracked per user.
+public sealed record AiConnection(AiProvider Provider, string ApiKey, string Model, IAiMeter? Meter = null);
+
+// The tokens one call was billed for. InputTokens are the ordinary ones only: tokens written to
+// or read from the provider's prompt cache are counted separately, since they cost differently.
+public sealed record AiUsage(long InputTokens, long CacheWriteTokens, long CacheReadTokens, long OutputTokens);
+
+// Guards and tracks calls made with a key that has limits. The clients call CheckAsync before
+// each request and RecordAsync as soon as the provider answers, also when the answer is then
+// rejected (cut off, refused): it was billed all the same.
+public interface IAiMeter
+{
+    // Throws an AiException saying why when the key may not be used (anymore).
+    Task CheckAsync(CancellationToken ct);
+
+    Task RecordAsync(AiUsage usage);
+}
 
 // A provider and model the user picked, without the key. Safe to show and pass around in the UI.
 public sealed record AiChoice(AiProvider Provider, string Model);
@@ -59,16 +75,27 @@ public static class AiClientFactory
 {
     public static IAiClient Create(AiConnection connection) => connection.Provider switch
     {
-        AiProvider.Claude => new ClaudeAiClient(connection.ApiKey, connection.Model),
-        AiProvider.OpenAi => new OpenAiClient(connection.ApiKey, connection.Model),
+        AiProvider.Claude => new ClaudeAiClient(connection.ApiKey, connection.Model, connection.Meter),
+        AiProvider.OpenAi => new OpenAiClient(connection.ApiKey, connection.Model, connection.Meter),
         _ => throw new AiException($"Unknown AI provider {connection.Provider}."),
     };
 }
 
-// One entry in the Settings model picker. Prices are USD per million tokens.
-public sealed record AiModelInfo(string Id, string Name, string Description, decimal InputPrice, decimal OutputPrice)
+// One entry in the Settings model picker. Prices are USD per million tokens; CachedInputPrice is
+// for input read back from the provider's prompt cache.
+public sealed record AiModelInfo(string Id, string Name, string Description, decimal InputPrice, decimal OutputPrice, decimal CachedInputPrice)
 {
+    // Both providers bill input written to the prompt cache at this multiple of the input price.
+    public const decimal CacheWriteFactor = 1.25m;
+
     public decimal InputCost(int tokens) => tokens * InputPrice / 1_000_000m;
+
+    // What a finished call cost, from the tokens the provider reported.
+    public decimal Cost(AiUsage usage) =>
+        (usage.InputTokens * InputPrice
+         + usage.CacheWriteTokens * InputPrice * CacheWriteFactor
+         + usage.CacheReadTokens * CachedInputPrice
+         + usage.OutputTokens * OutputPrice) / 1_000_000m;
 }
 
 public static class AiModels
@@ -102,19 +129,19 @@ public static class AiModels
 
     public static readonly IReadOnlyList<AiModelInfo> Claude =
     [
-        new("claude-fable-5-1", "Claude Fable 5.1", "Anthropic's most capable model. Best for very dense or technical material, at a premium price.", 10m, 50m),
-        new("claude-opus-5-5", "Claude Opus 5.5", "Newest Opus: top quality at a lower price than Opus 5.", 4m, 20m),
-        new("claude-opus-5", "Claude Opus 5", "Highly capable all-rounder for writing and grading questions.", 5m, 25m),
-        new("claude-sonnet-5-5", "Claude Sonnet 5.5", "Newest Sonnet: strong quality at a much lower price. A good everyday choice.", 2m, 10m),
-        new("claude-sonnet-5", "Claude Sonnet 5", "Previous Sonnet, same price as Sonnet 5.5. Kept for anyone who picked it.", 2m, 10m),
-        new("claude-haiku-4-5", "Claude Haiku 4.5", "Fastest and cheapest. Fine for easy recall questions; weaker on hard ones.", 1m, 5m),
+        new("claude-fable-5-1", "Claude Fable 5.1", "Anthropic's most capable model. Best for very dense or technical material, at a premium price.", 10m, 50m, 0.25m),
+        new("claude-opus-5-5", "Claude Opus 5.5", "Newest Opus: top quality at a lower price than Opus 5.", 4m, 20m, 0.20m),
+        new("claude-opus-5", "Claude Opus 5", "Highly capable all-rounder for writing and grading questions.", 5m, 25m, 0.50m),
+        new("claude-sonnet-5-5", "Claude Sonnet 5.5", "Newest Sonnet: strong quality at a much lower price. A good everyday choice.", 2m, 10m, 0.10m),
+        new("claude-sonnet-5", "Claude Sonnet 5", "Previous Sonnet, same price as Sonnet 5.5. Kept for anyone who picked it.", 2m, 10m, 0.20m),
+        new("claude-haiku-4-5", "Claude Haiku 4.5", "Fastest and cheapest. Fine for easy recall questions; weaker on hard ones.", 1m, 5m, 0.10m),
     ];
 
     public static readonly IReadOnlyList<AiModelInfo> OpenAi =
     [
-        new("gpt-6-astra", "GPT-6 Astra", "OpenAI's most capable model, at a premium price.", 10m, 50m),
-        new("gpt-6.1-sol", "GPT-6.1 Sol", "Newest Sol: near-Astra quality at a much lower price. A good everyday choice.", 2m, 10m),
-        new("gpt-6-sol", "GPT-6 Sol", "Previous Sol, same price as GPT-6.1 Sol. Kept for anyone who picked it.", 2m, 10m),
-        new("gpt-6-luna", "GPT-6 Luna", "Cheapest and fastest. Fine for easy recall questions; weaker on hard ones.", 0.10m, 0.50m),
+        new("gpt-6-astra", "GPT-6 Astra", "OpenAI's most capable model, at a premium price.", 10m, 50m, 1m),
+        new("gpt-6.1-sol", "GPT-6.1 Sol", "Newest Sol: near-Astra quality at a much lower price. A good everyday choice.", 2m, 10m, 0.10m),
+        new("gpt-6-sol", "GPT-6 Sol", "Previous Sol, same price as GPT-6.1 Sol. Kept for anyone who picked it.", 2m, 10m, 0.20m),
+        new("gpt-6-luna", "GPT-6 Luna", "Cheapest and fastest. Fine for easy recall questions; weaker on hard ones.", 0.10m, 0.50m, 0.01m),
     ];
 }

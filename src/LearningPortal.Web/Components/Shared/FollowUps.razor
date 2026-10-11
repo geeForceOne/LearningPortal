@@ -31,7 +31,7 @@
                           disabled="@_asking" placeholder="For example: why isn't the second option right?"></textarea>
                 @if (_settings is { AdvancedModels: true })
                 {
-                    <AiModelSelect Label="Answer with" @bind-Value="_answerWith" Available="_settings.HasKey" Inline="true" />
+                    <AiModelSelect Label="Answer with" @bind-Value="_answerWith" Available="_settings.HasKey" AllowedModels="_settings.AllowedModels" Inline="true" />
                 }
                 @if (_error is not null)
                 {

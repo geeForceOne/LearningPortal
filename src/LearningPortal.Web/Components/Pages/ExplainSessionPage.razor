@@ -102,7 +102,7 @@ else
         @if (_session.CompletedAt is null && _settings is { AdvancedModels: true })
         {
             <div style="margin-top:16px;max-width:520px">
-                <AiModelSelect Label="Write with" @bind-Value="_writeWith" Available="_settings.HasKey" Inline="true" />
+                <AiModelSelect Label="Write with" @bind-Value="_writeWith" Available="_settings.HasKey" AllowedModels="_settings.AllowedModels" Inline="true" />
             </div>
         }
         @if (_error is not null)

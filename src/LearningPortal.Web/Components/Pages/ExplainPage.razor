@@ -67,7 +67,7 @@ else
             @if (_settings is { AdvancedModels: true })
             {
                 <div style="margin-top:10px;max-width:520px">
-                    <AiModelSelect Label="Outline with" Value="_outlineWith" ValueChanged="SetOutlineModel" Available="_settings.HasKey" Inline="true" />
+                    <AiModelSelect Label="Outline with" Value="_outlineWith" ValueChanged="SetOutlineModel" Available="_settings.HasKey" AllowedModels="_settings.AllowedModels" Inline="true" />
                 </div>
             }
         </div>
@@ -227,7 +227,7 @@ else
             var cost = Format.AnalysisCost(tokens, _model);
             var go = await Ui.Confirm.AskAsync("This is a lot of material to analyze",
                 $"It's about {Format.Tokens(tokens)}. The AI reads all of it once more" +
-                (cost is null ? "" : $", {cost}") + ". That's billed to your API key. Analyze it again?",
+                (cost is null ? "" : $", {cost}") + $". {Format.BilledTo(_settings)} Analyze it again?",
                 "Analyze again");
             if (!go)
                 return;

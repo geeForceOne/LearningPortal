@@ -34,7 +34,7 @@ else
         @if (_settings is { AdvancedModels: true })
         {
             <div style="margin-top:22px">
-                <AiModelSelect Label="Write with" @bind-Value="_writeWith" Available="_settings.HasKey" Inline="true" />
+                <AiModelSelect Label="Write with" @bind-Value="_writeWith" Available="_settings.HasKey" AllowedModels="_settings.AllowedModels" Inline="true" />
             </div>
         }
 
@@ -125,7 +125,7 @@ else
         var estimate = await Generator.EstimateAsync(userId, TopicId, ToGenerate(), _values.Excluded, _writeWith, PageToken);
         if (Options.IsLargeGeneration(estimate.TotalInputTokens, estimate.Model) &&
             !await Ui.Confirm.AskAsync("This is a large generation",
-                Format.LargeGeneration(estimate),
+                Format.LargeGeneration(estimate, _settings),
                 "Generate questions"))
             return;
 

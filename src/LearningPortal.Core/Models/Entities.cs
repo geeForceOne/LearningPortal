@@ -55,6 +55,10 @@ public sealed class UserSettings
     public DateOnly? OpenAiKeyExpiresOn { get; set; }
     public DateOnly? KeyReminderDismissedOn { get; set; }
 
+    // Use the key the admin shares instead of the user's own keys. Only means something while
+    // the user has a SharedKeyGrant; the two are never mixed.
+    public bool UseSharedKey { get; set; }
+
     // Advanced mode: separate defaults for outlining uploads and for questions and grading, and
     // a model picker on the upload and generation screens. Simple mode: Provider/Model for everything.
     public bool AdvancedModels { get; set; }
@@ -378,6 +382,34 @@ public sealed class SiteSettings
     // SHA-256 (hex) of the token for the Homepage widget endpoint; the token itself isn't kept.
     public string? HomepageTokenHash { get; set; }
     public DateTime? HomepageTokenCreatedAt { get; set; }
+
+    // The admin's API keys that selected users may use (see SharedKeyGrant), stored like a
+    // user's own keys. SharedAllowedModels is the comma-separated model IDs those users may
+    // pick; null (never saved) allows every listed model.
+    public string? SharedClaudeKeyProtected { get; set; }
+    public string? SharedOpenAiKeyProtected { get; set; }
+    public string? SharedAllowedModels { get; set; }
+}
+
+// Lets one user use the admin's shared keys, within optional limits: an expiry date (the last
+// day it works) and a USD balance, one-time or per calendar month (UTC). Neither set means
+// unlimited. Amounts are millionths of a dollar, so spend can be added up in SQL. Spend is an
+// estimate from the tokens each call reports and Recall's price list.
+public sealed class SharedKeyGrant
+{
+    public string UserId { get; set; } = "";
+    public DateOnly? ExpiresOn { get; set; }
+    public long? BalanceMicros { get; set; }
+    public bool Monthly { get; set; }
+    // Spend counted against the balance: since the grant or the admin's last reset, or in
+    // Month for a monthly balance.
+    public long BalanceSpentMicros { get; set; }
+    // The month (yyyyMM, UTC) MonthSpentMicros belongs to; an older value means nothing was
+    // spent yet this month.
+    public int Month { get; set; }
+    public long MonthSpentMicros { get; set; }
+    public long TotalSpentMicros { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
 
 // Someone asking for an account. Approving it creates the account and sends the normal invite;

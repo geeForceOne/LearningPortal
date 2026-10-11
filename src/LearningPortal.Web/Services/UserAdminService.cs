@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using LearningPortal.Core.Models;
+using LearningPortal.Core.Services;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
@@ -169,7 +170,12 @@ public sealed class UserAdminService(IServiceScopeFactory scopes)
         var users = scope.ServiceProvider.GetRequiredService<UserManager<AppUser>>();
         var user = await users.FindByIdAsync(userId);
         if (user is null) return;
-        if (isAdmin) await users.AddToRoleAsync(user, Roles.Admin);
+        if (isAdmin)
+        {
+            await users.AddToRoleAsync(user, Roles.Admin);
+            // Admins use their own keys, so a grant on the shared key ends here.
+            await scope.ServiceProvider.GetRequiredService<SharedKeyService>().RevokeAsync(userId);
+        }
         else await users.RemoveFromRoleAsync(user, Roles.Admin);
     }
 

@@ -3,7 +3,18 @@
 
 @* Reminds the user of API keys that expire within SettingsService.ReminderDays days, or already
    have, from the dates they entered in Settings. Closing it hides it until the next day, on every
-   device. *@
+   device. Someone on the admin's shared key is told the same way when it has expired, is used
+   up, runs low or expires soon. *@
+@if (_shared is not null)
+{
+    <div class="whats-new banner-warn" role="status">
+        <Icon Name="key" />
+        <p>@SharedMessage() <a href="settings">See Settings</a></p>
+        <button type="button" class="btn btn-ghost btn-icon btn-sm" aria-label="Close until tomorrow" title="Close until tomorrow" @onclick="DismissAsync">
+            <Icon Name="x" Size="16" />
+        </button>
+    </div>
+}
 @if (_reminders is { Count: > 0 })
 {
     <div class="whats-new banner-warn" role="status">
@@ -28,7 +39,30 @@
         var state = AuthState is null ? null : await AuthState;
         _userId = state?.User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (_userId is not null)
+        {
             _reminders = await Settings.GetKeyRemindersAsync(_userId, Today);
+            _shared = await Settings.GetSharedKeyReminderAsync(_userId, Today);
+        }
+    }
+
+    private SharedKeyGrantView? _shared;
+
+    private string SharedMessage()
+    {
+        var g = _shared!;
+        if (g.State != GrantState.Active)
+            return "The key from your admin can't be used right now. " + Format.GrantStatus(g);
+        var parts = new List<string>();
+        if (g.IsLow)
+            parts.Add($"The key from your admin is running low: {Format.Usd(g.Remaining!.Value)} of {Format.Usd(g.Balance!.Value)} left{(g.Monthly ? " this month" : "")}.");
+        if (g.DaysLeft is { } days && days <= SettingsService.ReminderDays)
+            parts.Add(days switch
+            {
+                0 => "The key from your admin expires today.",
+                1 => "The key from your admin expires tomorrow.",
+                _ => $"The key from your admin expires in {days} days, on {Format.Day(g.ExpiresOn!.Value)}.",
+            });
+        return string.Join(" ", parts);
     }
 
     private string Message() => string.Join(" ", _reminders!.Select(r =>
@@ -46,6 +80,7 @@
     private async Task DismissAsync()
     {
         _reminders = null;
+        _shared = null;
         if (_userId is not null)
             await Settings.DismissKeyRemindersAsync(_userId, Today);
     }
