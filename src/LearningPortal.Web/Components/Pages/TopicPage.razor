@@ -7,6 +7,7 @@
 @inject LearningPortalOptions Options
 @inject PracticeService Practice
 @inject QuestionWriter Writer
+@inject StatisticsService Stats
 
 <PageTitle>@(_topic?.Summary.Name ?? "Topic") - @AppInfo.Name</PageTitle>
 
@@ -42,6 +43,14 @@ else
                 @if (t.AverageScore is { } avg)
                 {
                     <span>Average score <strong>@Format.Percent(avg)</strong></span>
+                }
+                @if (_readiness is { } ready)
+                {
+                    <span title="@ReadinessHint(ready)">Readiness <strong>@ready.Percent%</strong></span>
+                }
+                @if (t.ExamDate is { } examDate)
+                {
+                    <span title="@Format.Day(examDate)">Exam <strong>@Format.Countdown(examDate)</strong></span>
                 }
             </div>
         </div>
@@ -285,6 +294,7 @@ else
     private AiChoice _outlineWith = default!;
     private AiModelInfo? _model;
     private int _weakCount;
+    private TopicReadiness? _readiness;
     private string? _userId;
 
     // Passed to the analysis only in advanced mode; in simple mode the one model does everything.
@@ -307,6 +317,7 @@ else
             _userId = userId;
             _topic = await Topics.GetAsync(userId, TopicId, PageToken);
             _weakCount = await Practice.CountWeakAsync(userId, TopicId, PageToken);
+            _readiness = await Stats.GetReadinessAsync(userId, TopicId, PageToken);
             if (_settings is null)
             {
                 _settings = await Settings.GetAsync(userId, PageToken);
@@ -360,6 +371,9 @@ else
         _outlineWith = choice;
         _model = AiModels.Find(choice);
     }
+
+    private static string ReadinessHint(TopicReadiness r) =>
+        $"{r.Practiced} of {Format.Plural(r.Sections, "section", "sections")} practiced. Each section counts by its size and your average score on its questions; a section you haven't practiced counts as 0%.";
 
     private string CostHint(int tokens) => Format.CostHint(tokens, _model) is { } cost ? $" ({cost})" : "";
 
@@ -482,9 +496,9 @@ else
     private async Task EditAsync()
     {
         var t = _topic!.Summary;
-        var input = await _dialog.AskAsync("Edit topic", "Save", new TopicDialog.TopicInput(t.Name, t.Language, t.Description, t.IsProgramming));
+        var input = await _dialog.AskAsync("Edit topic", "Save", new TopicDialog.TopicInput(t.Name, t.Language, t.Description, t.IsProgramming, t.ExamDate));
         if (input is null) return;
-        await Topics.UpdateAsync(await UserIdAsync(), TopicId, input.Name, input.Description, input.Language, input.IsProgramming, PageToken);
+        await Topics.UpdateAsync(await UserIdAsync(), TopicId, input.Name, input.Description, input.Language, input.IsProgramming, input.ExamDate, PageToken);
         await LoadAsync();
     }
 

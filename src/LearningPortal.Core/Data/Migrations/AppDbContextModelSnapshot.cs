@@ -542,6 +542,9 @@ namespace LearningPortal.Core.Data.Migrations
                     b.Property<bool>("IsCode")
                         .HasColumnType("INTEGER");
 
+                    b.Property<bool>("IsFlagged")
+                        .HasColumnType("INTEGER");
+
                     b.Property<bool>("IsUserAuthored")
                         .HasColumnType("INTEGER");
 
@@ -682,6 +685,9 @@ namespace LearningPortal.Core.Data.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Description")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly?>("ExamDate")
                         .HasColumnType("TEXT");
 
                     b.Property<bool>("IsProgramming")

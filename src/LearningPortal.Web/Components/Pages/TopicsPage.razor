@@ -50,6 +50,10 @@ else
                         <span>@Format.Plural(t.MaterialCount, "material", "materials"), @Format.Tokens(t.TokenTotal)</span>
                         <span>@Format.Plural(t.ExamCount, "exam", "exams")</span>
                         <span>@Format.Plural(t.QuestionCount, "question", "questions") in the bank</span>
+                        @if (t.ExamDate is { } examDate)
+                        {
+                            <span>Exam @Format.Countdown(examDate)</span>
+                        }
                     </div>
                 </div>
                 <div class="row-aside">
@@ -89,7 +93,7 @@ else
         var input = await _dialog.AskAsync("New topic", "Create topic");
         if (input is null) return;
 
-        var id = await Topics.CreateAsync(await UserIdAsync(), input.Name, input.Description, input.Language, input.IsProgramming, PageToken);
+        var id = await Topics.CreateAsync(await UserIdAsync(), input.Name, input.Description, input.Language, input.IsProgramming, input.ExamDate, PageToken);
         Nav.NavigateTo($"topics/{id}");
     }
 }

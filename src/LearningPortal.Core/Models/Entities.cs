@@ -99,6 +99,8 @@ public sealed class Topic
     public string Language { get; set; } = "English";
     // Set by the user. Only programming topics get code questions, in the share each exam asks for.
     public bool IsProgramming { get; set; }
+    // Optional: the day of the real exam the user is studying for, for the countdown.
+    public DateOnly? ExamDate { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
@@ -212,6 +214,9 @@ public sealed class Question
     public bool IsCode { get; set; }
     // The model ID that wrote the question; null for the user's own and for older questions.
     public string? GeneratedByModel { get; set; }
+    // The user marked it as a bad question (ambiguous, wrong, off-topic). It stays in the exams
+    // that hold it, but isn't reused from the bank, practiced, or counted in section scores.
+    public bool IsFlagged { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public Topic? Topic { get; set; }

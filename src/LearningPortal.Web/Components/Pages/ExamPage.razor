@@ -120,6 +120,10 @@ else
                                     {
                                         <span class="tag">Yours</span>
                                     }
+                                    @if (q.IsFlagged)
+                                    {
+                                        <span class="tag tag-flag" title="You flagged this as a bad question. It isn't reused in new exams or in practice. Edit, replace or remove it here."><Icon Name="flag" Size="12" /> Flagged</span>
+                                    }
                                 </div>
                                 <RichText Class="prompt" Text="@q.Prompt" />
                                 <details class="q-more">
@@ -164,6 +168,7 @@ else
                                 </div>
                             </div>
                             <div class="row-actions">
+                                <button type="button" class="btn btn-ghost btn-icon btn-sm @(q.IsFlagged ? "is-flagged" : "")" title="@(q.IsFlagged ? "Remove the flag" : "Flag as a bad question")" aria-label="@(q.IsFlagged ? "Remove the flag from" : "Flag") question @number" aria-pressed="@(q.IsFlagged ? "true" : "false")" disabled="@Busy" @onclick="() => ToggleFlagAsync(q)"><Icon Name="flag" Size="16" /></button>
                                 <button type="button" class="btn btn-ghost btn-icon btn-sm" title="Edit" aria-label="Edit question @number" disabled="@Busy" @onclick="() => EditAsync(q)"><Icon Name="edit" Size="16" /></button>
                                 <button type="button" class="btn btn-ghost btn-icon btn-sm" title="@("Replace with a new AI question" + (CostHint(1) is { } c ? $" ({c})" : ""))" aria-label="Replace question @number" disabled="@Busy" @onclick="() => ReplaceAsync(q)"><Icon Name="swap" Size="16" /></button>
                                 <button type="button" class="btn btn-ghost btn-icon btn-sm" title="Remove from exam" aria-label="Remove question @number" disabled="@Busy" @onclick="() => RemoveAsync(q)"><Icon Name="trash" Size="16" /></button>
@@ -492,6 +497,15 @@ else
                 "It leaves this exam but stays in your question bank, and past results keep it.", "Remove", danger: true))
             return;
         await Exams.RemoveQuestionAsync(await UserIdAsync(), ExamId, q.Id, PageToken);
+        await LoadAsync();
+    }
+
+    private async Task ToggleFlagAsync(Question q)
+    {
+        await Exams.SetFlaggedAsync(await UserIdAsync(), q.Id, !q.IsFlagged, PageToken);
+        Ui.Toast.Success(q.IsFlagged
+            ? "Flag removed."
+            : "Flagged. Recall won't reuse this question in new exams or in practice. It stays in this exam until you replace or remove it.");
         await LoadAsync();
     }
 

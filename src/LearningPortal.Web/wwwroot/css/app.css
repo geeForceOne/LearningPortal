@@ -439,6 +439,10 @@ h1:focus { outline: none; }
     margin-bottom: 28px;
 }
 
+/* The title block gives way before the actions do: its text and facts wrap, so the buttons stay
+   beside the title until the page is too narrow for both (phones), where they move below. */
+.page-head > div:first-child { flex: 1 1 320px; min-width: 0; }
+
 .page-head h1 { overflow-wrap: anywhere; }
 
 .page-sub {
@@ -909,7 +913,11 @@ a.tool-card:hover, a.tool-card:focus-visible { border-color: var(--pencil); }
     background: var(--sheet);
 }
 
-.tag-ai { border-color: var(--partial); color: var(--partial); }
+/* Two classes, so these win over the plain .tag rule further down. */
+.tag.tag-ai { border-color: var(--partial); color: var(--partial); }
+/* A question the user flagged as bad, and the exam page's flag button while it's on. */
+.tag.tag-flag { border-color: var(--wrong); color: var(--wrong); }
+.btn.is-flagged { color: var(--wrong); }
 
 /* Explain it back. */
 .concept-pick { text-align: left; font-weight: 700; color: var(--ink); }

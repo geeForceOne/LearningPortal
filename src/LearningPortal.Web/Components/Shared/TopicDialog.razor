@@ -37,6 +37,12 @@
                     </span>
                 </div>
                 <label class="field">
+                    <span>Exam date <span class="muted" style="font-weight:400">(optional)</span></span>
+                    <input class="input" type="date" style="max-width:200px" value="@_examDate?.ToString("yyyy-MM-dd")"
+                           @onchange="e => _examDate = DateOnly.TryParse(e.Value?.ToString(), out var d) ? d : null" />
+                    <span class="field-hint">The day of the exam you're studying for. The topic then shows how many days are left.</span>
+                </label>
+                <label class="field">
                     <span>Description <span class="muted" style="font-weight:400">(optional)</span></span>
                     <textarea class="textarea" rows="3" @bind="_description" @bind:event="oninput" maxlength="1000"></textarea>
                 </label>
@@ -50,7 +56,7 @@
 }
 
 @code {
-    public sealed record TopicInput(string Name, string Language, string? Description, bool IsProgramming);
+    public sealed record TopicInput(string Name, string Language, string? Description, bool IsProgramming, DateOnly? ExamDate = null);
 
     private const string OtherLanguage = "__other";
 
@@ -78,6 +84,7 @@
     private string _language = "";
     private string? _description;
     private bool _programming;
+    private DateOnly? _examDate;
     private ElementReference _nameInput;
     private TaskCompletionSource<TopicInput?>? _tcs;
 
@@ -91,6 +98,7 @@
         _languagePick = CommonLanguages.FirstOrDefault(l => l.Equals(_language, StringComparison.OrdinalIgnoreCase)) ?? _language;
         _description = initial?.Description;
         _programming = initial?.IsProgramming ?? false;
+        _examDate = initial?.ExamDate;
         _visible = true;
         _focusPending = true;
         _tcs = new TaskCompletionSource<TopicInput?>();
@@ -116,7 +124,7 @@
     private void Submit()
     {
         if (string.IsNullOrWhiteSpace(_name)) return;
-        Resolve(new TopicInput(_name.Trim(), string.IsNullOrWhiteSpace(_language) ? "English" : _language.Trim(), _description, _programming));
+        Resolve(new TopicInput(_name.Trim(), string.IsNullOrWhiteSpace(_language) ? "English" : _language.Trim(), _description, _programming, _examDate));
     }
 
     private void Resolve(TopicInput? result)

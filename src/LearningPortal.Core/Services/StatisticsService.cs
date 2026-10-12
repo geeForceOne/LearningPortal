@@ -27,6 +27,24 @@ public sealed record SectionScore(
 
 public sealed record MaterialMap(int MaterialId, string Title, IReadOnlyList<SectionScore> Sections);
 
+// How far along a topic is, 0-100: every section counts by its size and the average score on its
+// questions, and a section nothing was answered from counts as 0.
+public sealed record TopicReadiness(int Percent, int Sections, int Practiced)
+{
+    // Null while the topic has no sections (no material yet).
+    public static TopicReadiness? From(IEnumerable<MaterialMap> map)
+    {
+        var sections = map.SelectMany(m => m.Sections).ToList();
+        if (sections.Count == 0)
+            return null;
+        var total = sections.Sum(Weight);
+        var reached = sections.Sum(s => Weight(s) * (s.AverageScore ?? 0));
+        return new TopicReadiness((int)Math.Round(reached / total), sections.Count, sections.Count(s => s.AverageScore is not null));
+    }
+
+    private static double Weight(SectionScore s) => Math.Max(1, s.TokenEstimate);
+}
+
 public sealed record BreakdownCell(QuestionType Type, Difficulty Difficulty, int Answered, double AverageScore);
 
 public sealed record StatisticsReport(
@@ -42,16 +60,20 @@ public sealed class StatisticsService(IDbContextFactory<AppDbContext> dbFactory,
 {
     private sealed record GradedAnswer(
         int QuestionId, int Score, string Prompt, QuestionType Type, Difficulty Difficulty,
-        int TopicId, string TopicName, string? SourceLabel);
+        int TopicId, string TopicName, string? SourceLabel, bool IsFlagged);
 
     // A topic's questions answered wrong or only partly right, weakest first: the highest share of
-    // misses, then the most misses, then the lowest average score.
+    // misses, then the most misses, then the lowest average score. Flagged questions are left out.
     public async Task<IReadOnlyList<WeakQuestion>> GetWeakQuestionsAsync(string userId, int topicId, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         return RankWeak(await GradedAnswersAsync(db, userId, topicId, ct)).ToList();
     }
 
+    public async Task<TopicReadiness?> GetReadinessAsync(string userId, int topicId, CancellationToken ct = default) =>
+        TopicReadiness.From(await GetSectionMapAsync(userId, topicId, ct));
+
+    // Flagged questions count neither as a section's questions nor in its score.
     public async Task<IReadOnlyList<MaterialMap>> GetSectionMapAsync(string userId, int topicId, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
@@ -65,14 +87,14 @@ public sealed class StatisticsService(IDbContextFactory<AppDbContext> dbFactory,
             .ToDictionaryAsync(m => m.Id, m => m.Outline, ct);
 
         var questionCounts = await db.Questions.AsNoTracking()
-            .Where(q => q.UserId == userId && q.TopicId == topicId && q.SourceSectionId != null)
+            .Where(q => q.UserId == userId && q.TopicId == topicId && q.SourceSectionId != null && !q.IsFlagged)
             .GroupBy(q => q.SourceSectionId!.Value)
             .Select(g => new { SectionId = g.Key, Count = g.Count() })
             .ToDictionaryAsync(x => x.SectionId, x => x.Count, ct);
 
         var scores = (await db.AttemptAnswers.AsNoTracking()
                 .Where(a => a.Attempt!.UserId == userId && a.Attempt.CompletedAt != null && a.Score != null
-                    && a.Question!.TopicId == topicId && a.Question.SourceSectionId != null)
+                    && a.Question!.TopicId == topicId && a.Question.SourceSectionId != null && !a.Question.IsFlagged)
                 .Select(a => new { SectionId = a.Question!.SourceSectionId!.Value, Score = a.Score!.Value })
                 .ToListAsync(ct))
             .GroupBy(a => a.SectionId)
@@ -97,12 +119,12 @@ public sealed class StatisticsService(IDbContextFactory<AppDbContext> dbFactory,
     }
 
     // A section's questions for practice: the most often missed first, then the ones never answered,
-    // then the rest by lowest average score.
+    // then the rest by lowest average score. Flagged questions are left out.
     public async Task<IReadOnlyList<int>> RankSectionQuestionsAsync(string userId, int topicId, int sectionId, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var questionIds = await db.Questions.AsNoTracking()
-            .Where(q => q.UserId == userId && q.TopicId == topicId && q.SourceSectionId == sectionId)
+            .Where(q => q.UserId == userId && q.TopicId == topicId && q.SourceSectionId == sectionId && !q.IsFlagged)
             .Select(q => q.Id)
             .ToListAsync(ct);
         var graded = (await db.AttemptAnswers.AsNoTracking()
@@ -125,10 +147,11 @@ public sealed class StatisticsService(IDbContextFactory<AppDbContext> dbFactory,
                 && (topicId == null || a.Question!.TopicId == topicId))
             .Select(a => new GradedAnswer(
                 a.QuestionId, a.Score!.Value, a.Question!.Prompt, a.Question.Type, a.Question.Difficulty,
-                a.Question.TopicId, a.Question.Topic!.Name, a.Question.SourceLabel))
+                a.Question.TopicId, a.Question.Topic!.Name, a.Question.SourceLabel, a.Question.IsFlagged))
             .ToListAsync(ct);
 
     private static IEnumerable<WeakQuestion> RankWeak(IEnumerable<GradedAnswer> answers) => answers
+        .Where(a => !a.IsFlagged)
         .GroupBy(a => a.QuestionId)
         .Select(g =>
         {

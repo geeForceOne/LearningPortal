@@ -1,6 +1,8 @@
 @* The revealed state of one question: the right answer highlighted, what you picked or wrote,
    the grade, the explanation you learn from, and follow-up questions to the AI. Used after
-   "Reveal answer" and on results. *@
+   "Reveal answer" and on results. A bad question can be flagged from here. *@
+@using System.Security.Claims
+@inject ExamService Exams
 
 @if (Q.Type == QuestionType.MultipleChoice)
 {
@@ -70,6 +72,19 @@ else
     }
     <span class="spacer" style="flex:1"></span>
     <SourceLink Question="Q" />
+    @if (Q.IsFlagged)
+    {
+        <span class="tag tag-flag"><Icon Name="flag" Size="12" /> Flagged</span>
+        <button type="button" class="link-button source-link" disabled="@_flagging" @onclick="() => SetFlaggedAsync(false)">Remove flag</button>
+    }
+    else
+    {
+        <button type="button" class="link-button source-link" disabled="@_flagging"
+                title="Ambiguous, wrong or off-topic? A flagged question isn't reused in new exams or in practice."
+                @onclick="() => SetFlaggedAsync(true)">
+            <Icon Name="flag" Size="14" /> Flag as a bad question
+        </button>
+    }
 </div>
 
 @if (!string.IsNullOrWhiteSpace(Answer.Feedback))
@@ -101,7 +116,36 @@ else
     // Set to offer follow-up questions to the AI about this answer.
     [Parameter] public int? AttemptId { get; set; }
 
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+    [CascadingParameter] private AppUi Ui { get; set; } = default!;
+
+    private bool _flagging;
+
     private Question Q => Answer.Question!;
+
+    private async Task SetFlaggedAsync(bool flagged)
+    {
+        var state = AuthState is null ? null : await AuthState;
+        if (state?.User.FindFirstValue(ClaimTypes.NameIdentifier) is not { } userId)
+            return;
+        _flagging = true;
+        try
+        {
+            await Exams.SetFlaggedAsync(userId, Q.Id, flagged);
+            Q.IsFlagged = flagged;
+            Ui.Toast.Success(flagged
+                ? "Flagged. Recall won't reuse this question in new exams or in practice. It stays in this exam until you replace or remove it there."
+                : "Flag removed.");
+        }
+        catch (NotFoundException ex)
+        {
+            Ui.Toast.Error(ex.Message);
+        }
+        finally
+        {
+            _flagging = false;
+        }
+    }
 
     // Options in the order this attempt showed them.
     private IEnumerable<QuestionOption> OrderedOptions

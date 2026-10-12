@@ -19,7 +19,8 @@ public sealed record TopicSummary(
     int AttemptCount,
     double? AverageScore,
     DateTime? LastPracticed,
-    DateTime UpdatedAt);
+    DateTime UpdatedAt,
+    DateOnly? ExamDate = null);
 
 public sealed record MaterialSummary(
     int Id,
@@ -66,7 +67,7 @@ public sealed class TopicService(IDbContextFactory<AppDbContext> dbFactory, Lear
             .Where(t => t.UserId == userId)
             .Select(t => new
             {
-                t.Id, t.Name, t.Description, t.Language, t.IsProgramming, t.UpdatedAt,
+                t.Id, t.Name, t.Description, t.Language, t.IsProgramming, t.UpdatedAt, t.ExamDate,
                 MaterialCount = t.Materials.Count,
                 TokenTotal = t.Materials.Sum(m => (int?)m.TokenEstimate) ?? 0,
                 ExamCount = t.Exams.Count(e => !e.IsPractice),
@@ -88,7 +89,8 @@ public sealed class TopicService(IDbContextFactory<AppDbContext> dbFactory, Lear
                     mine.Count,
                     mine.Count > 0 ? mine.Average(a => a.ScorePercent ?? 0) : null,
                     mine.Max(a => a.CompletedAt),
-                    t.UpdatedAt);
+                    t.UpdatedAt,
+                    t.ExamDate);
             })
             .OrderByDescending(t => t.LastPracticed ?? t.UpdatedAt)
             .ToList();
@@ -139,14 +141,14 @@ public sealed class TopicService(IDbContextFactory<AppDbContext> dbFactory, Lear
 
     // How many bank questions exist per type, difficulty and code/theory, so exam settings can show
     // how many will be reused and how many the AI still has to write.
-    // Bank questions an exam could reuse: those from materials it leaves out don't count.
+    // Bank questions an exam could reuse: flagged ones and those from materials it leaves out don't count.
     public async Task<Dictionary<(QuestionType Type, Difficulty Difficulty, bool IsCode), int>> BankCountsAsync(
         string userId, int topicId, IReadOnlyCollection<int>? excludedMaterials = null, CancellationToken ct = default)
     {
         var excluded = excludedMaterials?.ToList() ?? [];
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var counts = await db.Questions.AsNoTracking()
-            .Where(q => q.UserId == userId && q.TopicId == topicId)
+            .Where(q => q.UserId == userId && q.TopicId == topicId && !q.IsFlagged)
             .Where(q => q.SourceMaterialId == null || !excluded.Contains(q.SourceMaterialId.Value))
             .GroupBy(q => new { q.Type, q.Difficulty, q.IsCode })
             .Select(g => new { g.Key.Type, g.Key.Difficulty, g.Key.IsCode, Count = g.Count() })
@@ -166,7 +168,8 @@ public sealed class TopicService(IDbContextFactory<AppDbContext> dbFactory, Lear
     }
 
     public async Task<int> CreateAsync(
-        string userId, string name, string? description, string language, bool isProgramming, CancellationToken ct = default)
+        string userId, string name, string? description, string language, bool isProgramming, DateOnly? examDate = null,
+        CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var topic = new Topic
@@ -176,6 +179,7 @@ public sealed class TopicService(IDbContextFactory<AppDbContext> dbFactory, Lear
             Description = string.IsNullOrWhiteSpace(description) ? null : description.Trim(),
             Language = string.IsNullOrWhiteSpace(language) ? "English" : language.Trim(),
             IsProgramming = isProgramming,
+            ExamDate = examDate,
         };
         db.Topics.Add(topic);
         await db.SaveChangesAsync(ct);
@@ -184,7 +188,8 @@ public sealed class TopicService(IDbContextFactory<AppDbContext> dbFactory, Lear
 
     // Changing IsProgramming only affects questions generated from now on; existing ones stay.
     public async Task UpdateAsync(
-        string userId, int topicId, string name, string? description, string language, bool isProgramming, CancellationToken ct = default)
+        string userId, int topicId, string name, string? description, string language, bool isProgramming, DateOnly? examDate = null,
+        CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var topic = await db.Topics.FirstOrDefaultAsync(t => t.Id == topicId && t.UserId == userId, ct) ?? throw new NotFoundException();
@@ -192,6 +197,7 @@ public sealed class TopicService(IDbContextFactory<AppDbContext> dbFactory, Lear
         topic.Description = string.IsNullOrWhiteSpace(description) ? null : description.Trim();
         topic.Language = string.IsNullOrWhiteSpace(language) ? "English" : language.Trim();
         topic.IsProgramming = isProgramming;
+        topic.ExamDate = examDate;
         topic.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync(ct);
     }

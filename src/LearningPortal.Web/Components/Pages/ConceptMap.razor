@@ -27,6 +27,20 @@ else
                 Each tile is a section of your material, sized by how much text it has and colored by how well you do
                 on the questions written from it. Pick a section to practice it.
             </p>
+            @if (TopicReadiness.From(_map) is { } ready)
+            {
+                <div class="facts">
+                    <span>Readiness <strong>@ready.Percent%</strong></span>
+                    <span>Practiced <strong>@ready.Practiced of @Format.Plural(ready.Sections, "section", "sections")</strong></span>
+                    @if (_topic.Summary.ExamDate is { } examDate)
+                    {
+                        <span title="@Format.Day(examDate)">Exam <strong>@Format.Countdown(examDate)</strong></span>
+                    }
+                </div>
+                <p class="muted small" style="margin:6px 0 0">
+                    Readiness counts each section by its size and your average score on its questions. A section you haven't practiced counts as 0%.
+                </p>
+            }
         </div>
     </div>
 

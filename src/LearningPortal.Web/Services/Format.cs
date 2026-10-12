@@ -28,6 +28,19 @@ public static class Format
     // A calendar day: "4 Oct 2026".
     public static string Day(DateOnly day) => day.ToString("d MMM yyyy", CultureInfo.InvariantCulture);
 
+    // How far away a topic's exam date is: "in 12 days", "tomorrow", "today", "was on 4 Oct 2026".
+    public static string Countdown(DateOnly day)
+    {
+        var days = day.DayNumber - DateOnly.FromDateTime(DateTime.Now).DayNumber;
+        return days switch
+        {
+            < 0 => $"was on {Day(day)}",
+            0 => "today",
+            1 => "tomorrow",
+            _ => $"in {days} days",
+        };
+    }
+
     public static string Duration(int seconds) => seconds switch
     {
         < 60 => $"{seconds} s",

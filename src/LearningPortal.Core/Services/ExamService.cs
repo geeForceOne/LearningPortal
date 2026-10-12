@@ -126,7 +126,7 @@ public sealed class ExamService(
             progress?.Report("Checking the question bank...");
             var inExam = exam.Questions.Select(eq => eq.QuestionId).ToHashSet();
             var bank = await db.Questions
-                .Where(q => q.TopicId == topicId && q.UserId == userId && q.Difficulty == difficulty && (programming || !q.IsCode))
+                .Where(q => q.TopicId == topicId && q.UserId == userId && q.Difficulty == difficulty && !q.IsFlagged && (programming || !q.IsCode))
                 .Where(q => q.SourceMaterialId == null || !excluded.Contains(q.SourceMaterialId.Value))
                 .Select(q => new { q.Id, q.Type, q.IsCode, Uses = db.ExamQuestions.Count(eq => eq.QuestionId == q.Id && !eq.Exam!.IsPractice) })
                 .ToListAsync(ct);
@@ -323,6 +323,15 @@ public sealed class ExamService(
             q.Options = BuildOptions(draft);
             q.AllowsMultiple = q.Options.Count(o => o.IsCorrect) > 1;
         }
+        await db.SaveChangesAsync(ct);
+    }
+
+    // Marks a bank question as bad, or takes the mark off again. Exams that hold it keep it.
+    public async Task SetFlaggedAsync(string userId, int questionId, bool flagged, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var q = await db.Questions.FirstOrDefaultAsync(x => x.Id == questionId && x.UserId == userId, ct) ?? throw new NotFoundException();
+        q.IsFlagged = flagged;
         await db.SaveChangesAsync(ct);
     }
 

@@ -1,5 +1,16 @@
 # Release notes
 
+## 1.13.0 - 2026-10-12
+
+### New
+
+- **Flag a bad question**: when a question is ambiguous, wrong or off-topic, flag it with one click, next to a revealed answer or on the exam page. Recall then stops reusing it in new exams and in practice, and it no longer counts in the concept map. It stays in the exams that already have it, marked "Flagged", until you edit, replace or remove it. You can take the flag off again.
+- **Exam date and readiness**: give a topic the date of the exam you're studying for, and Recall shows how many days are left. The date is optional. Every topic with material also shows a readiness percentage, on the topic page and on the concept map: each section counts by its size and your average score on its questions, and a section you haven't practiced counts as 0%.
+
+### Fixed
+
+- Minor fixes and updates.
+
 ## 1.12.1 - 2026-10-11
 
 ### Improved
