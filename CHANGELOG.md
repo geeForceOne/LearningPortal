@@ -1,5 +1,15 @@
 # Release notes
 
+## 1.13.1 - 2026-10-13
+
+### Improved
+
+- **Claude Haiku 5.5** replaces Claude Haiku 4.5 in the model list, at a tenth of the price. If you had Haiku 4.5 selected, you're now on Haiku 5.5. One thing to know: a call that sends more than 100k tokens of material costs five times the listed price, which is still less than Haiku 4.5 cost.
+
+### Fixed
+
+- Minor fixes and updates.
+
 ## 1.13.0 - 2026-10-12
 
 ### New

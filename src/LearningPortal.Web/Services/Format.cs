@@ -102,15 +102,15 @@ public static class Format
     public const int NotableTokensWithoutPrice = 20_000;
 
     // "74k tokens, roughly $0.37 on Claude Opus 5" when that's worth showing, otherwise null.
-    public static string? CostHint(int tokens, AiModelInfo? model)
+    public static string? CostHint(int tokens, AiModelInfo? model, int calls = 1)
     {
         if (model is null)
             return tokens >= NotableTokensWithoutPrice ? $"about {Tokens(tokens)}" : null;
-        var cost = model.InputCost(tokens);
+        var cost = model.InputCost(tokens, calls);
         return cost >= NotableCost ? $"about {Tokens(tokens)}, roughly {Money(cost)} on {model.Name}" : null;
     }
 
-    public static string? CostHint(GenerationEstimate e) => e.Calls == 0 ? null : CostHint(e.TotalInputTokens, e.Model);
+    public static string? CostHint(GenerationEstimate e) => e.Calls == 0 ? null : CostHint(e.TotalInputTokens, e.Model, e.Calls);
 
     // "roughly $0.37 on Claude Opus 5" for analyzing material of this size, or null when the
     // chosen model's price isn't known (a custom model ID).

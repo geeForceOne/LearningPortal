@@ -20,7 +20,7 @@ public sealed record GenerationEstimate(int Calls, int InputTokensPerCall, bool 
     public int TotalInputTokens => Calls * InputTokensPerCall;
 
     // Input only, without caching discounts: an upper bound for the material, not the full bill.
-    public decimal? InputCost => Model?.InputCost(TotalInputTokens);
+    public decimal? InputCost => Model?.InputCost(TotalInputTokens, Calls);
 }
 
 // Asks the AI for new bank questions. When the whole topic fits the token budget, every call

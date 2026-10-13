@@ -178,6 +178,29 @@ public sealed class SettingsService(IDbContextFactory<AppDbContext> dbFactory, S
         await db.SaveChangesAsync(ct);
     }
 
+    // Moves saved choices of a model that left the list (AiModels.Retired) to its replacement:
+    // every user's defaults and the models allowed on the shared key. Run at startup; a no-op
+    // once nothing points at a retired model.
+    public async Task ReplaceRetiredModelsAsync(CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        foreach (var (old, (_, replacement)) in AiModels.Retired)
+        {
+            await db.UserSettings.Where(s => s.Model == old).ExecuteUpdateAsync(u => u.SetProperty(s => s.Model, replacement), ct);
+            await db.UserSettings.Where(s => s.AnalysisModel == old).ExecuteUpdateAsync(u => u.SetProperty(s => s.AnalysisModel, replacement), ct);
+            await db.UserSettings.Where(s => s.GenerationModel == old).ExecuteUpdateAsync(u => u.SetProperty(s => s.GenerationModel, replacement), ct);
+        }
+
+        var site = await db.SiteSettings.FirstOrDefaultAsync(x => x.Id == 1, ct);
+        if (site?.SharedAllowedModels is { } allowed)
+        {
+            var ids = allowed.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                .Select(id => AiModels.Retired.TryGetValue(id, out var r) ? r.Replacement : id).Distinct();
+            site.SharedAllowedModels = string.Join(',', ids);
+            await db.SaveChangesAsync(ct);
+        }
+    }
+
     private static async Task<UserSettings> GetOrAddAsync(AppDbContext db, string userId, CancellationToken ct)
     {
         var s = await db.UserSettings.FirstOrDefaultAsync(x => x.UserId == userId, ct);

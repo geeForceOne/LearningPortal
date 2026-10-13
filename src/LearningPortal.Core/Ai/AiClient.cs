@@ -88,14 +88,24 @@ public sealed record AiModelInfo(string Id, string Name, string Description, dec
     // Both providers bill input written to the prompt cache at this multiple of the input price.
     public const decimal CacheWriteFactor = 1.25m;
 
-    public decimal InputCost(int tokens) => tokens * InputPrice / 1_000_000m;
+    // Some models bill a whole call at a multiple of their prices once its prompt (input, cache
+    // writes and cache reads together) is longer than this many tokens. Null: one price throughout.
+    public int? LongPromptTokens { get; init; }
+    public decimal LongPromptFactor { get; init; } = 1m;
+
+    // tokens is the input of all calls together, so the prompt length is judged per call.
+    public decimal InputCost(int tokens, int calls = 1) =>
+        tokens * InputPrice * FactorFor(tokens / Math.Max(calls, 1)) / 1_000_000m;
 
     // What a finished call cost, from the tokens the provider reported.
     public decimal Cost(AiUsage usage) =>
         (usage.InputTokens * InputPrice
          + usage.CacheWriteTokens * InputPrice * CacheWriteFactor
          + usage.CacheReadTokens * CachedInputPrice
-         + usage.OutputTokens * OutputPrice) / 1_000_000m;
+         + usage.OutputTokens * OutputPrice)
+        * FactorFor(usage.InputTokens + usage.CacheWriteTokens + usage.CacheReadTokens) / 1_000_000m;
+
+    private decimal FactorFor(long promptTokens) => promptTokens > LongPromptTokens ? LongPromptFactor : 1m;
 }
 
 public static class AiModels
@@ -125,7 +135,16 @@ public static class AiModels
 
     // The model's display name, or the raw ID for a custom model. Used for "Written by ...".
     public static string DisplayName(string modelId) =>
-        Claude.Concat(OpenAi).FirstOrDefault(m => m.Id == modelId)?.Name ?? modelId;
+        Claude.Concat(OpenAi).FirstOrDefault(m => m.Id == modelId)?.Name
+        ?? (Retired.TryGetValue(modelId, out var retired) ? retired.Name : modelId);
+
+    // Models taken off the list: the name still shown for what they wrote, and the listed model
+    // that saved choices are moved to at startup (SettingsService.ReplaceRetiredModelsAsync).
+    public static readonly IReadOnlyDictionary<string, (string Name, string Replacement)> Retired =
+        new Dictionary<string, (string, string)>
+        {
+            ["claude-haiku-4-5"] = ("Claude Haiku 4.5", "claude-haiku-5-5"),
+        };
 
     public static readonly IReadOnlyList<AiModelInfo> Claude =
     [
@@ -134,7 +153,8 @@ public static class AiModels
         new("claude-opus-5", "Claude Opus 5", "Highly capable all-rounder for writing and grading questions.", 5m, 25m, 0.50m),
         new("claude-sonnet-5-5", "Claude Sonnet 5.5", "Newest Sonnet: strong quality at a much lower price. A good everyday choice.", 2m, 10m, 0.10m),
         new("claude-sonnet-5", "Claude Sonnet 5", "Previous Sonnet, same price as Sonnet 5.5. Kept for anyone who picked it.", 2m, 10m, 0.20m),
-        new("claude-haiku-4-5", "Claude Haiku 4.5", "Fastest and cheapest. Fine for easy recall questions; weaker on hard ones.", 1m, 5m, 0.10m),
+        new("claude-haiku-5-5", "Claude Haiku 5.5", "Fastest and cheapest. Fine for easy recall questions; weaker on hard ones. A call with more than 100k tokens of material costs five times the listed price.", 0.10m, 0.50m, 0.01m)
+            { LongPromptTokens = 100_000, LongPromptFactor = 5m },
     ];
 
     public static readonly IReadOnlyList<AiModelInfo> OpenAi =

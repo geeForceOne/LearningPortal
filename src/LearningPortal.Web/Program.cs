@@ -99,6 +99,7 @@ await using (var scope = app.Services.CreateAsyncScope())
         await roles.CreateAsync(new IdentityRole(Roles.Admin));
 
     await scope.ServiceProvider.GetRequiredService<MaterialService>().RefreshSourceLabelsAsync();
+    await scope.ServiceProvider.GetRequiredService<SettingsService>().ReplaceRetiredModelsAsync();
 }
 
 if (!app.Environment.IsDevelopment())

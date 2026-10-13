@@ -12,9 +12,8 @@ public static class AppInfo
     public const string Name = "Recall";
     public const string Tagline = "Turn your own notes into practice exams, and learn from every answer.";
 
-    // Shown quietly under the name on the sign-in pages. "Deticated" is spelled that way on
-    // purpose (an inside joke): don't correct it.
-    public const string Dedication = "Deticated to Bellissima. Obviously.";
+    // Shown quietly under the name on the sign-in pages.
+    public const string Dedication = "Dedicated to Bellissima. Obviously.";
 
     // The API key warning, shown in Settings and in the invite email so both say the same.
     public const string KeySafetyTitle = "Protect your API key";
