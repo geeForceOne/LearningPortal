@@ -115,14 +115,23 @@
                         @if (_grants.GetValueOrDefault(u.Id) is { } grant)
                         {
                             <span class="nowrap">@Format.GrantLimits(grant)</span>
+                            @* A one-time balance has no months, so it shows what's used of it and what's left. *@
+                            var oneTime = grant.Balance is not null && !grant.Monthly;
                             <span class="muted small users-email" title="Estimated from the tokens used">
-                                @Format.Usd(grant.MonthSpent) this month · @Format.Usd(grant.TotalSpent) total
+                                @if (oneTime)
+                                {
+                                    @($"{Format.Usd(grant.BalanceSpent)} used · {Format.Usd(grant.Remaining ?? 0)} left")
+                                }
+                                else
+                                {
+                                    @($"{Format.Usd(grant.MonthSpent)} this month · {Format.Usd(grant.TotalSpent)} total")
+                                }
                             </span>
                             @if (grant.State != GrantState.Active)
                             {
                                 <span class="tag">@(grant.State == GrantState.Expired ? "Expired" : "Used up")</span>
                             }
-                            else if (grant.Remaining is { } left)
+                            else if (!oneTime && grant.Remaining is { } left)
                             {
                                 <span class="muted small users-email">@Format.Usd(left) left</span>
                             }

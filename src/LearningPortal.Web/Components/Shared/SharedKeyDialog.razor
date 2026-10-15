@@ -15,7 +15,15 @@
                 @if (_existing is not null)
                 {
                     <p class="small" style="margin:0">
-                        Spent so far (estimated): @Format.Usd(_existing.MonthSpent) this month, @Format.Usd(_existing.TotalSpent) in total.
+                        @* A one-time balance has no months; what's used of it is shown under the amount. *@
+                        @if (_existing is { Balance: not null, Monthly: false })
+                        {
+                            @($"Spent so far (estimated): {Format.Usd(_existing.TotalSpent)} in total.")
+                        }
+                        else
+                        {
+                            @($"Spent so far (estimated): {Format.Usd(_existing.MonthSpent)} this month, {Format.Usd(_existing.TotalSpent)} in total.")
+                        }
                     </p>
                 }
                 else

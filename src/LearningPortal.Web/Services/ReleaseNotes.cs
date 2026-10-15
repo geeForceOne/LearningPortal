@@ -1,4 +1,3 @@
-using System.Text.RegularExpressions;
 using LearningPortal.Core;
 using Markdig;
 
@@ -18,17 +17,8 @@ public static class ReleaseNotes
     private static string RunningHeading() =>
         "## " + AppInfo.Version + (AppInfo.BuildDate is { } date ? " - " + date : "");
 
-    // The notes as HTML, with the running version's heading tagged.
-    public static string Html
-    {
-        get
-        {
-            var html = RenderedHtml.Value;
-            // "<h2>1.2.0 - 2026-09-24</h2>" -> the same, plus a small "Running now" tag.
-            var heading = new Regex($@"<h2>({Regex.Escape(AppInfo.Version)}(?:\s[^<]*)?)</h2>");
-            return heading.Replace(html, "<h2>$1<span class=\"current-tag\">Running now</span></h2>", 1);
-        }
-    }
+    // The notes as HTML. The top entry is always the running version, so it isn't marked.
+    public static string Html => RenderedHtml.Value;
 
     private static string Render()
     {

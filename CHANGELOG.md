@@ -1,5 +1,12 @@
 # Release notes
 
+## 1.13.2 - 2026-10-15
+
+### Fixed
+
+- Updated a .NET library with security fixes.
+- Minor fixes and updates.
+
 ## 1.13.1 - 2026-10-13
 
 ### Improved

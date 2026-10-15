@@ -1112,7 +1112,7 @@ a.tool-card:hover, a.tool-card:focus-visible { border-color: var(--pencil); }
 /* ---------- Release notes ---------- */
 
 /* Rendered from CHANGELOG.md: one h2 per version, h3 for New / Improved / Fixed. */
-.release-notes { max-width: 720px; font-family: var(--font-read); line-height: 1.65; }
+.release-notes { font-family: var(--font-read); line-height: 1.65; }
 .release-notes h1 { display: none; } /* The page has its own heading. */
 .release-notes h2 {
     margin: 34px 0 6px;
@@ -1135,16 +1135,6 @@ a.tool-card:hover, a.tool-card:focus-visible { border-color: var(--pencil); }
 .release-notes ul { margin: 4px 0; padding-left: 1.3em; }
 .release-notes li { margin: 3px 0; }
 .release-notes code { font-size: 0.9em; padding: 1px 5px; border-radius: 4px; background: var(--sheet-2); }
-.release-notes .current-tag {
-    margin-left: 8px;
-    padding: 2px 8px;
-    border-radius: 999px;
-    background: var(--marker-soft);
-    color: var(--ink);
-    font-size: var(--t-xs);
-    font-weight: 600;
-    vertical-align: middle;
-}
 
 /* ---------- Reading ---------- */
 
