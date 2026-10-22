@@ -16,7 +16,8 @@ public sealed record AiConnection(AiProvider Provider, string ApiKey, string Mod
 
 // The tokens one call was billed for. InputTokens are the ordinary ones only: tokens written to
 // or read from the provider's prompt cache are counted separately, since they cost differently.
-public sealed record AiUsage(long InputTokens, long CacheWriteTokens, long CacheReadTokens, long OutputTokens);
+// WebSearches is how many web searches the call ran, billed per search on top of the tokens.
+public sealed record AiUsage(long InputTokens, long CacheWriteTokens, long CacheReadTokens, long OutputTokens, int WebSearches = 0);
 
 // Guards and tracks calls made with a key that has limits. The clients call CheckAsync before
 // each request and RecordAsync as soon as the provider answers, also when the answer is then
@@ -61,14 +62,42 @@ public sealed record AiRequest
 
     public int MaxTokens { get; init; } = 16_000;
 
+    // A PDF the AI reads itself, pages as images included: for a scanned exam paper that has no
+    // text to extract. Sent before the prompt.
+    public AiPdf? Pdf { get; init; }
+
     // Groups requests that share a prefix (e.g. "topic-12") for providers that route caches by key.
     public string? CacheKey { get; init; }
 }
+
+public sealed record AiPdf(string FileName, byte[] Content);
+
+// A request that lets the AI search the web and answers in plain text with the pages it used.
+// Both providers' web search tools are used without a response schema, so the answer comes back
+// as text; a second, ordinary call turns it into structured data where needed.
+public sealed record WebResearchRequest
+{
+    public required string System { get; init; }
+    public required string Prompt { get; init; }
+
+    // A hard cap on the searches, which are billed one by one.
+    public required int MaxSearches { get; init; }
+
+    public int MaxTokens { get; init; } = 12_000;
+}
+
+// The answer text, the pages it cites and where in the text each citation applies (a character
+// offset), and how many searches ran.
+public sealed record WebResearch(string Text, IReadOnlyList<WebCitation> Citations, int Searches);
+
+public sealed record WebCitation(int Position, string Url, string Title);
 
 public interface IAiClient
 {
     // Returns the model's JSON response text, already checked to be complete.
     Task<string> CompleteJsonAsync(AiRequest request, CancellationToken ct);
+
+    Task<WebResearch> ResearchAsync(WebResearchRequest request, CancellationToken ct);
 }
 
 public static class AiClientFactory
@@ -88,6 +117,9 @@ public sealed record AiModelInfo(string Id, string Name, string Description, dec
     // Both providers bill input written to the prompt cache at this multiple of the input price.
     public const decimal CacheWriteFactor = 1.25m;
 
+    // Both providers bill a web search at $10 per 1,000, whatever the model.
+    public const decimal WebSearchPrice = 0.01m;
+
     // Some models bill a whole call at a multiple of their prices once its prompt (input, cache
     // writes and cache reads together) is longer than this many tokens. Null: one price throughout.
     public int? LongPromptTokens { get; init; }
@@ -103,7 +135,8 @@ public sealed record AiModelInfo(string Id, string Name, string Description, dec
          + usage.CacheWriteTokens * InputPrice * CacheWriteFactor
          + usage.CacheReadTokens * CachedInputPrice
          + usage.OutputTokens * OutputPrice)
-        * FactorFor(usage.InputTokens + usage.CacheWriteTokens + usage.CacheReadTokens) / 1_000_000m;
+        * FactorFor(usage.InputTokens + usage.CacheWriteTokens + usage.CacheReadTokens) / 1_000_000m
+        + usage.WebSearches * WebSearchPrice;
 
     private decimal FactorFor(long promptTokens) => promptTokens > LongPromptTokens ? LongPromptFactor : 1m;
 }

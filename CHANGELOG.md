@@ -1,5 +1,13 @@
 # Release notes
 
+## 1.14.0 - 2026-10-22
+
+### New
+
+- **Upload your own exam**: practice with a real exam paper, like last year's exam. Upload it on the topic page (the same files as material, scanned PDFs too) and Recall copies out its questions in the paper's own words, multiple choice and written. Answers the paper gives are kept; Recall works out the rest from your material and writes an explanation for every question.
+- **Check an answer**: ask your own question about a topic and give your answer. Recall answers the question from your material and tells you how right you are and what you missed. You'll find it under "Go deeper" on the topic page. Your checks are kept, and you can save a question to an exam.
+- **Questions your material doesn't cover**: for an uploaded exam or a checked answer, you choose whether Recall searches the web (you see the cost first) or the AI answers from its own knowledge. These answers are marked as possibly wrong, and web answers list the pages they come from.
+
 ## 1.13.2 - 2026-10-15
 
 ### Fixed

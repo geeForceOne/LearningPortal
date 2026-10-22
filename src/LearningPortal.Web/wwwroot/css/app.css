@@ -930,6 +930,21 @@ a.tool-card:hover, a.tool-card:focus-visible { border-color: var(--pencil); }
 .explain-student { display: grid; gap: 12px; margin-top: 18px; }
 .explain-student .follow-up { display: grid; gap: 8px; }
 
+/* Upload an exam: the chosen paper under the file picker. */
+.paper-file { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; overflow-wrap: anywhere; }
+/* Questions from an uploaded paper, or a checked answer, that the material doesn't cover. */
+.pending-panel h2 { margin-bottom: 6px; }
+.pending-panel > p { margin-top: 0; }
+.pending-list { display: grid; gap: 10px; margin: 10px 0 0; padding-left: 22px; }
+/* The web pages an answer was taken from. */
+.web-sources { margin-top: 16px; }
+.web-sources h3 { font-size: var(--t-sm); color: var(--pencil); margin-bottom: 6px; }
+.web-sources ul { display: grid; gap: 4px; margin: 0; padding-left: 20px; }
+.web-sources a { overflow-wrap: anywhere; }
+/* Check an answer: where to save the question, in one row on wide screens. */
+.save-check { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; }
+.save-check .field { flex: 1 1 240px; }
+
 /* Follow-up questions to the AI under a revealed answer. */
 .follow-ups { display: grid; gap: 12px; margin-top: 16px; }
 .follow-up { border-left: 3px solid var(--rule-strong); padding-left: 12px; }

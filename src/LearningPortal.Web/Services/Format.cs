@@ -110,6 +110,13 @@ public static class Format
         return cost >= NotableCost ? $"about {Tokens(tokens)}, roughly {Money(cost)} on {model.Name}" : null;
     }
 
+    // What a web lookup may cost: "Web search: up to 4 searches at $10 per 1,000, roughly $0.18 in
+    // all on Claude Opus 5.5 with the pages read. That's billed to your API key."
+    public static string ResearchHint(int searches, decimal? cost, AiModelInfo? model, SettingsView? settings) =>
+        $"Web search: up to {Plural(searches, "search", "searches")} at $10 per 1,000"
+        + (cost is { } c && model is not null ? $", roughly {Money(c)} in all on {model.Name} with the pages read" : "")
+        + $". {BilledTo(settings)}";
+
     public static string? CostHint(GenerationEstimate e) => e.Calls == 0 ? null : CostHint(e.TotalInputTokens, e.Model, e.Calls);
 
     // "roughly $0.37 on Claude Opus 5" for analyzing material of this size, or null when the

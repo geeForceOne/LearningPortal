@@ -76,7 +76,10 @@ else
                     <h2>Exams<span class="count">@_topic.Exams.Count</span></h2>
                     @if (_topic.Materials.Count > 0)
                     {
-                        <a class="btn btn-primary btn-sm" href="topics/@TopicId/exams/new"><Icon Name="plus" Size="16" /> New exam</a>
+                        <div class="actions">
+                            <a class="btn btn-secondary btn-sm" href="topics/@TopicId/exams/upload" title="Practice with a real exam paper, such as last year's exam"><Icon Name="upload" Size="16" /> Upload an exam</a>
+                            <a class="btn btn-primary btn-sm" href="topics/@TopicId/exams/new"><Icon Name="plus" Size="16" /> New exam</a>
+                        </div>
                     }
                 </div>
 
@@ -89,8 +92,11 @@ else
                         }
                         else
                         {
-                            <p>No exams yet. Create one to start practicing.</p>
-                            <a class="btn btn-primary" href="topics/@TopicId/exams/new"><Icon Name="plus" /> Create an exam</a>
+                            <p>No exams yet. Create one to start practicing, or upload an exam paper you have.</p>
+                            <div class="actions" style="justify-content:center">
+                                <a class="btn btn-primary" href="topics/@TopicId/exams/new"><Icon Name="plus" /> Create an exam</a>
+                                <a class="btn btn-secondary" href="topics/@TopicId/exams/upload"><Icon Name="upload" /> Upload an exam</a>
+                            </div>
                         }
                     </div>
                 }
@@ -164,6 +170,10 @@ else
                         <a class="tool-card" href="topics/@TopicId/explain">
                             <span class="tool-card-title"><Icon Name="text" Size="16" /> Explain it back</span>
                             <span class="tool-card-text">Explain a concept in your own words. Recall asks a question or two, then scores it.</span>
+                        </a>
+                        <a class="tool-card" href="topics/@TopicId/check">
+                            <span class="tool-card-title"><Icon Name="check" Size="16" /> Check an answer</span>
+                            <span class="tool-card-text">Ask your own question and give your answer. Recall says how right you are and what you missed.</span>
                         </a>
                         <a class="tool-card" href="topics/@TopicId/map">
                             <span class="tool-card-title"><Icon Name="chart" Size="16" /> Concept map</span>

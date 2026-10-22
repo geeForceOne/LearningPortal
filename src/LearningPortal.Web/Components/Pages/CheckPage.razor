@@ -1,0 +1,143 @@
+@page "/topics/{TopicId:int}/check"
+@inherits AppPage
+@inject TopicService Topics
+@inject AnswerCheckService Checks
+@inject SettingsService Settings
+
+<PageTitle>Check an answer - @AppInfo.Name</PageTitle>
+
+@if (_topic is null || _history is null)
+{
+    <p class="page-loading">Loading...</p>
+}
+else
+{
+    <nav class="crumbs" aria-label="Breadcrumb">
+        <a href="">Topics</a><span class="sep">/</span>
+        <a href="topics/@TopicId">@_topic.Summary.Name</a>
+    </nav>
+    <div class="page-head">
+        <div>
+            <h1>Check an answer</h1>
+            <p class="page-sub">
+                Ask a question about this topic and give your own answer. Recall answers the question from your material,
+                then tells you how right you are and what you missed.
+            </p>
+        </div>
+    </div>
+
+    <div class="answer-box">
+        <label for="check-question" class="kind-hint" style="margin-bottom:4px">Your question</label>
+        <textarea id="check-question" class="textarea" rows="3" maxlength="@AnswerCheck.MaxQuestionLength" @bind="_question" @bind:event="oninput"
+                  disabled="@IsBusy" placeholder="e.g. Why do cats always land on their feet?"></textarea>
+    </div>
+    <div class="answer-box" style="margin-top:16px">
+        <label for="check-answer" class="kind-hint" style="margin-bottom:4px">Your answer</label>
+        <textarea id="check-answer" class="textarea" maxlength="@AttemptService.MaxWrittenAnswerLength" @bind="_answer" @bind:event="oninput"
+                  disabled="@IsBusy" placeholder="Answer as you would in an exam: one sentence to a short paragraph."></textarea>
+        <div class="answer-foot">
+            <span>Keep it short: at most 10 to 20 sentences.</span>
+            <span>@_answer.Length / @AttemptService.MaxWrittenAnswerLength characters</span>
+        </div>
+    </div>
+    @if (_settings is { AdvancedModels: true })
+    {
+        <div style="margin-top:16px">
+            <AiModelSelect Label="Check with" @bind-Value="_checkWith" Available="_settings.HasKey" AllowedModels="_settings.AllowedModels" Inline="true" />
+        </div>
+    }
+    <div class="exam-actions">
+        <button type="button" class="btn btn-primary btn-lg" disabled="@(IsBusy || string.IsNullOrWhiteSpace(_question) || string.IsNullOrWhiteSpace(_answer))" @onclick="CheckAsync">
+            <Icon Name="check" /> Check my answer
+        </button>
+    </div>
+    @if (IsBusy)
+    {
+        <div style="margin-top:12px"><BusyBar Message="@BusyMessage" OnCancel="CancelBusy" /></div>
+    }
+    @if (_error is not null)
+    {
+        <div class="notice notice-error" style="margin-top:16px">@_error</div>
+    }
+
+    @if (_history.Count > 0)
+    {
+        <section class="section" style="margin-top:36px">
+            <div class="section-head"><h2>Your checks<span class="count">@_history.Count</span></h2></div>
+            <ul class="rows">
+                @foreach (var h in _history)
+                {
+                    <li class="row" @key="h.Id">
+                        <div class="row-main">
+                            <a class="row-title" href="checks/@h.Id">@Shorten(h.Question)</a>
+                            <div class="row-meta">
+                                <span>@Format.Date(h.CreatedAt)</span>
+                                <AnswerOrigin Source="h.AnswerSource" />
+                            </div>
+                        </div>
+                        <div class="row-aside">
+                            @if (h.Score is { } score)
+                            {
+                                <VerdictLabel Score="score" ShowScore="true" />
+                            }
+                            else if (h.Pending)
+                            {
+                                <span class="muted small">Not in your material</span>
+                            }
+                        </div>
+                    </li>
+                }
+            </ul>
+        </section>
+    }
+}
+
+@code {
+    [Parameter] public int TopicId { get; set; }
+
+    private TopicDetail? _topic;
+    private IReadOnlyList<AnswerCheckSummary>? _history;
+    private SettingsView? _settings;
+    // The model that answers and checks; starts at the questions default.
+    private AiChoice _checkWith = default!;
+    private string _question = "";
+    private string _answer = "";
+    private string? _error;
+
+    // Passed on only in advanced mode; in simple mode the one model does everything.
+    private AiChoice? Choice => _settings?.AdvancedModels == true ? _checkWith : null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var userId = await UserIdAsync();
+        try
+        {
+            _topic = await Topics.GetAsync(userId, TopicId, PageToken);
+        }
+        catch (NotFoundException)
+        {
+            Nav.NavigateTo("not-found");
+            return;
+        }
+        _history = await Checks.ListAsync(userId, TopicId, PageToken);
+        _settings = await Settings.GetAsync(userId, PageToken);
+        _checkWith = _settings.Default(AiTask.Generation);
+    }
+
+    private async Task CheckAsync()
+    {
+        _error = null;
+        var userId = await UserIdAsync();
+        var id = 0;
+        var ok = await RunBusyAsync("Recall is checking your answer...", async (_, ct) =>
+            id = await Checks.CheckAsync(userId, TopicId, _question, _answer, Choice, ct), message => _error = message);
+        if (ok)
+            Nav.NavigateTo($"checks/{id}");
+    }
+
+    private static string Shorten(string text)
+    {
+        var line = text.ReplaceLineEndings(" ");
+        return line.Length <= 140 ? line : line[..140] + "...";
+    }
+}

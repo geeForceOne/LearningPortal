@@ -7,6 +7,7 @@
 @inject SettingsService Settings
 @inject LearningPortalOptions Options
 @inject QuestionWriter Writer
+@inject PaperImportService Papers
 
 <PageTitle>@(_detail?.Exam.Name ?? "Exam") - @AppInfo.Name</PageTitle>
 
@@ -31,6 +32,10 @@ else
                 <span>@Format.Label(exam.Difficulty)</span>
                 <span><strong>@_detail.Questions.Count</strong> @(_detail.Questions.Count == 1 ? "question" : "questions")</span>
                 <span>@Format.Plural(_attempts.Count(a => a.CompletedAt is not null), "attempt", "attempts")</span>
+                @if (exam.ImportedFrom is { } paper)
+                {
+                    <span>Uploaded from <strong>@paper</strong></span>
+                }
             </div>
         </div>
         <div class="actions">
@@ -68,7 +73,57 @@ else
         <div class="notice notice-error" style="margin-bottom:20px">@_error</div>
     }
 
-    @if (_detail.Questions.Count < exam.QuestionCount && !Busy)
+    @if (exam.ImportedFrom is not null && !Busy)
+    {
+        @if (exam.PaperFilePath is not null)
+        {
+            <div class="notice notice-warn" style="margin-bottom:24px">
+                Recall hasn't read this exam paper yet.
+                <button type="button" class="link-button" @onclick="() => StartWritingAsync(QuestionWriter.Kind.ReadPaper)">Read it now</button>
+            </div>
+        }
+        else if (_pending.Any(q => !q.Checked))
+        {
+            <div class="notice notice-warn" style="margin-bottom:24px">
+                Recall stopped before it answered @Format.Plural(_pending.Count(q => !q.Checked), "question", "questions") from the paper.
+                <button type="button" class="link-button" @onclick="() => StartWritingAsync(QuestionWriter.Kind.ReadPaper)">Go on</button>
+            </div>
+        }
+        else if (_pending.Count > 0)
+        {
+            <section class="panel pending-panel" style="margin-bottom:24px">
+                <h2>@Format.Plural(_pending.Count, "question isn't", "questions aren't") covered by your material</h2>
+                <p class="muted">
+                    @(_pending.Count == 1 ? "This question from the paper isn't" : "These questions from the paper aren't") in the exam yet,
+                    because your material doesn't answer @(_pending.Count == 1 ? "it" : "them").
+                    Recall can search the web, or the AI can answer from its own knowledge.
+                    Either way the answers aren't checked against your material, so they're marked as possibly wrong.
+                </p>
+                <details class="q-more" style="margin-bottom:14px">
+                    <summary>Show @(_pending.Count == 1 ? "the question" : "the questions")</summary>
+                    <ol class="pending-list">
+                        @foreach (var q in _pending)
+                        {
+                            <li @key="q.Index"><RichText Text="@q.Prompt" /></li>
+                        }
+                    </ol>
+                </details>
+                <div class="actions">
+                    <button type="button" class="btn btn-primary btn-sm" @onclick="() => StartWritingAsync(QuestionWriter.Kind.AnswerFromWeb)"><Icon Name="search" Size="14" /> Search the web</button>
+                    <button type="button" class="btn btn-secondary btn-sm" @onclick="() => StartWritingAsync(QuestionWriter.Kind.AnswerFromKnowledge)">Answer without searching</button>
+                    <button type="button" class="btn btn-ghost btn-sm" @onclick="DropPendingAsync">Leave them out</button>
+                </div>
+                @if (_research is { } research)
+                {
+                    <p class="muted small" style="margin:10px 0 0">
+                        @Format.ResearchHint(research.Searches, research.Cost, research.Model, _settings)
+                    </p>
+                }
+            </section>
+        }
+    }
+
+    @if (_detail.Questions.Count < exam.QuestionCount && exam.ImportedFrom is null && !Busy)
     {
         <div class="notice notice-warn" style="margin-bottom:24px">
             This exam has @_detail.Questions.Count of @exam.QuestionCount questions.
@@ -81,7 +136,7 @@ else
     }
 
     @* Above every way this page has the AI write questions: filling, "New questions", replacing one. *@
-    <SaturationNotice Basis="Basis" Show="@(!Busy)" Style="margin-bottom:24px"
+    <SaturationNotice Basis="Basis" Show="@(!Busy && exam.ImportedFrom is null)" Style="margin-bottom:24px"
                       Advice="Before having the AI write more, add material to the topic, or raise this exam's reuse from the bank." />
 
     <div class="two-col">
@@ -120,6 +175,7 @@ else
                                     {
                                         <span class="tag">Yours</span>
                                     }
+                                    <AnswerOrigin Source="q.AnswerSource" />
                                     @if (q.IsFlagged)
                                     {
                                         <span class="tag tag-flag" title="You flagged this as a bad question. It isn't reused in new exams or in practice. Edit, replace or remove it here."><Icon Name="flag" Size="12" /> Flagged</span>
@@ -158,6 +214,7 @@ else
                                         <h3>Explanation</h3>
                                         <RichText Class="reading" Text="@q.Explanation" />
                                     </div>
+                                    <AnswerOrigin WebSources="q.WebSources" ShowSources="true" />
                                 </details>
                                 <div class="q-foot">
                                     <SourceLink Question="q" />
@@ -182,7 +239,23 @@ else
         <aside>
             <div class="panel">
                 <h2>Settings</h2>
-                @if (_editing)
+                @if (exam.ImportedFrom is not null)
+                {
+                    <div class="form" style="gap:10px">
+                        <div class="facts" style="margin:0;flex-direction:column;gap:4px">
+                            <span>Questions <strong>@_detail.Questions.Count</strong></span>
+                            <span>Type <strong>@Format.Label(exam.Type)</strong></span>
+                            <span style="overflow-wrap:anywhere">Paper <strong>@exam.ImportedFrom</strong></span>
+                        </div>
+                        <p class="muted small" style="margin:0">
+                            This exam holds the questions from your paper. Edit, replace or remove single questions, or add your own.
+                        </p>
+                        <div class="actions">
+                            <button type="button" class="btn btn-secondary btn-sm" disabled="@Busy" @onclick="RenameAsync"><Icon Name="edit" Size="14" /> Rename</button>
+                        </div>
+                    </div>
+                }
+                else if (_editing)
                 {
                     <ExamSettingsForm Model="_values" Programming="_detail.Topic.IsProgramming" Materials="_materials" />
                     <div class="actions" style="margin-top:20px">
@@ -226,7 +299,7 @@ else
                 {
                     <div style="margin-top:16px">
                         <AiModelSelect Label="Write with" @bind-Value="_writeWith" Available="_settings.HasKey" AllowedModels="_settings.AllowedModels" Inline="true">
-                            <Hint><span class="field-hint">Used when the AI adds, rewrites or replaces questions here.</span></Hint>
+                            <Hint><span class="field-hint">Used when the AI adds, answers, rewrites or replaces questions here.</span></Hint>
                         </AiModelSelect>
                     </div>
                 }
@@ -289,6 +362,9 @@ else
     private string? _error;
     private IReadOnlyList<MaterialChoice> _materials = [];
     private SettingsView? _settings;
+    // An uploaded exam's questions that wait for the user's choice, and what looking them up costs.
+    private IReadOnlyList<PaperQuestion> _pending = [];
+    private (int Searches, decimal? Cost, AiModelInfo? Model)? _research;
     // The model that writes questions here; starts at the questions default.
     private AiChoice _writeWith = default!;
 
@@ -339,6 +415,8 @@ else
             _error = done.Error;
         else if (done.Kind == QuestionWriter.Kind.Replace)
             Ui.Toast.Success("Question replaced. The old one stays in your question bank.");
+        else if (done.Paper is { } paper)
+            ReportPaper(done.Kind, paper);
         else
             ReportFill(done.Result);
         Writer.Dismiss(userId, ExamId);
@@ -370,6 +448,7 @@ else
                 return;
             }
             _attempts = await Attempts.ListForExamAsync(userId, ExamId, PageToken);
+            _pending = _detail.Exam.ImportedFrom is null ? [] : await Papers.PendingAsync(userId, ExamId, PageToken);
             _cost = await Generator.CostBasisAsync(userId, _detail.Exam.TopicId, _detail.Exam.ExcludedMaterialIds, ct: PageToken);
             _materials = await Topics.MaterialChoicesAsync(userId, _detail.Exam.TopicId, PageToken);
             if (_settings is null)
@@ -377,6 +456,9 @@ else
                 _settings = await Settings.GetAsync(userId, PageToken);
                 _writeWith = _settings.Default(AiTask.Generation);
             }
+            _research = _pending.Count(q => q.Checked) is > 0 and var waiting
+                ? await Papers.ResearchCostAsync(userId, waiting, _writeWith, PageToken)
+                : null;
         }
         catch (NotFoundException)
         {
@@ -433,6 +515,40 @@ else
             Ui.Toast.Error($"{Format.Plural(result.Missing, "question", "questions")} couldn't be generated. Try adding them again.");
         else if (result.FromBank + result.Generated > 0)
             Ui.Toast.Success($"Added {result.FromBank + result.Generated} questions ({result.FromBank} from the bank, {result.Generated} new).");
+    }
+
+    private void ReportPaper(QuestionWriter.Kind kind, PaperResult result)
+    {
+        var waiting = result.Pending > 0
+            ? $" {Format.Plural(result.Pending, "question isn't", "questions aren't")} covered by your material; choose below how to answer {(result.Pending == 1 ? "it" : "them")}."
+            : "";
+        if (kind == QuestionWriter.Kind.ReadPaper)
+            Ui.Toast.Success(result.Answered == 0 && result.Pending > 0
+                ? $"Recall read the paper.{waiting}"
+                : $"Added {Format.Plural(result.Answered, "question", "questions")} from the paper.{waiting}");
+        else if (result.Answered > 0)
+            Ui.Toast.Success($"Added {Format.Plural(result.Answered, "question", "questions")}." +
+                (result.Pending > 0 ? $" {Format.Plural(result.Pending, "question", "questions")} couldn't be answered; try again or leave them out." : ""));
+        else
+            Ui.Toast.Error("The AI couldn't answer the remaining questions. Try again, or leave them out.");
+    }
+
+    private async Task DropPendingAsync()
+    {
+        if (!await Ui.Confirm.AskAsync("Leave these questions out?",
+                "They won't be in the exam. To practice them later, upload the paper again.", "Leave them out"))
+            return;
+        await Papers.DropPendingAsync(await UserIdAsync(), ExamId, PageToken);
+        await LoadAsync();
+    }
+
+    private async Task RenameAsync()
+    {
+        var name = await Ui.Prompt.AskAsync("Rename exam", "Name", _detail!.Exam.Name, "Rename");
+        if (string.IsNullOrWhiteSpace(name)) return;
+        var e = _detail.Exam;
+        await Exams.UpdateSettingsAsync(await UserIdAsync(), ExamId, new ExamSettings(name, Math.Max(1, e.QuestionCount), e.Type, e.Difficulty), PageToken);
+        await LoadAsync();
     }
 
     private void BeginEdit()

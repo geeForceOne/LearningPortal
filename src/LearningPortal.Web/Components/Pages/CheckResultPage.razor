@@ -1,0 +1,214 @@
+@page "/checks/{CheckId:int}"
+@inherits AppPage
+@inject AnswerCheckService Checks
+@inject TopicService Topics
+@inject SettingsService Settings
+
+<PageTitle>Check an answer - @AppInfo.Name</PageTitle>
+
+@if (_check is null)
+{
+    <p class="page-loading">Loading...</p>
+}
+else
+{
+    <nav class="crumbs" aria-label="Breadcrumb">
+        <a href="">Topics</a><span class="sep">/</span>
+        <a href="topics/@_check.TopicId">@_check.Topic!.Name</a><span class="sep">/</span>
+        <a href="topics/@_check.TopicId/check">Check an answer</a>
+    </nav>
+
+    <div>
+        <p class="question-number" style="margin-bottom:6px">Your question</p>
+        <RichText Class="prompt" Text="@_check.Question" />
+
+        <div class="your-answer">
+            <h3 class="small muted" style="margin-bottom:6px">Your answer</h3>
+            <div class="reading">@_check.Answer</div>
+        </div>
+
+        @if (_check.IsPending)
+        {
+            <section class="panel pending-panel" style="margin-top:20px">
+                <h2>Your material doesn't cover this question</h2>
+                <p class="muted">
+                    Recall couldn't find the answer in this topic's material. It can search the web, or the AI can answer
+                    from its own knowledge. Either way the answer isn't checked against your material, so it's marked as possibly wrong.
+                </p>
+                @if (IsBusy)
+                {
+                    <BusyBar Message="@BusyMessage" OnCancel="CancelBusy" />
+                }
+                else
+                {
+                    <div class="actions">
+                        <button type="button" class="btn btn-primary btn-sm" @onclick="() => FinishAsync(true)"><Icon Name="search" Size="14" /> Search the web</button>
+                        <button type="button" class="btn btn-secondary btn-sm" @onclick="() => FinishAsync(false)">Answer without searching</button>
+                    </div>
+                    @if (_research is { } research)
+                    {
+                        <p class="muted small" style="margin:10px 0 0">
+                            @Format.ResearchHint(research.Searches, research.Cost, research.Model, _settings)
+                        </p>
+                    }
+                    @if (_settings is { AdvancedModels: true })
+                    {
+                        <div style="margin-top:14px">
+                            <AiModelSelect Label="Answer with" @bind-Value="_answerWith" Available="_settings.HasKey" AllowedModels="_settings.AllowedModels" Inline="true" />
+                        </div>
+                    }
+                }
+            </section>
+        }
+        else
+        {
+            <div class="result-line">
+                <VerdictLabel Score="_check.Score ?? 0" ShowScore="true" />
+                <span class="spacer" style="flex:1"></span>
+                <AnswerOrigin Source="_check.AnswerSource" />
+                @if (_check.SourceMaterialId is { } materialId)
+                {
+                    <a class="source-link" href="@(_check.SourceSectionId is { } section ? $"materials/{materialId}#section-{section}" : $"materials/{materialId}")">
+                        <Icon Name="file" Size="14" /> From @(_check.SourceLabel ?? "your material")
+                    </a>
+                }
+            </div>
+            @if (!string.IsNullOrWhiteSpace(_check.Feedback))
+            {
+                <RichText Class="feedback" Text="@_check.Feedback" />
+            }
+            <div class="reference">
+                <h3>Reference answer</h3>
+                <RichText Class="reading" Text="@_check.ReferenceAnswer" />
+            </div>
+            <div class="explain">
+                <h3>Why</h3>
+                <RichText Class="reading" Text="@_check.Explanation" />
+            </div>
+            <AnswerOrigin WebSources="_check.WebSources" ShowSources="true" />
+            @if (_check.Model is { } by)
+            {
+                <p class="source-link" style="margin-top:12px">Answered by @AiModels.DisplayName(by)</p>
+            }
+
+            <section class="panel" style="margin-top:24px">
+                <h2>Save to an exam</h2>
+                <p class="muted small" style="margin-top:0">Keep this question, with Recall's answer, to practice it again in an exam.</p>
+                <div class="save-check">
+                    <label class="field">
+                        <span>Exam</span>
+                        <select class="input" @bind="_target" disabled="@_saving">
+                            @foreach (var e in _exams)
+                            {
+                                <option value="@e.Id">@e.Name</option>
+                            }
+                            <option value="0">New exam...</option>
+                        </select>
+                    </label>
+                    @if (_target == 0)
+                    {
+                        <label class="field">
+                            <span>New exam's name</span>
+                            <input class="input" @bind="_newName" @bind:event="oninput" maxlength="200" disabled="@_saving" />
+                        </label>
+                    }
+                    <button type="button" class="btn btn-secondary" disabled="@(_saving || (_target == 0 && string.IsNullOrWhiteSpace(_newName)))" @onclick="SaveAsync">
+                        <Icon Name="plus" Size="16" /> Save
+                    </button>
+                </div>
+            </section>
+        }
+
+        @if (_error is not null)
+        {
+            <div class="notice notice-error" style="margin-top:16px">@_error</div>
+        }
+
+        <div class="actions" style="margin-top:28px">
+            <a class="btn btn-secondary" href="topics/@_check.TopicId/check"><Icon Name="check" Size="16" /> Check another answer</a>
+            <button type="button" class="btn btn-ghost" disabled="@IsBusy" @onclick="DeleteAsync"><Icon Name="trash" Size="16" /> Delete</button>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public int CheckId { get; set; }
+    [CascadingParameter] private AppUi Ui { get; set; } = default!;
+
+    private AnswerCheck? _check;
+    private SettingsView? _settings;
+    private AiChoice _answerWith = default!;
+    private (int Searches, decimal? Cost, AiModelInfo? Model)? _research;
+    private IReadOnlyList<ExamSummary> _exams = [];
+    // The exam to save to; 0 is a new one.
+    private int _target;
+    private string _newName = "";
+    private bool _saving;
+    private string? _error;
+
+    // Passed on only in advanced mode; in simple mode the one model does everything.
+    private AiChoice? Choice => _settings?.AdvancedModels == true ? _answerWith : null;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var userId = await UserIdAsync();
+        try
+        {
+            _check = await Checks.GetAsync(userId, CheckId, PageToken);
+        }
+        catch (NotFoundException)
+        {
+            Nav.NavigateTo("not-found");
+            return;
+        }
+        _settings ??= await Settings.GetAsync(userId, PageToken);
+        if (_answerWith is null)
+            _answerWith = _settings.Default(AiTask.Generation);
+        _research = _check.IsPending ? await Checks.ResearchCostAsync(userId, _answerWith, PageToken) : null;
+        _exams = (await Topics.GetAsync(userId, _check.TopicId, PageToken)).Exams;
+        _target = _exams.FirstOrDefault()?.Id ?? 0;
+        _newName = $"{_check.Topic!.Name}: my questions";
+    }
+
+    private async Task FinishAsync(bool searchWeb)
+    {
+        _error = null;
+        var userId = await UserIdAsync();
+        var ok = await RunBusyAsync(searchWeb ? "Searching the web..." : "Checking your answer...", (progress, ct) =>
+            Checks.FinishAsync(userId, CheckId, searchWeb, Choice, progress, ct), message => _error = message);
+        if (ok)
+            await OnParametersSetAsync();
+    }
+
+    private async Task SaveAsync()
+    {
+        _error = null;
+        _saving = true;
+        try
+        {
+            var examId = await Checks.SaveToExamAsync(await UserIdAsync(), CheckId, _target == 0 ? null : _target, _newName, PageToken);
+            var name = _target == 0 ? _newName.Trim() : _exams.First(e => e.Id == _target).Name;
+            Ui.Toast.Success($"Saved to \"{name}\".");
+            if (_target == 0)
+                Nav.NavigateTo($"exams/{examId}");
+            else
+                await OnParametersSetAsync();
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or NotFoundException)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (!await Ui.Confirm.AskAsync("Delete this check?", "It's removed from your checks. A question you saved to an exam stays there.", "Delete", danger: true))
+            return;
+        await Checks.DeleteAsync(await UserIdAsync(), CheckId, PageToken);
+        Nav.NavigateTo($"topics/{_check!.TopicId}/check");
+    }
+}

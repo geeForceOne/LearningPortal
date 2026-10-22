@@ -217,11 +217,47 @@ public sealed class Question
     // The user marked it as a bad question (ambiguous, wrong, off-topic). It stays in the exams
     // that hold it, but isn't reused from the bank, practiced, or counted in section scores.
     public bool IsFlagged { get; set; }
+    // Where the answer comes from; see AnswerSource. Questions from before 1.14.0 are Material.
+    public AnswerSource AnswerSource { get; set; }
+    // The name of the uploaded exam paper the question was taken from; null for the AI's own
+    // questions and the user's.
+    public string? ImportedFrom { get; set; }
+    // Web answers: the pages the AI used, as JSON [{"title": "...", "url": "..."}].
+    public string? WebSourcesJson { get; set; }
+    // Web answers: what the pages say about the question, in a few sentences. It takes the place
+    // of the source section when an answer is graded or asked about.
+    public string? SourceNote { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public Topic? Topic { get; set; }
     public List<QuestionOption> Options { get; set; } = [];
+
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+    public IReadOnlyList<WebSource> WebSources => WebSource.Parse(WebSourcesJson);
     public MaterialSection? SourceSection { get; set; }
+}
+
+// A web page an answer was taken from.
+public sealed record WebSource(string Title, string Url)
+{
+    public static IReadOnlyList<WebSource> Parse(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+            return [];
+        try
+        {
+            return System.Text.Json.JsonSerializer.Deserialize<List<WebSource>>(json, JsonOptions) ?? [];
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return [];
+        }
+    }
+
+    public static string? ToJson(IEnumerable<WebSource> sources) =>
+        sources.ToList() is { Count: > 0 } list ? System.Text.Json.JsonSerializer.Serialize(list, JsonOptions) : null;
+
+    private static readonly System.Text.Json.JsonSerializerOptions JsonOptions = new(System.Text.Json.JsonSerializerDefaults.Web);
 }
 
 public sealed class QuestionOption
@@ -254,6 +290,15 @@ public sealed class Exam
     // The topic's "Weak questions" practice: one per topic, its questions rebuilt from the ones most
     // often answered wrong each time it's started. Not listed with the topic's exams or edited.
     public bool IsPractice { get; set; }
+    // The user uploaded this exam: the name of the paper its questions were taken from. It keeps
+    // exactly those questions, so only its name is edited and it's never filled up or regenerated.
+    public string? ImportedFrom { get; set; }
+    // Uploaded exams: the stored paper while Recall reads it (relative to the files root); removed
+    // once it's read.
+    public string? PaperFilePath { get; set; }
+    // Uploaded exams: questions the topic's material doesn't answer, waiting for the user to choose
+    // between a web search and the AI's own knowledge. JSON, see PaperImportService.
+    public string? PendingQuestionsJson { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
@@ -376,6 +421,44 @@ public sealed class ExplainSession
 
     private static List<string> Parse(string? json) =>
         string.IsNullOrWhiteSpace(json) ? [] : System.Text.Json.JsonSerializer.Deserialize<List<string>>(json) ?? [];
+}
+
+// "Check an answer": the user asks a question of their own and gives their answer; the AI answers
+// it from the topic's material (or, if the user agrees, from a web search or its own knowledge)
+// and scores the user's answer. Kept per topic; not counted in statistics.
+public sealed class AnswerCheck
+{
+    public const int MaxQuestionLength = 2_000;
+
+    public int Id { get; set; }
+    public string UserId { get; set; } = "";
+    public int TopicId { get; set; }
+    public string Question { get; set; } = "";
+    public string Answer { get; set; } = "";
+    // Null while the material didn't cover the question and the user hasn't chosen how to go on.
+    public AnswerSource? AnswerSource { get; set; }
+    public int? SourceSectionId { get; set; }
+    public int? SourceMaterialId { get; set; }
+    public string? SourceLabel { get; set; }
+    public string? WebSourcesJson { get; set; }
+    public string? SourceNote { get; set; }
+    public string? ReferenceAnswer { get; set; }
+    public string? Explanation { get; set; }
+    public Difficulty Difficulty { get; set; } = Difficulty.Medium;
+    public bool IsCode { get; set; }
+    public int? Score { get; set; }
+    public string? Feedback { get; set; }
+    public string? Model { get; set; }
+    // The bank question made from this check by "Save to an exam".
+    public int? SavedQuestionId { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    public Topic? Topic { get; set; }
+
+    public bool IsPending => AnswerSource is null;
+
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+    public IReadOnlyList<WebSource> WebSources => WebSource.Parse(WebSourcesJson);
 }
 
 // App-wide switches the admin sets. A single row (Id 1); no row means everything is off.

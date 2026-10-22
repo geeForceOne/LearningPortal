@@ -15,7 +15,7 @@ namespace LearningPortal.Core.Data.Migrations
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder.HasAnnotation("ProductVersion", "10.0.12");
+            modelBuilder.HasAnnotation("ProductVersion", "10.0.13");
 
             modelBuilder.Entity("LearningPortal.Core.Models.AccountRequest", b =>
                 {
@@ -45,6 +45,89 @@ namespace LearningPortal.Core.Data.Migrations
                     b.HasIndex("Email");
 
                     b.ToTable("AccountRequests");
+                });
+
+            modelBuilder.Entity("LearningPortal.Core.Models.AnswerCheck", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Answer")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("AnswerSource")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Difficulty")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Explanation")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Feedback")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsCode")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Model")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Question")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ReferenceAnswer")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("SavedQuestionId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("Score")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SourceLabel")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("SourceMaterialId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SourceNote")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("SourceSectionId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("TopicId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("WebSourcesJson")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SavedQuestionId");
+
+                    b.HasIndex("SourceMaterialId");
+
+                    b.HasIndex("SourceSectionId");
+
+                    b.HasIndex("TopicId");
+
+                    b.HasIndex("UserId", "TopicId");
+
+                    b.ToTable("AnswerChecks");
                 });
 
             modelBuilder.Entity("LearningPortal.Core.Models.AppUser", b =>
@@ -273,6 +356,10 @@ namespace LearningPortal.Core.Data.Migrations
                     b.PrimitiveCollection<string>("ExcludedMaterialIds")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("ImportedFrom")
+                        .HasMaxLength(300)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Instructions")
                         .HasColumnType("TEXT");
 
@@ -282,6 +369,12 @@ namespace LearningPortal.Core.Data.Migrations
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PaperFilePath")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PendingQuestionsJson")
                         .HasColumnType("TEXT");
 
                     b.Property<int>("QuestionCount")
@@ -526,6 +619,9 @@ namespace LearningPortal.Core.Data.Migrations
                     b.Property<bool>("AllowsMultiple")
                         .HasColumnType("INTEGER");
 
+                    b.Property<int>("AnswerSource")
+                        .HasColumnType("INTEGER");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("TEXT");
 
@@ -537,6 +633,10 @@ namespace LearningPortal.Core.Data.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<string>("GeneratedByModel")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ImportedFrom")
+                        .HasMaxLength(300)
                         .HasColumnType("TEXT");
 
                     b.Property<bool>("IsCode")
@@ -561,6 +661,9 @@ namespace LearningPortal.Core.Data.Migrations
                     b.Property<int?>("SourceMaterialId")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("SourceNote")
+                        .HasColumnType("TEXT");
+
                     b.Property<int?>("SourceSectionId")
                         .HasColumnType("INTEGER");
 
@@ -572,6 +675,9 @@ namespace LearningPortal.Core.Data.Migrations
 
                     b.Property<string>("UserId")
                         .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("WebSourcesJson")
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
@@ -895,6 +1001,32 @@ namespace LearningPortal.Core.Data.Migrations
                     b.HasKey("UserId", "LoginProvider", "Name");
 
                     b.ToTable("AspNetUserTokens", (string)null);
+                });
+
+            modelBuilder.Entity("LearningPortal.Core.Models.AnswerCheck", b =>
+                {
+                    b.HasOne("LearningPortal.Core.Models.Question", null)
+                        .WithMany()
+                        .HasForeignKey("SavedQuestionId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("LearningPortal.Core.Models.Material", null)
+                        .WithMany()
+                        .HasForeignKey("SourceMaterialId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("LearningPortal.Core.Models.MaterialSection", null)
+                        .WithMany()
+                        .HasForeignKey("SourceSectionId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("LearningPortal.Core.Models.Topic", "Topic")
+                        .WithMany()
+                        .HasForeignKey("TopicId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Topic");
                 });
 
             modelBuilder.Entity("LearningPortal.Core.Models.Attempt", b =>

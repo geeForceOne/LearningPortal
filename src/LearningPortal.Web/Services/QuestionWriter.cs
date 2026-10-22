@@ -5,10 +5,13 @@ namespace LearningPortal.Web.Services;
 
 // Has the AI write questions for an exam on the server, so the work carries on when the user leaves
 // the page or closes the browser. One job per exam at a time. The exam page follows a job through
-// Changed and shows its outcome when it ends, also when the user only comes back later.
-public sealed class QuestionWriter(ExamService exams, IHostApplicationLifetime lifetime, ILogger<QuestionWriter> logger)
+// Changed and shows its outcome when it ends, also when the user only comes back later. An uploaded
+// exam's paper is read the same way (ReadPaper), and so are its questions the material doesn't
+// answer, from a web search (AnswerFromWeb) or the AI's own knowledge (AnswerFromKnowledge).
+public sealed class QuestionWriter(
+    ExamService exams, PaperImportService papers, IHostApplicationLifetime lifetime, ILogger<QuestionWriter> logger)
 {
-    public enum Kind { Fill, Regenerate, Replace }
+    public enum Kind { Fill, Regenerate, Replace, ReadPaper, AnswerFromWeb, AnswerFromKnowledge }
 
     public sealed class Job
     {
@@ -19,6 +22,7 @@ public sealed class QuestionWriter(ExamService exams, IHostApplicationLifetime l
         public bool Finished { get; internal set; }
         public bool Canceled { get; internal set; }
         public FillResult? Result { get; internal set; }
+        public PaperResult? Paper { get; internal set; }
         public string? Error { get; internal set; }
         public DateTime FinishedAt { get; internal set; }
         internal CancellationTokenSource Cts { get; } = new();
@@ -51,6 +55,9 @@ public sealed class QuestionWriter(ExamService exams, IHostApplicationLifetime l
                 {
                     Kind.Fill => "Adding questions...",
                     Kind.Regenerate => "Writing new questions...",
+                    Kind.ReadPaper => "Reading the exam paper...",
+                    Kind.AnswerFromWeb => "Searching the web...",
+                    Kind.AnswerFromKnowledge => "Answering the remaining questions...",
                     _ => "Writing a replacement question...",
                 },
             };
@@ -98,12 +105,23 @@ public sealed class QuestionWriter(ExamService exams, IHostApplicationLifetime l
 
         try
         {
-            job.Result = job.Kind switch
+            switch (job.Kind)
             {
-                Kind.Fill => await exams.FillAsync(job.UserId, job.ExamId, choice, progress, cts.Token),
-                Kind.Regenerate => await exams.RegenerateAllAsync(job.UserId, job.ExamId, choice, progress, cts.Token),
-                _ => await ReplaceAsync(job, choice, questionId!.Value, progress, cts.Token),
-            };
+                case Kind.ReadPaper:
+                    job.Paper = await papers.ReadAsync(job.UserId, job.ExamId, choice, progress, cts.Token);
+                    break;
+                case Kind.AnswerFromWeb or Kind.AnswerFromKnowledge:
+                    job.Paper = await papers.AnswerPendingAsync(job.UserId, job.ExamId, job.Kind == Kind.AnswerFromWeb, choice, progress, cts.Token);
+                    break;
+                default:
+                    job.Result = job.Kind switch
+                    {
+                        Kind.Fill => await exams.FillAsync(job.UserId, job.ExamId, choice, progress, cts.Token),
+                        Kind.Regenerate => await exams.RegenerateAllAsync(job.UserId, job.ExamId, choice, progress, cts.Token),
+                        _ => await ReplaceAsync(job, choice, questionId!.Value, progress, cts.Token),
+                    };
+                    break;
+            }
         }
         catch (OperationCanceledException)
         {

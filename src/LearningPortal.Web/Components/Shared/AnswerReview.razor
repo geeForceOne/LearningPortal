@@ -71,6 +71,7 @@ else
         }
     }
     <span class="spacer" style="flex:1"></span>
+    <AnswerOrigin Source="Q.AnswerSource" />
     <SourceLink Question="Q" />
     @if (Q.IsFlagged)
     {
@@ -104,6 +105,7 @@ else
     <h3>Why</h3>
     <RichText Class="reading" Text="@Q.Explanation" />
 </div>
+<AnswerOrigin WebSources="Q.WebSources" ShowSources="true" />
 
 @if (AttemptId is { } attemptId)
 {

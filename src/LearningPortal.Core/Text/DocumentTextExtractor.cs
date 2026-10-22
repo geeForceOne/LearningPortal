@@ -9,7 +9,11 @@ using UglyToad.PdfPig.DocumentLayoutAnalysis.TextExtractor;
 
 namespace LearningPortal.Core.Text;
 
-public sealed class UnsupportedMaterialException(string message) : Exception(message);
+public class UnsupportedMaterialException(string message) : Exception(message);
+
+// A PDF without a text layer, usually a scan. Material needs text, but an exam paper can still be
+// read by the AI from the page images.
+public sealed class ScannedPdfException(string message) : UnsupportedMaterialException(message);
 
 // Turns an uploaded file into plain text once, at upload time. Word headings and PowerPoint
 // slides come out as Markdown headings so the sectioner can split on them the same way it splits
@@ -54,6 +58,19 @@ public static class DocumentTextExtractor
         return Normalize(text);
     }
 
+    public static int PdfPageCount(Stream stream)
+    {
+        try
+        {
+            using var document = PdfDocument.Open(stream);
+            return document.NumberOfPages;
+        }
+        catch (Exception ex)
+        {
+            throw new UnsupportedMaterialException($"The PDF couldn't be read: {ex.Message}");
+        }
+    }
+
     private static string ExtractPdf(Stream stream, CancellationToken ct)
     {
         var sb = new StringBuilder();
@@ -73,7 +90,7 @@ public static class DocumentTextExtractor
         }
 
         if (string.IsNullOrWhiteSpace(sb.ToString()))
-            throw new UnsupportedMaterialException(
+            throw new ScannedPdfException(
                 "No text was found in this PDF. It may be a scanned image; export it with a text layer and try again.");
 
         return sb.ToString();

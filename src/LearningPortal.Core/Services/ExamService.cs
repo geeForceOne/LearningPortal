@@ -36,7 +36,8 @@ public sealed record FillResult(int FromBank, int Generated, int Missing);
 
 public sealed class ExamService(
     IDbContextFactory<AppDbContext> dbFactory,
-    QuestionGenerationService generator)
+    QuestionGenerationService generator,
+    LearningPortalOptions options)
 {
     public const int MaxQuestions = 100;
     public const int MaxInstructionsLength = 500;
@@ -185,6 +186,13 @@ public sealed class ExamService(
         Validate(settings);
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var exam = await LoadForEditAsync(db, userId, examId, ct);
+        if (exam.ImportedFrom is not null)
+        {
+            exam.Name = settings.Name.Trim();
+            exam.UpdatedAt = DateTime.UtcNow;
+            await db.SaveChangesAsync(ct);
+            return;
+        }
         var trimKind = exam.Topic!.IsProgramming && exam.CodePercent != settings.CodePercent;
         var excluded = await CheckExcludedAsync(db, userId, exam.TopicId, settings.ExcludedMaterialIds, ct);
 
@@ -231,6 +239,8 @@ public sealed class ExamService(
         await using (var db = await dbFactory.CreateDbContextAsync(ct))
         {
             var exam = await LoadForEditAsync(db, userId, examId, ct);
+            if (exam.ImportedFrom is not null)
+                throw new InvalidOperationException("An uploaded exam keeps the questions from its paper. Replace single questions instead.");
             topicId = exam.TopicId;
             difficulty = exam.Difficulty;
             instructions = exam.Instructions;
@@ -375,6 +385,8 @@ public sealed class ExamService(
         var exam = await db.Exams.FirstOrDefaultAsync(e => e.Id == examId && e.UserId == userId, ct) ?? throw new NotFoundException();
         db.Exams.Remove(exam);
         await db.SaveChangesAsync(ct);
+        if (exam.PaperFilePath is { } paper)
+            MaterialService.TryDeleteFile(options, paper);
     }
 
     public static (int MultipleChoice, int Written) Split(int count, ExamType type) => type switch
@@ -429,6 +441,9 @@ public sealed class ExamService(
 
     private static QuestionMix Missing(Exam exam)
     {
+        // An uploaded exam holds what its paper held; it isn't topped up with new questions.
+        if (exam.ImportedFrom is not null)
+            return default;
         var target = Targets(exam);
         var questions = exam.Questions.Select(eq => eq.Question!).ToList();
         var total = exam.QuestionCount - questions.Count;

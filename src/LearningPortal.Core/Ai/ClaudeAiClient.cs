@@ -17,6 +17,8 @@ public sealed class ClaudeAiClient(string apiKey, string model, IAiMeter? meter 
         var client = new AnthropicClient(new ClientOptions { ApiKey = apiKey });
 
         var content = new List<BetaContentBlockParam>();
+        if (request.Pdf is { } pdf)
+            content.Add(new BetaRequestDocumentBlock { Source = new BetaBase64PdfSource { Data = Convert.ToBase64String(pdf.Content) } });
         if (!string.IsNullOrWhiteSpace(request.Context))
         {
             // Cache breakpoint after the material: system + material form the reusable prefix,
@@ -30,7 +32,7 @@ public sealed class ClaudeAiClient(string apiKey, string model, IAiMeter? meter 
             Model = model,
             MaxTokens = request.MaxTokens,
             System = new List<BetaTextBlockParam> { new() { Text = request.System } },
-            Messages = [new BetaMessageParam { Role = Role.User, Content = content }],
+            Messages = [new BetaUserMessageParam { Content = content }],
             OutputConfig = new BetaOutputConfig
             {
                 Format = new BetaJsonOutputFormat { Schema = ToSchemaDictionary(request.Schema) },
@@ -44,6 +46,73 @@ public sealed class ClaudeAiClient(string apiKey, string model, IAiMeter? meter 
             parameters = parameters with { Betas = [FallbackBeta], Fallbacks = new List<BetaFallbackParam> { new() { Model = "claude-opus-4-8" } } };
         }
 
+        var response = await SendAsync(client, parameters, ct);
+
+        var stop = response.StopReason?.ToString();
+        if (stop == "refusal")
+            throw new AiException("The AI declined to answer this request. Try rewording the material or question.");
+        if (stop == "max_tokens")
+            throw new AiException("The AI's answer was cut off because it ran too long. Try fewer questions at a time.");
+
+        var text = string.Concat(response.Content.Select(b => b.TryPickText(out var t) ? t.Text : ""));
+        if (string.IsNullOrWhiteSpace(text))
+            throw new AiException("The AI returned an empty answer. Try again.");
+
+        return text;
+    }
+
+    // Claude answers in text blocks, the cited ones carrying the pages they draw on. The basic web
+    // search tool works on every current model; the newer versions filter results with code
+    // execution, which only some models support and which can pause a long turn.
+    public async Task<WebResearch> ResearchAsync(WebResearchRequest request, CancellationToken ct)
+    {
+        var client = new AnthropicClient(new ClientOptions { ApiKey = apiKey });
+        var parameters = new MessageCreateParams
+        {
+            Model = model,
+            MaxTokens = request.MaxTokens,
+            System = new List<BetaTextBlockParam> { new() { Text = request.System } },
+            Messages = [new BetaUserMessageParam { Content = request.Prompt }],
+            Tools = [new BetaWebSearchTool20250305 { MaxUses = request.MaxSearches }],
+        };
+        if (SupportsFallbacks(model))
+            parameters = parameters with { Betas = [FallbackBeta], Fallbacks = new List<BetaFallbackParam> { new() { Model = "claude-opus-4-8" } } };
+
+        var response = await SendAsync(client, parameters, ct);
+
+        var stop = response.StopReason?.ToString();
+        if (stop == "refusal")
+            throw new AiException("The AI declined to answer this request. Try rewording the question.");
+        if (stop == "max_tokens")
+            throw new AiException("The AI's answer was cut off because it ran too long. Try fewer questions at a time.");
+        if (stop == "pause_turn")
+            throw new AiException("The web search took too long. Try again.");
+
+        var text = new System.Text.StringBuilder();
+        var citations = new List<WebCitation>();
+        foreach (var block in response.Content)
+        {
+            if (!block.TryPickText(out var t))
+                continue;
+            foreach (var citation in t.Citations ?? [])
+            {
+                if (citation.TryPickCitationsWebSearchResultLocation(out var web))
+                    citations.Add(new WebCitation(text.Length, web.Url, web.Title ?? web.Url));
+            }
+            text.Append(t.Text);
+        }
+        if (text.Length == 0)
+            throw new AiException("The AI returned an empty answer. Try again.");
+
+        return new WebResearch(text.ToString(), citations, Searches(response));
+    }
+
+    private static int Searches(BetaMessage response) => (int)(response.Usage.ServerToolUse?.WebSearchRequests ?? 0);
+
+    // Sends the request, records what it cost on a metered key, and turns failures into messages
+    // the user can act on.
+    private async Task<BetaMessage> SendAsync(AnthropicClient client, MessageCreateParams parameters, CancellationToken ct)
+    {
         if (meter is not null)
             await meter.CheckAsync(ct);
 
@@ -81,19 +150,10 @@ public sealed class ClaudeAiClient(string apiKey, string model, IAiMeter? meter 
                 response.Usage.InputTokens,
                 response.Usage.CacheCreationInputTokens ?? 0,
                 response.Usage.CacheReadInputTokens ?? 0,
-                response.Usage.OutputTokens));
+                response.Usage.OutputTokens,
+                Searches(response)));
 
-        var stop = response.StopReason?.ToString();
-        if (stop == "refusal")
-            throw new AiException("The AI declined to answer this request. Try rewording the material or question.");
-        if (stop == "max_tokens")
-            throw new AiException("The AI's answer was cut off because it ran too long. Try fewer questions at a time.");
-
-        var text = string.Concat(response.Content.Select(b => b.TryPickText(out var t) ? t.Text : ""));
-        if (string.IsNullOrWhiteSpace(text))
-            throw new AiException("The AI returned an empty answer. Try again.");
-
-        return text;
+        return response;
     }
 
     private static bool SupportsFallbacks(string model) =>

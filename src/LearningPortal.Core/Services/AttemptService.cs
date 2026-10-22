@@ -173,9 +173,9 @@ public sealed class AttemptService(
 
         var language = await db.Topics.Where(t => t.Id == question.TopicId).Select(t => t.Language).FirstAsync(ct);
         // Only the question's own source section goes along, never the whole topic.
-        var source = question.SourceSectionId is { } sid
+        var source = (question.SourceSectionId is { } sid
             ? await db.MaterialSections.Where(s => s.Id == sid).Select(s => s.Text).FirstOrDefaultAsync(ct)
-            : null;
+            : null) ?? question.SourceNote;
 
         var client = AiClientFactory.Create(await settings.GetConnectionAsync(userId, AiTask.Generation, ct: ct));
         var json = await client.CompleteJsonAsync(new AiRequest
@@ -222,9 +222,9 @@ public sealed class AttemptService(
 
         var question = answer.Question!;
         var language = await db.Topics.Where(t => t.Id == question.TopicId).Select(t => t.Language).FirstAsync(ct);
-        var source = question.SourceSectionId is { } sid
+        var source = (question.SourceSectionId is { } sid
             ? await db.MaterialSections.Where(s => s.Id == sid).Select(s => s.Text).FirstOrDefaultAsync(ct)
-            : null;
+            : null) ?? question.SourceNote;
 
         var connection = await settings.GetConnectionAsync(userId, AiTask.Generation, choice, ct);
         var json = await AiClientFactory.Create(connection).CompleteJsonAsync(new AiRequest

@@ -16,6 +16,13 @@ public sealed class OpenAiClient(string apiKey, string model, IAiMeter? meter = 
     public async Task<string> CompleteJsonAsync(AiRequest request, CancellationToken ct)
     {
         var content = new JsonArray();
+        if (request.Pdf is { } pdf)
+            content.Add(new JsonObject
+            {
+                ["type"] = "input_file",
+                ["filename"] = pdf.FileName,
+                ["file_data"] = "data:application/pdf;base64," + Convert.ToBase64String(pdf.Content),
+            });
         if (!string.IsNullOrWhiteSpace(request.Context))
             content.Add(new JsonObject { ["type"] = "input_text", ["text"] = request.Context });
         content.Add(new JsonObject { ["type"] = "input_text", ["text"] = request.Prompt });
@@ -41,6 +48,68 @@ public sealed class OpenAiClient(string apiKey, string model, IAiMeter? meter = 
         if (request.CacheKey is not null)
             body["prompt_cache_key"] = request.CacheKey;
 
+        return ExtractOutput(await SendAsync(body, ct));
+    }
+
+    // The web search tool runs the searches inside the call; the answer is a message whose text
+    // carries url_citation annotations at the characters they apply to. Searches are counted from
+    // the web_search_call items of type "search" (opening a page found by one isn't a new search).
+    public async Task<WebResearch> ResearchAsync(WebResearchRequest request, CancellationToken ct)
+    {
+        var body = new JsonObject
+        {
+            ["model"] = model,
+            ["instructions"] = request.System,
+            ["input"] = new JsonArray
+            {
+                new JsonObject
+                {
+                    ["role"] = "user",
+                    ["content"] = new JsonArray { new JsonObject { ["type"] = "input_text", ["text"] = request.Prompt } },
+                },
+            },
+            ["max_output_tokens"] = request.MaxTokens,
+            ["max_tool_calls"] = request.MaxSearches,
+            ["store"] = false,
+            ["tools"] = new JsonArray { new JsonObject { ["type"] = "web_search" } },
+        };
+
+        var responseText = await SendAsync(body, ct);
+        var root = JsonNode.Parse(responseText)!;
+        var text = ExtractOutput(responseText);
+
+        var citations = new List<WebCitation>();
+        foreach (var item in root["output"]?.AsArray() ?? [])
+        {
+            if (item?["type"]?.GetValue<string>() != "message")
+                continue;
+            var offset = 0;
+            foreach (var part in item["content"]?.AsArray() ?? [])
+            {
+                if (part?["type"]?.GetValue<string>() != "output_text")
+                    continue;
+                foreach (var a in part["annotations"]?.AsArray() ?? [])
+                {
+                    if (a?["type"]?.GetValue<string>() != "url_citation" || a["url"]?.GetValue<string>() is not { } url)
+                        continue;
+                    var start = a["start_index"]?.GetValue<int>() ?? 0;
+                    citations.Add(new WebCitation(offset + start, url, a["title"]?.GetValue<string>() ?? url));
+                }
+                offset += part["text"]?.GetValue<string>()?.Length ?? 0;
+            }
+        }
+
+        return new WebResearch(text, citations, CountSearches(root));
+    }
+
+    private static int CountSearches(JsonNode root) =>
+        (root["output"]?.AsArray() ?? []).Count(i =>
+            i?["type"]?.GetValue<string>() == "web_search_call"
+            && (i["action"]?["type"]?.GetValue<string>() ?? "search") == "search");
+
+    // Sends the request, records what it cost on a metered key, and returns the response body.
+    private async Task<string> SendAsync(JsonObject body, CancellationToken ct)
+    {
         using var message = new HttpRequestMessage(HttpMethod.Post, "https://api.openai.com/v1/responses")
         {
             Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json"),
@@ -69,7 +138,7 @@ public sealed class OpenAiClient(string apiKey, string model, IAiMeter? meter = 
             if (meter is not null && ReadUsage(responseText) is { } usage)
                 await meter.RecordAsync(usage);
 
-            return ExtractOutput(responseText);
+            return responseText;
         }
     }
 
@@ -84,7 +153,8 @@ public sealed class OpenAiClient(string apiKey, string model, IAiMeter? meter = 
             var cached = Count(usage["input_tokens_details"]?["cached_tokens"]);
             var written = Count(usage["input_tokens_details"]?["cache_write_tokens"]);
             return new AiUsage(
-                Math.Max(0, Count(usage["input_tokens"]) - cached - written), written, cached, Count(usage["output_tokens"]));
+                Math.Max(0, Count(usage["input_tokens"]) - cached - written), written, cached, Count(usage["output_tokens"]),
+                CountSearches(JsonNode.Parse(responseText)!));
         }
         catch (Exception ex) when (ex is JsonException or InvalidOperationException or FormatException)
         {

@@ -43,13 +43,18 @@ builder.Services.AddAuthentication(options =>
         options.DefaultSignInScheme = IdentityConstants.ExternalScheme;
     })
     .AddIdentityCookies();
+// Cookies are shared by every app on the same host whatever the port, so Recall's have names of
+// their own: with ASP.NET's defaults, another app on the host (LaLira) signed Recall's users out.
 builder.Services.ConfigureApplicationCookie(options =>
 {
+    options.Cookie.Name = ".Recall.Auth";
     options.LoginPath = "/account/login";
     options.AccessDeniedPath = "/";
     options.ExpireTimeSpan = TimeSpan.FromDays(30);
     options.SlidingExpiration = true;
 });
+builder.Services.ConfigureExternalCookie(options => options.Cookie.Name = ".Recall.External");
+builder.Services.AddAntiforgery(options => options.Cookie.Name = ".Recall.Antiforgery");
 builder.Services.AddAuthorization();
 
 builder.Services.AddIdentityCore<AppUser>(options =>

@@ -1,0 +1,39 @@
+@* Where a question's answer comes from, when it isn't simply the topic's material: the uploaded
+   paper, a web search, or the AI's own knowledge. The last two may be wrong, and say so. With
+   ShowSources, it lists the web pages the answer was taken from instead. *@
+@if (ShowSources)
+{
+    @if (WebSources.Count > 0)
+    {
+        <div class="web-sources">
+            <h3>Sources</h3>
+            <ul>
+                @foreach (var s in WebSources)
+                {
+                    <li><a href="@s.Url" target="_blank" rel="noopener noreferrer nofollow">@s.Title</a></li>
+                }
+            </ul>
+        </div>
+    }
+}
+else
+{
+    @switch (Source)
+    {
+        case AnswerSource.Paper:
+            <span class="tag" title="The answer comes from the exam paper you uploaded.">Answer from your paper</span>
+            break;
+        case AnswerSource.Web:
+            <span class="tag tag-ai" title="Your material doesn't cover this. The AI looked the answer up on the web; check it against the sources.">From the web · may be wrong</span>
+            break;
+        case AnswerSource.General:
+            <span class="tag tag-ai" title="Your material doesn't cover this. The AI answered from its own knowledge; check it against a trusted source.">AI's own knowledge · may be wrong</span>
+            break;
+    }
+}
+
+@code {
+    [Parameter] public AnswerSource? Source { get; set; }
+    [Parameter] public IReadOnlyList<WebSource> WebSources { get; set; } = [];
+    [Parameter] public bool ShowSources { get; set; }
+}

@@ -1,0 +1,187 @@
+@page "/topics/{TopicId:int}/exams/upload"
+@inherits AppPage
+@inject TopicService Topics
+@inject PaperImportService Papers
+@inject SettingsService Settings
+@inject LearningPortalOptions Options
+@inject QuestionWriter Writer
+
+<PageTitle>Upload an exam - @AppInfo.Name</PageTitle>
+
+@if (_topic is null)
+{
+    <p class="page-loading">Loading...</p>
+}
+else
+{
+    <nav class="crumbs" aria-label="Breadcrumb">
+        <a href="">Topics</a><span class="sep">/</span><a href="topics/@TopicId">@_topic.Summary.Name</a>
+    </nav>
+    <div class="page-head">
+        <div>
+            <h1>Upload an exam</h1>
+            <p class="page-sub">
+                Practice with a real exam paper, such as last year's exam. Recall copies out its questions, multiple choice
+                and written, in the paper's own words. Answers the paper gives are kept. Recall works out the rest from this
+                topic's material and writes the explanations in @_topic.Summary.Language.
+            </p>
+        </div>
+    </div>
+
+    <div class="form-cols">
+        <div class="form">
+            <label class="field">
+                <span>Exam paper</span>
+                <label class="dropzone">
+                    <Icon Name="upload" Size="22" />
+                    <strong>@(_upload is null ? "Choose a file" : "Choose another file")</strong>
+                    <span>PDF, Word, PowerPoint, LaTeX, Markdown or text, up to @(Options.MaxUploadBytes / 1024 / 1024) MB</span>
+                    <InputFile OnChange="ChooseAsync" accept="@string.Join(",", LearningPortal.Core.Text.DocumentTextExtractor.SupportedExtensions)" disabled="@IsBusy" />
+                </label>
+            </label>
+            @if (IsBusy)
+            {
+                <BusyBar Message="@BusyMessage" OnCancel="CancelBusy" />
+            }
+            @if (_upload is not null)
+            {
+                <div class="paper-file">
+                    <Icon Name="file" Size="16" />
+                    <strong>@_upload.FileName</strong>
+                    <span class="muted">@(_upload.Scanned ? Format.Plural(_upload.Pages, "page", "pages") : $"about {Format.Tokens(_upload.TokenEstimate)}")</span>
+                </div>
+                @if (_upload.Scanned)
+                {
+                    <div class="notice">
+                        This PDF has no text layer, so it's probably a scan. Recall can still read it: the AI looks at each page
+                        as an image, which costs more than reading text. Check the questions afterward; handwriting and blurry
+                        pages can be misread.
+                    </div>
+                }
+            }
+            <label class="field">
+                <span>Exam name</span>
+                <input class="input" @bind="_name" @bind:event="oninput" maxlength="200" placeholder="@(_upload is null ? "The file name, unless you type one" : Path.GetFileNameWithoutExtension(_upload.FileName))" />
+            </label>
+        </div>
+
+        <div class="form">
+            <div class="notice">
+                <p style="margin:0 0 6px">How the answers are found:</p>
+                <ul style="margin:0;padding-left:18px">
+                    <li>An answer the paper gives (a marked option, a model answer, an answer key) is used as it is.</li>
+                    <li>Otherwise Recall answers from this topic's material and links each question to the section it comes from.</li>
+                    <li>Questions your material doesn't cover wait on the exam page. There you choose: search the web, let the AI
+                        answer from its own knowledge, or leave them out.</li>
+                </ul>
+            </div>
+            @if (_settings is { AdvancedModels: true })
+            {
+                <AiModelSelect Label="Read and answer with" @bind-Value="_writeWith" Available="_settings.HasKey" AllowedModels="_settings.AllowedModels" Inline="true" />
+            }
+        </div>
+    </div>
+
+    <div class="actions" style="margin-top:28px">
+        <button type="button" class="btn btn-primary btn-lg" disabled="@(IsBusy || _upload is null)" @onclick="BuildAsync">Build the exam</button>
+        <a class="btn btn-ghost btn-lg" href="topics/@TopicId">Cancel</a>
+    </div>
+    @if (Estimate is not null && Format.CostHint(Estimate) is { } hint)
+    {
+        <p class="muted small" style="margin-top:8px">Reading the paper and answering its questions: @hint.</p>
+    }
+    @if (_error is not null)
+    {
+        <div class="notice notice-error" style="margin-top:20px">@_error</div>
+    }
+}
+
+@code {
+    [Parameter] public int TopicId { get; set; }
+    [CascadingParameter] private AppUi Ui { get; set; } = default!;
+
+    private TopicDetail? _topic;
+    private SettingsView? _settings;
+    private AiChoice _writeWith = default!;
+    private string _name = "";
+    private string? _error;
+    // The stored paper, until it becomes an exam; a paper left behind is deleted with the page.
+    private PaperUpload? _upload;
+    private GenerationEstimate? _estimate;
+
+    // The estimate priced for the model picked here.
+    private GenerationEstimate? Estimate => _estimate is null ? null : _estimate with { Model = AiModels.Find(_writeWith) };
+
+    // Passed on only in advanced mode; in simple mode the one model does everything.
+    private AiChoice? Choice => _settings?.AdvancedModels == true ? _writeWith : null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var userId = await UserIdAsync();
+        try
+        {
+            _topic = await Topics.GetAsync(userId, TopicId, PageToken);
+        }
+        catch (NotFoundException)
+        {
+            Nav.NavigateTo("not-found");
+            return;
+        }
+        _settings = await Settings.GetAsync(userId, PageToken);
+        _writeWith = _settings.Default(AiTask.Generation);
+    }
+
+    private async Task ChooseAsync(InputFileChangeEventArgs e)
+    {
+        _error = null;
+        var file = e.File;
+        if (file.Size > Options.MaxUploadBytes)
+        {
+            _error = $"\"{file.Name}\" is larger than {Options.MaxUploadBytes / 1024 / 1024} MB.";
+            return;
+        }
+
+        var userId = await UserIdAsync();
+        PaperUpload? upload = null;
+        await RunBusyAsync($"Reading {file.Name}...", async (_, ct) =>
+        {
+            await using var stream = file.OpenReadStream(Options.MaxUploadBytes, ct);
+            upload = await Papers.PrepareAsync(userId, TopicId, file.Name, stream, file.Size, ct);
+        }, message => _error = message);
+
+        if (upload is null)
+            return;
+        if (_upload is not null)
+            Papers.Discard(_upload);
+        _upload = upload;
+        _estimate = await Papers.EstimateAsync(userId, TopicId, upload, _writeWith, PageToken);
+    }
+
+    private async Task BuildAsync()
+    {
+        if (_upload is not { } upload)
+            return;
+        _error = null;
+        var userId = await UserIdAsync();
+
+        _estimate = await Papers.EstimateAsync(userId, TopicId, upload, _writeWith, PageToken);
+        if (Options.IsLargeGeneration(_estimate.TotalInputTokens, _estimate.Model) &&
+            !await Ui.Confirm.AskAsync("This is a large exam to read",
+                Format.LargeGeneration(_estimate, _settings),
+                "Build the exam"))
+            return;
+
+        // Reading happens in the background; the exam page shows the progress.
+        var examId = await Papers.CreateExamAsync(userId, TopicId, _name, upload, PageToken);
+        _upload = null;
+        Writer.Start(userId, examId, QuestionWriter.Kind.ReadPaper, Choice);
+        Nav.NavigateTo($"exams/{examId}");
+    }
+
+    public override void Dispose()
+    {
+        if (_upload is not null)
+            Papers.Discard(_upload);
+        base.Dispose();
+    }
+}

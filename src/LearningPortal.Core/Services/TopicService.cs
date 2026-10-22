@@ -205,10 +205,12 @@ public sealed class TopicService(IDbContextFactory<AppDbContext> dbFactory, Lear
     public async Task DeleteAsync(string userId, int topicId, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var topic = await db.Topics.Include(t => t.Materials)
+        var topic = await db.Topics.Include(t => t.Materials).Include(t => t.Exams)
             .FirstOrDefaultAsync(t => t.Id == topicId && t.UserId == userId, ct) ?? throw new NotFoundException();
 
-        var files = topic.Materials.Where(m => m.StoredFilePath is not null).Select(m => m.StoredFilePath!).ToList();
+        // Exam papers not read yet are stored files too.
+        var files = topic.Materials.Select(m => m.StoredFilePath).Concat(topic.Exams.Select(e => e.PaperFilePath))
+            .OfType<string>().ToList();
         db.Topics.Remove(topic);
         await db.SaveChangesAsync(ct);
 

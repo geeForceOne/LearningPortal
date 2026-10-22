@@ -1,4 +1,5 @@
-@* Where a question came from: the material and section it was written about. *@
+@* Where a question came from: the material and section it was written about, or the uploaded
+   exam paper when no section answers it. *@
 @if (Question.IsUserAuthored)
 {
     <span class="source-link"><Icon Name="edit" Size="14" /> Written by you</span>
@@ -12,6 +13,10 @@ else if (Question.SourceMaterialId is not null)
 else if (Question.SourceLabel is not null)
 {
     <span class="source-link"><Icon Name="file" Size="14" /> From @Question.SourceLabel (material since deleted)</span>
+}
+else if (Question.ImportedFrom is not null)
+{
+    <span class="source-link"><Icon Name="file" Size="14" /> From your paper @Question.ImportedFrom</span>
 }
 
 @code {

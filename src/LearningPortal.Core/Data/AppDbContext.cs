@@ -19,6 +19,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
     public DbSet<AttemptAnswer> AttemptAnswers => Set<AttemptAnswer>();
     public DbSet<FollowUp> FollowUps => Set<FollowUp>();
     public DbSet<ExplainSession> ExplainSessions => Set<ExplainSession>();
+    public DbSet<AnswerCheck> AnswerChecks => Set<AnswerCheck>();
     public DbSet<SiteSettings> SiteSettings => Set<SiteSettings>();
     public DbSet<AccountRequest> AccountRequests => Set<AccountRequest>();
     public DbSet<SharedKeyGrant> SharedKeyGrants => Set<SharedKeyGrant>();
@@ -76,6 +77,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
             e.HasOne(x => x.SourceSection).WithMany().HasForeignKey(x => x.SourceSectionId).OnDelete(DeleteBehavior.SetNull);
             e.HasOne<Material>().WithMany().HasForeignKey(x => x.SourceMaterialId).OnDelete(DeleteBehavior.SetNull);
             e.HasMany(x => x.Options).WithOne().HasForeignKey(o => o.QuestionId).OnDelete(DeleteBehavior.Cascade);
+            e.Property(x => x.ImportedFrom).HasMaxLength(300);
         });
 
         b.Entity<Exam>(e =>
@@ -83,6 +85,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
             e.HasIndex(x => new { x.UserId, x.TopicId });
             e.HasOne(x => x.Topic).WithMany(t => t.Exams).HasForeignKey(x => x.TopicId).OnDelete(DeleteBehavior.Cascade);
             e.Property(x => x.Name).HasMaxLength(200);
+            e.Property(x => x.ImportedFrom).HasMaxLength(300);
         });
 
         b.Entity<ExamQuestion>(e =>
@@ -126,6 +129,17 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
             e.HasIndex(x => new { x.UserId, x.TopicId });
             e.HasOne(x => x.Topic).WithMany().HasForeignKey(x => x.TopicId).OnDelete(DeleteBehavior.Cascade);
             e.Property(x => x.Concept).HasMaxLength(ExplainSession.MaxConceptLength);
+            e.Property(x => x.Model).HasMaxLength(200);
+        });
+
+        b.Entity<AnswerCheck>(e =>
+        {
+            e.HasIndex(x => new { x.UserId, x.TopicId });
+            e.HasOne(x => x.Topic).WithMany().HasForeignKey(x => x.TopicId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne<MaterialSection>().WithMany().HasForeignKey(x => x.SourceSectionId).OnDelete(DeleteBehavior.SetNull);
+            e.HasOne<Material>().WithMany().HasForeignKey(x => x.SourceMaterialId).OnDelete(DeleteBehavior.SetNull);
+            e.HasOne<Question>().WithMany().HasForeignKey(x => x.SavedQuestionId).OnDelete(DeleteBehavior.SetNull);
+            e.Property(x => x.Question).HasMaxLength(AnswerCheck.MaxQuestionLength);
             e.Property(x => x.Model).HasMaxLength(200);
         });
 

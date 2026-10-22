@@ -39,6 +39,18 @@ public enum QuestionType
 }
 
 // What an exam asks for. Mixed means the exam holds both kinds, split roughly in half.
+// Where a question's answer comes from. Material: the topic's own material (the source section says
+// where). Paper: the exam paper the user uploaded gave it. Web: the AI looked it up on the web
+// (WebSourcesJson lists the pages). General: the AI answered from its own knowledge. Web and
+// General answers aren't checked against the user's sources, so the UI says they may be wrong.
+public enum AnswerSource
+{
+    Material,
+    Paper,
+    Web,
+    General,
+}
+
 public enum ExamType
 {
     MultipleChoice,

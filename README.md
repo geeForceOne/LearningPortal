@@ -58,6 +58,19 @@ questions work with code (40% by default); the rest are theory.
 - Repeat an exam as often as you like, with the question order and the options shuffled
 - Amend an exam later: edit its settings, remove or replace a question, edit a question by hand,
   or add your own
+
+### Upload your own exam
+
+Have a real exam paper, like last year's exam? **Upload an exam** turns it into an exam to practice
+with. It takes the same files as material, and scanned PDFs too. Recall copies out the questions in
+the paper's own words and tells multiple choice from written. Answers the paper gives (marked
+options, model answers, an answer key) are kept. Recall works out the rest from your material and
+writes an explanation for every question.
+
+When your material doesn't cover a question, it waits on the exam page until you choose: Recall
+searches the web (you see the cost first), the AI answers from its own knowledge, or you leave the
+question out. Answers that don't come from your material are marked as possibly wrong, and web
+answers list the pages they come from.
 - Questions are written in the background: leave the page or close the browser, and they're there
   when you come back
 
@@ -77,7 +90,7 @@ After each question, or at the end, you see what was right, what you picked, and
 ## Go deeper
 
 Exams test what you know. The **Go deeper** section on each topic page helps you understand it:
-four tools, side by side, between the exams and the material.
+five tools, side by side, between the exams and the material.
 
 ![A topic with its exams, the Go deeper tools and the material](docs/images/recall-topic.jpg)
 
@@ -102,6 +115,14 @@ well and what was missing. Only that part of your material goes to the AI, so it
 against your own sources. Your explanations are kept per topic, so you can look back at them.
 
 ![Explain it back: an explanation, the questions and the feedback](docs/images/recall-explain.jpg)
+
+### Check an answer
+
+Ask your own question about the topic and give your answer. Recall answers the question from your
+material and tells you how right you are, what was right and what you missed, with the reference
+answer and an explanation. If your material doesn't cover the question, you choose whether Recall
+searches the web or the AI answers from its own knowledge. Your checks are kept per topic, and
+**Save to an exam** keeps a question to practice it again later.
 
 ### Concept map
 
