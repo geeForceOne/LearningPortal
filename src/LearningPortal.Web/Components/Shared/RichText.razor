@@ -1,10 +1,13 @@
 @inject IJSRuntime JS
 
 @* AI-written text with code formatting (see Services/RichTextHtml). Code blocks get syntax coloring
-   in the browser after each render. *@
-<div class="rich @Class" @ref="_element">@((MarkupString)RichTextHtml.ToHtml(Text))</div>
+   in the browser after each render. Long text is marked "long", so pages can set it smaller (a
+   question that holds a whole text to correct reads like a document, not a headline). *@
+<div class="rich @Class @(Text?.Length > LongLength ? "long" : "")" @ref="_element">@((MarkupString)RichTextHtml.ToHtml(Text))</div>
 
 @code {
+    public const int LongLength = 700;
+
     [Parameter] public string? Text { get; set; }
     [Parameter] public string? Class { get; set; }
 

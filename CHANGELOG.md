@@ -1,5 +1,13 @@
 # Release notes
 
+## 1.15.1 - 2026-10-24
+
+### Improved
+
+- **Roomier exam page**: questions get the full page width. Settings and attempts now sit in one strip above them, with your latest scores at a glance, and Delete exam moved to the ⋯ menu.
+- **Wider exam taking**: taking an exam and its results use the full page width.
+- **Easier long questions**: long questions, answers and explanations are set in a smaller reading size, so a whole text to correct is easier to read.
+
 ## 1.15.0 - 2026-10-24
 
 ### Improved

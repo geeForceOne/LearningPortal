@@ -403,7 +403,8 @@ public static class DocumentTextExtractor
             foreach (var deeper in _counts.Keys.Where(k => k.List == list && k.Level > level).ToList())
                 _counts.Remove(deeper);
 
-            var indent = new string(' ', 2 * level);
+            // Four spaces per level: Markdown needs three or more to nest under a numbered item.
+            var indent = new string(' ', 4 * level);
             var format = definition?.NumberingFormat?.Val;
             if (definition is null || format is null || format == NumberFormatValues.Bullet)
                 return indent + "- ";

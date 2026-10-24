@@ -54,8 +54,144 @@ else
                 }
                 <a class="btn btn-ghost btn-lg" href="exams/@exam.Id/print" title="Print this exam or save it as a PDF"><Icon Name="print" /> Print</a>
             }
+            <div class="row-menu">
+                <button type="button" class="btn btn-ghost btn-lg btn-icon" aria-label="More actions for this exam" aria-expanded="@(_menuOpen ? "true" : "false")"
+                        @onclick="() => _menuOpen = !_menuOpen"><Icon Name="more" /></button>
+                @if (_menuOpen)
+                {
+                    <div class="menu-scrim" @onclick="() => _menuOpen = false"></div>
+                    <div class="menu-list" @onclick="() => _menuOpen = false">
+                        @if (exam.ImportedFrom is not null)
+                        {
+                            <button type="button" disabled="@Busy" @onclick="RenameAsync"><Icon Name="edit" Size="16" /> Rename</button>
+                            <hr />
+                        }
+                        <button type="button" class="danger" disabled="@Busy" @onclick="DeleteAsync"><Icon Name="trash" Size="16" /> Delete exam</button>
+                    </div>
+                }
+            </div>
         </div>
     </div>
+
+    @* Settings and attempts in one strip above the questions, so long questions get the full width. *@
+    <section class="exam-strip @(_editing ? "editing" : "")" aria-label="Exam settings and attempts">
+        <div class="strip-part">
+            <h2>Settings</h2>
+            @if (exam.ImportedFrom is not null)
+            {
+                <div class="facts">
+                    <span><strong>@_detail.Questions.Count</strong> @(_detail.Questions.Count == 1 ? "question" : "questions")</span>
+                    <span>@Format.Label(exam.Type)</span>
+                    <span style="overflow-wrap:anywhere">Paper <strong>@exam.ImportedFrom</strong></span>
+                </div>
+                <p class="muted small strip-note">
+                    This exam holds the questions from your paper. Edit, replace or remove single questions, or add your own.
+                </p>
+            }
+            else if (_editing)
+            {
+                <ExamSettingsForm Model="_values" Programming="_detail.Topic.IsProgramming" Materials="_materials" Columns="true" />
+                <div class="actions" style="margin-top:20px">
+                    <button type="button" class="btn btn-primary" disabled="@Busy" @onclick="SaveSettingsAsync">Save</button>
+                    <button type="button" class="btn btn-ghost" @onclick="() => _editing = false">Cancel</button>
+                </div>
+                <p class="muted small" style="margin-top:12px">
+                    Questions that no longer fit the type or difficulty leave the exam but stay in your question bank.
+                    Missing questions are filled from the bank first, then written by the AI.
+                </p>
+            }
+            else
+            {
+                <div class="facts">
+                    <span><strong>@exam.QuestionCount</strong> questions</span>
+                    <span>@Format.Label(exam.Type)</span>
+                    <span>@Format.Label(exam.Difficulty)</span>
+                    <span>Reuse from bank <strong>@(exam.ReusePercent > 0 ? $"{exam.ReusePercent}%" : "Off")</strong></span>
+                    @if (_materials.Count > 1)
+                    {
+                        var used = _materials.Count(m => exam.ExcludedMaterialIds?.Contains(m.Id) != true);
+                        <span>Material <strong>@(used == _materials.Count ? $"All {used}" : $"{used} of {_materials.Count}")</strong></span>
+                    }
+                </div>
+                @if (exam.Instructions is not null)
+                {
+                    <p class="strip-instructions" title="@exam.Instructions">Instructions <strong>@exam.Instructions</strong></p>
+                }
+                <div class="actions strip-actions">
+                    <button type="button" class="btn btn-secondary btn-sm" disabled="@Busy" @onclick="BeginEdit"><Icon Name="edit" Size="14" /> Edit settings</button>
+                    <button type="button" class="btn btn-ghost btn-sm" disabled="@Busy" @onclick="RegenerateAsync"><Icon Name="redo" Size="14" /> New questions</button>
+                    @if (CostHint(exam.QuestionCount) is { } newCost)
+                    {
+                        <span class="muted small">New questions: @newCost.</span>
+                    }
+                </div>
+            }
+            @if (_settings is { AdvancedModels: true } && !_editing)
+            {
+                <div class="strip-model">
+                    <AiModelSelect Label="Write with" @bind-Value="_writeWith" Available="_settings.HasKey" AllowedModels="_settings.AllowedModels" Inline="true">
+                        <Hint><span class="field-hint">Used when the AI adds, answers, rewrites or replaces questions here.</span></Hint>
+                    </AiModelSelect>
+                </div>
+            }
+        </div>
+
+        @if (!_editing)
+        {
+            <div class="strip-part">
+                <h2>Attempts<span class="count">@_attempts.Count</span></h2>
+                @if (_attempts.Count == 0)
+                {
+                    <p class="muted small">No attempts yet.</p>
+                }
+                else
+                {
+                    <div class="score-chips">
+                        @foreach (var a in _attempts.Take(5))
+                        {
+                            @if (a.CompletedAt is null)
+                            {
+                                <a class="score-chip in-progress" href="attempts/@a.Id" title="Started @Format.Date(a.StartedAt)">In progress @a.Answered/@a.Total</a>
+                            }
+                            else if (a.ScorePercent is { } s)
+                            {
+                                <a class="score-chip" href="attempts/@a.Id" title="@Format.Date(a.StartedAt), @Format.Duration(a.ActiveSeconds)">
+                                    <span class="verdict verdict-@Format.VerdictClass(s)">@Format.Percent(s)</span>
+                                </a>
+                            }
+                        }
+                    </div>
+                    <details class="strip-more">
+                        <summary>Show all</summary>
+                        <ul class="rows">
+                            @foreach (var a in _attempts)
+                            {
+                                <li class="row" style="padding:10px 0" @key="a.Id">
+                                    <div class="row-main">
+                                        <a class="row-title" href="attempts/@a.Id">@Format.Date(a.StartedAt)</a>
+                                        <div class="row-meta">
+                                            @if (a.CompletedAt is null)
+                                            {
+                                                <span>In progress, @a.Answered of @a.Total answered</span>
+                                            }
+                                            else
+                                            {
+                                                <span>@Format.Duration(a.ActiveSeconds)</span>
+                                            }
+                                        </div>
+                                    </div>
+                                    @if (a.ScorePercent is { } s)
+                                    {
+                                        <div class="row-aside"><span class="verdict verdict-@Format.VerdictClass(s)">@Format.Percent(s)</span></div>
+                                    }
+                                </li>
+                            }
+                        </ul>
+                    </details>
+                }
+            </div>
+        }
+    </section>
 
     @if (Writing)
     {
@@ -139,212 +275,101 @@ else
     <SaturationNotice Basis="Basis" Show="@(!Busy && exam.ImportedFrom is null)" Style="margin-bottom:24px"
                       Advice="Before having the AI write more, add material to the topic, or raise this exam's reuse from the bank." />
 
-    <div class="two-col">
-        <section>
-            <div class="section-head">
-                <h2>Questions<span class="count">@_detail.Questions.Count</span></h2>
-                <button type="button" class="btn btn-ghost btn-sm" disabled="@Busy" @onclick="AddOwnAsync"><Icon Name="plus" Size="14" /> Add your own</button>
-            </div>
+    <section>
+        <div class="section-head">
+            <h2>Questions<span class="count">@_detail.Questions.Count</span></h2>
+            <button type="button" class="btn btn-ghost btn-sm" disabled="@Busy" @onclick="AddOwnAsync"><Icon Name="plus" Size="14" /> Add your own</button>
+        </div>
 
-            @if (_detail.Questions.Count > 0 && CostHint(1) is { } replaceCost)
+        @if (_detail.Questions.Count > 0 && CostHint(1) is { } replaceCost)
+        {
+            <p class="muted small" style="margin:-4px 0 12px">Replacing a question with a new AI one sends the material each time: @replaceCost.</p>
+        }
+
+        @if (_detail.Questions.Count == 0)
+        {
+            <div class="empty"><p>No questions yet.</p></div>
+        }
+
+        <ol class="q-list">
+            @for (var i = 0; i < _detail.Questions.Count; i++)
             {
-                <p class="muted small" style="margin:-4px 0 12px">Replacing a question with a new AI one sends the material each time: @replaceCost.</p>
-            }
-
-            @if (_detail.Questions.Count == 0)
-            {
-                <div class="empty"><p>No questions yet.</p></div>
-            }
-
-            <ol class="q-list">
-                @for (var i = 0; i < _detail.Questions.Count; i++)
-                {
-                    var q = _detail.Questions[i];
-                    var number = i + 1;
-                    <li class="q-item" @key="q.Id">
-                        <div class="q-head">
-                            <span class="q-num">@number</span>
-                            <div class="q-body">
-                                <div class="question-meta">
-                                    <span class="tag">@Format.Label(q.Type)</span>
-                                    @if (q.Type == QuestionType.MultipleChoice)
-                                    {
-                                        <span class="tag">@(q.AllowsMultiple ? "Choose all that apply" : "Choose one")</span>
-                                    }
-                                    @if (q.IsUserAuthored)
-                                    {
-                                        <span class="tag">Yours</span>
-                                    }
-                                    <AnswerOrigin Source="q.AnswerSource" />
-                                    @if (q.IsFlagged)
-                                    {
-                                        <span class="tag tag-flag" title="You flagged this as a bad question. It isn't reused in new exams or in practice. Edit, replace or remove it here."><Icon Name="flag" Size="12" /> Flagged</span>
-                                    }
-                                </div>
-                                <RichText Class="prompt" Text="@q.Prompt" />
-                                <details class="q-more">
-                                    <summary>Answer and explanation</summary>
-                                    @if (q.Type == QuestionType.MultipleChoice)
-                                    {
-                                        <ul class="q-options">
-                                            @foreach (var o in q.Options)
-                                            {
-                                                <li>
-                                                    @if (o.IsCorrect)
-                                                    {
-                                                        <span class="ok">Correct</span>
-                                                    }
-                                                    else
-                                                    {
-                                                        <span class="no"></span>
-                                                    }
-                                                    <RichText Text="@o.Text" />
-                                                </li>
-                                            }
-                                        </ul>
-                                    }
-                                    else
-                                    {
-                                        <div class="reference">
-                                            <h3>Reference answer</h3>
-                                            <RichText Class="reading" Text="@q.ReferenceAnswer" />
-                                        </div>
-                                    }
-                                    <div class="explain">
-                                        <h3>Explanation</h3>
-                                        <RichText Class="reading" Text="@q.Explanation" />
-                                    </div>
-                                    <AnswerOrigin WebSources="q.WebSources" ShowSources="true" />
-                                </details>
-                                <div class="q-foot">
-                                    <SourceLink Question="q" />
-                                    @if (q.GeneratedByModel is { } by)
-                                    {
-                                        <span class="source-link">Written by @AiModels.DisplayName(by)</span>
-                                    }
-                                </div>
-                            </div>
-                            <div class="row-actions">
-                                <button type="button" class="btn btn-ghost btn-icon btn-sm @(q.IsFlagged ? "is-flagged" : "")" title="@(q.IsFlagged ? "Remove the flag" : "Flag as a bad question")" aria-label="@(q.IsFlagged ? "Remove the flag from" : "Flag") question @number" aria-pressed="@(q.IsFlagged ? "true" : "false")" disabled="@Busy" @onclick="() => ToggleFlagAsync(q)"><Icon Name="flag" Size="16" /></button>
-                                <button type="button" class="btn btn-ghost btn-icon btn-sm" title="Edit" aria-label="Edit question @number" disabled="@Busy" @onclick="() => EditAsync(q)"><Icon Name="edit" Size="16" /></button>
-                                <button type="button" class="btn btn-ghost btn-icon btn-sm" title="@("Replace with a new AI question" + (CostHint(1) is { } c ? $" ({c})" : ""))" aria-label="Replace question @number" disabled="@Busy" @onclick="() => ReplaceAsync(q)"><Icon Name="swap" Size="16" /></button>
-                                <button type="button" class="btn btn-ghost btn-icon btn-sm" title="Remove from exam" aria-label="Remove question @number" disabled="@Busy" @onclick="() => RemoveAsync(q)"><Icon Name="trash" Size="16" /></button>
-                            </div>
-                        </div>
-                    </li>
-                }
-            </ol>
-        </section>
-
-        <aside>
-            <div class="panel">
-                <h2>Settings</h2>
-                @if (exam.ImportedFrom is not null)
-                {
-                    <div class="form" style="gap:10px">
-                        <div class="facts" style="margin:0;flex-direction:column;gap:4px">
-                            <span>Questions <strong>@_detail.Questions.Count</strong></span>
-                            <span>Type <strong>@Format.Label(exam.Type)</strong></span>
-                            <span style="overflow-wrap:anywhere">Paper <strong>@exam.ImportedFrom</strong></span>
-                        </div>
-                        <p class="muted small" style="margin:0">
-                            This exam holds the questions from your paper. Edit, replace or remove single questions, or add your own.
-                        </p>
-                        <div class="actions">
-                            <button type="button" class="btn btn-secondary btn-sm" disabled="@Busy" @onclick="RenameAsync"><Icon Name="edit" Size="14" /> Rename</button>
-                        </div>
-                    </div>
-                }
-                else if (_editing)
-                {
-                    <ExamSettingsForm Model="_values" Programming="_detail.Topic.IsProgramming" Materials="_materials" />
-                    <div class="actions" style="margin-top:20px">
-                        <button type="button" class="btn btn-primary" disabled="@Busy" @onclick="SaveSettingsAsync">Save</button>
-                        <button type="button" class="btn btn-ghost" @onclick="() => _editing = false">Cancel</button>
-                    </div>
-                    <p class="muted small" style="margin-top:12px">
-                        Questions that no longer fit the type or difficulty leave the exam but stay in your question bank.
-                        Missing questions are filled from the bank first, then written by the AI.
-                    </p>
-                }
-                else
-                {
-                    <div class="form" style="gap:10px">
-                        <div class="facts" style="margin:0;flex-direction:column;gap:4px">
-                            <span>Questions <strong>@exam.QuestionCount</strong></span>
-                            <span>Type <strong>@Format.Label(exam.Type)</strong></span>
-                            <span>Difficulty <strong>@Format.Label(exam.Difficulty)</strong></span>
-                            <span>Reuse from bank <strong>@(exam.ReusePercent > 0 ? $"{exam.ReusePercent}%" : "Off")</strong></span>
-                            @if (_materials.Count > 1)
-                            {
-                                var used = _materials.Count(m => exam.ExcludedMaterialIds?.Contains(m.Id) != true);
-                                <span>Material <strong>@(used == _materials.Count ? $"All {used}" : $"{used} of {_materials.Count}")</strong></span>
-                            }
-                            @if (exam.Instructions is not null)
-                            {
-                                <span style="overflow-wrap:anywhere">Instructions <strong style="white-space:pre-wrap">@exam.Instructions</strong></span>
-                            }
-                        </div>
-                        <div class="actions">
-                            <button type="button" class="btn btn-secondary btn-sm" disabled="@Busy" @onclick="BeginEdit"><Icon Name="edit" Size="14" /> Edit settings</button>
-                            <button type="button" class="btn btn-ghost btn-sm" disabled="@Busy" @onclick="RegenerateAsync"><Icon Name="redo" Size="14" /> New questions</button>
-                        </div>
-                        @if (CostHint(exam.QuestionCount) is { } newCost)
-                        {
-                            <p class="muted small" style="margin:0">New questions: @newCost.</p>
-                        }
-                    </div>
-                }
-                @if (_settings is { AdvancedModels: true })
-                {
-                    <div style="margin-top:16px">
-                        <AiModelSelect Label="Write with" @bind-Value="_writeWith" Available="_settings.HasKey" AllowedModels="_settings.AllowedModels" Inline="true">
-                            <Hint><span class="field-hint">Used when the AI adds, answers, rewrites or replaces questions here.</span></Hint>
-                        </AiModelSelect>
-                    </div>
-                }
-            </div>
-
-            <div class="panel">
-                <h2>Attempts</h2>
-                @if (_attempts.Count == 0)
-                {
-                    <p class="muted small">No attempts yet.</p>
-                }
-                else
-                {
-                    <ul class="rows">
-                        @foreach (var a in _attempts)
-                        {
-                            <li class="row" style="padding:10px 0" @key="a.Id">
-                                <div class="row-main">
-                                    <a class="row-title" href="attempts/@a.Id">@Format.Date(a.StartedAt)</a>
-                                    <div class="row-meta">
-                                        @if (a.CompletedAt is null)
-                                        {
-                                            <span>In progress, @a.Answered of @a.Total answered</span>
-                                        }
-                                        else
-                                        {
-                                            <span>@Format.Duration(a.ActiveSeconds)</span>
-                                        }
-                                    </div>
-                                </div>
-                                @if (a.ScorePercent is { } s)
+                var q = _detail.Questions[i];
+                var number = i + 1;
+                <li class="q-item" @key="q.Id">
+                    <div class="q-head">
+                        <span class="q-num">@number</span>
+                        <div class="q-body">
+                            <div class="question-meta">
+                                <span class="tag">@Format.Label(q.Type)</span>
+                                @if (q.Type == QuestionType.MultipleChoice)
                                 {
-                                    <div class="row-aside"><span class="verdict verdict-@Format.VerdictClass(s)">@Format.Percent(s)</span></div>
+                                    <span class="tag">@(q.AllowsMultiple ? "Choose all that apply" : "Choose one")</span>
                                 }
-                            </li>
-                        }
-                    </ul>
-                }
-            </div>
-
-            <div class="actions" style="margin-top:16px">
-                <button type="button" class="btn btn-danger btn-sm" disabled="@Busy" @onclick="DeleteAsync"><Icon Name="trash" Size="14" /> Delete exam</button>
-            </div>
-        </aside>
-    </div>
+                                @if (q.IsUserAuthored)
+                                {
+                                    <span class="tag">Yours</span>
+                                }
+                                <AnswerOrigin Source="q.AnswerSource" />
+                                @if (q.IsFlagged)
+                                {
+                                    <span class="tag tag-flag" title="You flagged this as a bad question. It isn't reused in new exams or in practice. Edit, replace or remove it here."><Icon Name="flag" Size="12" /> Flagged</span>
+                                }
+                            </div>
+                            <RichText Class="prompt" Text="@q.Prompt" />
+                            <details class="q-more">
+                                <summary>Answer and explanation</summary>
+                                @if (q.Type == QuestionType.MultipleChoice)
+                                {
+                                    <ul class="q-options">
+                                        @foreach (var o in q.Options)
+                                        {
+                                            <li>
+                                                @if (o.IsCorrect)
+                                                {
+                                                    <span class="ok">Correct</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="no"></span>
+                                                }
+                                                <RichText Text="@o.Text" />
+                                            </li>
+                                        }
+                                    </ul>
+                                }
+                                else
+                                {
+                                    <div class="reference">
+                                        <h3>Reference answer</h3>
+                                        <RichText Class="reading" Text="@q.ReferenceAnswer" />
+                                    </div>
+                                }
+                                <div class="explain">
+                                    <h3>Explanation</h3>
+                                    <RichText Class="reading" Text="@q.Explanation" />
+                                </div>
+                                <AnswerOrigin WebSources="q.WebSources" ShowSources="true" />
+                            </details>
+                            <div class="q-foot">
+                                <SourceLink Question="q" />
+                                @if (q.GeneratedByModel is { } by)
+                                {
+                                    <span class="source-link">Written by @AiModels.DisplayName(by)</span>
+                                }
+                            </div>
+                        </div>
+                        <div class="row-actions">
+                            <button type="button" class="btn btn-ghost btn-icon btn-sm @(q.IsFlagged ? "is-flagged" : "")" title="@(q.IsFlagged ? "Remove the flag" : "Flag as a bad question")" aria-label="@(q.IsFlagged ? "Remove the flag from" : "Flag") question @number" aria-pressed="@(q.IsFlagged ? "true" : "false")" disabled="@Busy" @onclick="() => ToggleFlagAsync(q)"><Icon Name="flag" Size="16" /></button>
+                            <button type="button" class="btn btn-ghost btn-icon btn-sm" title="Edit" aria-label="Edit question @number" disabled="@Busy" @onclick="() => EditAsync(q)"><Icon Name="edit" Size="16" /></button>
+                            <button type="button" class="btn btn-ghost btn-icon btn-sm" title="@("Replace with a new AI question" + (CostHint(1) is { } c ? $" ({c})" : ""))" aria-label="Replace question @number" disabled="@Busy" @onclick="() => ReplaceAsync(q)"><Icon Name="swap" Size="16" /></button>
+                            <button type="button" class="btn btn-ghost btn-icon btn-sm" title="Remove from exam" aria-label="Remove question @number" disabled="@Busy" @onclick="() => RemoveAsync(q)"><Icon Name="trash" Size="16" /></button>
+                        </div>
+                    </div>
+                </li>
+            }
+        </ol>
+    </section>
 }
 
 <QuestionDialog @ref="_questionDialog" />
@@ -358,6 +383,7 @@ else
     private QuestionDialog _questionDialog = default!;
     private readonly ExamSettingsForm.Values _values = new();
     private bool _editing;
+    private bool _menuOpen;
     private GenerationCostBasis? _cost;
     private string? _error;
     private IReadOnlyList<MaterialChoice> _materials = [];

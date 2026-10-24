@@ -506,6 +506,60 @@ h1:focus { outline: none; }
 .panel + .panel { margin-top: 16px; }
 .panel h2 { font-size: var(--t-md); margin-bottom: 12px; }
 
+/* Exam page: settings and attempts side by side in one strip above the questions. While the
+   settings are edited, the form takes the whole strip. */
+.exam-strip {
+    display: grid;
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+    margin-bottom: 28px;
+    background: var(--sheet);
+    border: 1px solid var(--rule);
+    border-radius: var(--r-lg);
+}
+.exam-strip.editing { grid-template-columns: minmax(0, 1fr); }
+.strip-part { min-width: 0; padding: 18px 22px; }
+.strip-part + .strip-part { border-left: 1px solid var(--rule); }
+.strip-part h2 { font-size: var(--t-md); margin-bottom: 10px; }
+.strip-part h2 .count { color: var(--pencil); font-weight: 400; margin-left: 6px; }
+.strip-part .facts { margin-top: 0; }
+.strip-note { margin: 8px 0 0; }
+.strip-instructions {
+    margin: 8px 0 0;
+    font-size: var(--t-sm);
+    color: var(--pencil);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+}
+.strip-instructions strong { color: var(--ink-soft); font-weight: 600; white-space: pre-wrap; }
+.strip-actions { margin-top: 14px; }
+.strip-model { margin-top: 14px; }
+.score-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.score-chip {
+    display: inline-flex;
+    align-items: center;
+    min-height: 30px;
+    padding: 3px 10px;
+    border: 1px solid var(--rule);
+    border-radius: 999px;
+    background: var(--sheet-2);
+    color: var(--ink-soft);
+    font-size: var(--t-sm);
+    font-weight: 600;
+    text-decoration: none;
+}
+.score-chip:hover { border-color: var(--rule-strong); }
+.score-chip.in-progress { color: var(--pencil); }
+details.strip-more summary { margin-top: 12px; cursor: pointer; color: var(--pencil); font-size: var(--t-sm); font-weight: 600; }
+details.strip-more .rows { margin-top: 6px; }
+
+@media (max-width: 760px) {
+    .exam-strip { grid-template-columns: minmax(0, 1fr); }
+    .strip-part + .strip-part { border-left: 0; border-top: 1px solid var(--rule); }
+}
+
 /* ---------- Rows (the main list device) ---------- */
 
 .rows { list-style: none; margin: 0; padding: 0; }
@@ -1223,10 +1277,13 @@ a.tool-card:hover, a.tool-card:focus-visible { border-color: var(--pencil); }
 
 /* ---------- Taking an exam ---------- */
 
-.exam {
-    max-width: var(--read-max);
-    margin: 0 auto;
-}
+.exam { width: 100%; }
+
+/* Long questions, answers and explanations (RichText marks them "long") drop from the large
+   question size to reading size, and reading text a step below. Not on the printed sheet. */
+.prompt .rich.long,
+.rich.prompt.long:not(.paper *) { font-size: 1.06rem; font-weight: 400; line-height: 1.7; }
+.rich.reading.long:not(.paper *) { font-size: 0.98rem; line-height: 1.65; }
 
 .exam-top {
     display: flex;
@@ -1536,6 +1593,11 @@ a.tool-card:hover, a.tool-card:focus-visible { border-color: var(--pencil); }
 }
 
 .q-body { flex: 1; min-width: 0; }
+
+/* The question tools sit on the tag row, so the question text below runs the full width. */
+.q-head { position: relative; }
+.q-head > .row-actions { position: absolute; top: -3px; right: 0; }
+.q-body .question-meta { padding-right: 140px; min-height: 26px; }
 .q-body .prompt { font-size: 1.08rem; margin-bottom: 8px; }
 
 .q-options { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 4px; font-family: var(--font-read); }
