@@ -1,9 +1,13 @@
+using System.Globalization;
 using System.Text;
+using System.Text.RegularExpressions;
+using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Wordprocessing;
 using LearningPortal.Core.Models;
 using A = DocumentFormat.OpenXml.Drawing;
 using P = DocumentFormat.OpenXml.Presentation;
+using WText = DocumentFormat.OpenXml.Wordprocessing.Text;
 using UglyToad.PdfPig;
 using UglyToad.PdfPig.DocumentLayoutAnalysis.TextExtractor;
 
@@ -105,24 +109,8 @@ public static class DocumentTextExtractor
             var body = doc.MainDocumentPart?.Document?.Body
                 ?? throw new UnsupportedMaterialException("The Word document has no content.");
 
-            foreach (var element in body.ChildElements)
-            {
-                ct.ThrowIfCancellationRequested();
-                switch (element)
-                {
-                    case Paragraph p:
-                        AppendParagraph(sb, p);
-                        break;
-                    case Table table:
-                        foreach (var row in table.Elements<TableRow>())
-                        {
-                            var cells = row.Elements<TableCell>().Select(c => c.InnerText.Trim());
-                            sb.AppendLine("| " + string.Join(" | ", cells) + " |");
-                        }
-                        sb.AppendLine();
-                        break;
-                }
-            }
+            var lists = new ListNumbers(doc.MainDocumentPart.NumberingDefinitionsPart?.Numbering);
+            AppendBlocks(sb, body, lists, headings: true, ct);
         }
         catch (Exception ex) when (ex is not OperationCanceledException and not UnsupportedMaterialException)
         {
@@ -254,16 +242,126 @@ public static class DocumentTextExtractor
     private static string CellText(A.TableCell cell) =>
         string.Join(" ", cell.TextBody?.Elements<A.Paragraph>().Select(ParagraphText).Where(t => t.Length > 0) ?? []);
 
-    private static void AppendParagraph(StringBuilder sb, Paragraph p)
+    // ---------- Word ----------
+
+    // What an unfilled fill-in field (still showing "Click or tap here to enter text.") becomes.
+    // On an exam paper it marks where the student writes.
+    public const string BlankField = "[answer field]";
+
+    // Paragraphs, tables and content controls in reading order. Headings become Markdown headings
+    // only outside tables, so text laid out in a table never changes how material is sectioned.
+    private static void AppendBlocks(StringBuilder sb, OpenXmlElement parent, ListNumbers lists, bool headings, CancellationToken ct)
     {
-        var text = p.InnerText.Trim();
+        foreach (var element in parent.ChildElements)
+        {
+            ct.ThrowIfCancellationRequested();
+            switch (element)
+            {
+                case Paragraph p:
+                    AppendParagraph(sb, p, lists, headings);
+                    break;
+                case Table table:
+                    AppendTable(sb, table, lists, ct);
+                    break;
+                case SdtBlock sdt when ShowsPlaceholder(sdt.SdtProperties):
+                    sb.AppendLine(BlankField);
+                    break;
+                case SdtBlock { SdtContentBlock: { } content }:
+                    AppendBlocks(sb, content, lists, headings, ct);
+                    break;
+            }
+        }
+    }
+
+    // A table of short cells stays one "| a | b |" line per row. A cell holding several
+    // paragraphs (often a layout table around a long text) would be squeezed onto one line that
+    // way, so such a table is written out cell by cell instead, each cell's lines kept.
+    private static void AppendTable(StringBuilder sb, Table table, ListNumbers lists, CancellationToken ct)
+    {
+        var rows = Unwrap<TableRow>(table).Select(row => Unwrap<TableCell>(row).ToList()).ToList();
+        var shortCells = rows.SelectMany(r => r).All(cell =>
+            !cell.Descendants<Table>().Any()
+            && cell.Descendants<Paragraph>().Count(p => WordText(p).Trim().Length > 0) <= 1);
+
+        foreach (var row in rows)
+        {
+            var cells = row.Select(cell =>
+            {
+                var cellText = new StringBuilder();
+                AppendBlocks(cellText, cell, lists, headings: false, ct);
+                return cellText.ToString().Trim();
+            }).ToList();
+
+            if (shortCells)
+            {
+                sb.AppendLine("| " + string.Join(" | ", cells.Select(c => c.ReplaceLineEndings(" "))) + " |");
+                continue;
+            }
+            foreach (var cell in cells.Where(c => c.Length > 0))
+            {
+                sb.AppendLine(cell);
+                sb.AppendLine();
+            }
+        }
+        sb.AppendLine();
+    }
+
+    // Rows and cells can sit inside content controls (a repeating section, say).
+    private static IEnumerable<T> Unwrap<T>(OpenXmlElement parent) where T : OpenXmlElement
+    {
+        foreach (var child in parent.ChildElements)
+        {
+            if (child is T match)
+                yield return match;
+            else if (child is SdtElement sdt)
+                foreach (var content in sdt.ChildElements.Where(e => e is not SdtProperties and not SdtEndCharProperties))
+                    foreach (var inner in Unwrap<T>(content))
+                        yield return inner;
+        }
+    }
+
+    private static bool ShowsPlaceholder(SdtProperties? properties) =>
+        properties?.GetFirstChild<ShowingPlaceholder>() is not null;
+
+    // The text as Word shows it. Unlike InnerText, it keeps line breaks and leaves out deleted
+    // revisions, field codes and the fallback copy of a text box.
+    private static string WordText(OpenXmlElement element)
+    {
+        var sb = new StringBuilder();
+        AppendWordText(sb, element);
+        return sb.ToString();
+    }
+
+    private static void AppendWordText(StringBuilder sb, OpenXmlElement element)
+    {
+        foreach (var child in element.ChildElements)
+        {
+            switch (child)
+            {
+                case WText t: sb.Append(t.Text); break;
+                case TabChar: sb.Append(' '); break;
+                case Break or CarriageReturn: sb.Append('\n'); break;
+                case NoBreakHyphen: sb.Append('-'); break;
+                case SdtRun sdt when ShowsPlaceholder(sdt.SdtProperties): sb.Append(BlankField); break;
+                case DeletedText or FieldCode or AlternateContentFallback or ParagraphProperties or RunProperties: break;
+                case Paragraph nested: sb.Append('\n'); AppendWordText(sb, nested); break; // a text box's paragraphs
+                default: AppendWordText(sb, child); break;
+            }
+        }
+    }
+
+    private static void AppendParagraph(StringBuilder sb, Paragraph p, ListNumbers lists, bool headings)
+    {
+        // Every list paragraph counts, empty or not, so later numbers match what Word shows.
+        var prefix = lists.Prefix(p);
+        var text = WordText(p).Trim();
         if (text.Length == 0)
         {
             sb.AppendLine();
             return;
         }
 
-        var style = p.ParagraphProperties?.ParagraphStyleId?.Val?.Value ?? "";
+        var style = headings ? p.ParagraphProperties?.ParagraphStyleId?.Val?.Value ?? "" : "";
         var level = style switch
         {
             "Title" => 1,
@@ -275,11 +373,84 @@ public static class DocumentTextExtractor
         if (level > 0)
         {
             sb.AppendLine();
-            sb.Append('#', level).Append(' ').AppendLine(text);
+            sb.Append('#', level).Append(' ').AppendLine(text.ReplaceLineEndings(" "));
         }
         else
         {
-            sb.AppendLine(text);
+            sb.Append(prefix).AppendLine(text);
+        }
+    }
+
+    // The bullet or number Word shows before a list paragraph, from the list's level definitions
+    // ("%1.", "(%2)", "%1.%2"). Numbers are counted per list in reading order; an item restarts the
+    // levels below it. A list without definitions gets a plain bullet.
+    private sealed class ListNumbers(Numbering? numbering)
+    {
+        private readonly Dictionary<(int List, int Level), int> _counts = [];
+
+        public string Prefix(Paragraph p)
+        {
+            var properties = p.ParagraphProperties?.NumberingProperties;
+            var list = properties?.NumberingId?.Val?.Value ?? 0;
+            if (list == 0) // 0 means "not a list"
+                return "";
+            var level = Math.Clamp(properties!.NumberingLevelReference?.Val?.Value ?? 0, 0, 8);
+
+            var definition = LevelOf(list, level);
+            _counts[(list, level)] = _counts.TryGetValue((list, level), out var n)
+                ? n + 1
+                : definition?.StartNumberingValue?.Val?.Value ?? 1;
+            foreach (var deeper in _counts.Keys.Where(k => k.List == list && k.Level > level).ToList())
+                _counts.Remove(deeper);
+
+            var indent = new string(' ', 2 * level);
+            var format = definition?.NumberingFormat?.Val;
+            if (definition is null || format is null || format == NumberFormatValues.Bullet)
+                return indent + "- ";
+            if (format == NumberFormatValues.None)
+                return indent;
+
+            var pattern = definition.LevelText?.Val?.Value ?? $"%{level + 1}.";
+            var shown = Regex.Replace(pattern, @"%([1-9])", m =>
+            {
+                var at = m.Groups[1].Value[0] - '1';
+                return _counts.TryGetValue((list, at), out var count) ? Format(count, LevelOf(list, at)?.NumberingFormat?.Val) : "";
+            }).Trim();
+            return shown.Length == 0 ? indent : indent + shown + " ";
+        }
+
+        private Level? LevelOf(int list, int level)
+        {
+            var abstractId = numbering?.Elements<NumberingInstance>()
+                .FirstOrDefault(i => i.NumberID?.Value == list)?.AbstractNumId?.Val?.Value;
+            return numbering?.Elements<AbstractNum>()
+                .FirstOrDefault(a => a.AbstractNumberId?.Value == abstractId)?
+                .Elements<Level>().FirstOrDefault(l => l.LevelIndex?.Value == level);
+        }
+
+        private static string Format(int n, EnumValue<NumberFormatValues>? format)
+        {
+            if (format is null || n < 1)
+                return n.ToString(CultureInfo.InvariantCulture);
+            if (format == NumberFormatValues.LowerLetter)
+                return new string((char)('a' + (n - 1) % 26), (n - 1) / 26 + 1);
+            if (format == NumberFormatValues.UpperLetter)
+                return new string((char)('A' + (n - 1) % 26), (n - 1) / 26 + 1);
+            if (format == NumberFormatValues.LowerRoman)
+                return Roman(n).ToLowerInvariant();
+            if (format == NumberFormatValues.UpperRoman)
+                return Roman(n);
+            return n.ToString(CultureInfo.InvariantCulture);
+        }
+
+        private static string Roman(int n)
+        {
+            var sb = new StringBuilder();
+            foreach (var (value, numeral) in new[] { (1000, "M"), (900, "CM"), (500, "D"), (400, "CD"), (100, "C"), (90, "XC"),
+                         (50, "L"), (40, "XL"), (10, "X"), (9, "IX"), (5, "V"), (4, "IV"), (1, "I") })
+                for (; n >= value; n -= value)
+                    sb.Append(numeral);
+            return sb.ToString();
         }
     }
 

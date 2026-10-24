@@ -1406,7 +1406,7 @@ a.tool-card:hover, a.tool-card:focus-visible { border-color: var(--pencil); }
     color: var(--pencil);
 }
 
-.answer-foot .over { color: var(--wrong); font-weight: 700; }
+.answer-foot .over { color: var(--partial); font-weight: 700; }
 
 .your-answer {
     padding: 14px 16px;

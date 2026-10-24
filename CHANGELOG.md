@@ -1,5 +1,13 @@
 # Release notes
 
+## 1.15.0 - 2026-10-24
+
+### Improved
+
+- **Longer written answers**: written answers can be as long as the question needs. About 20 sentences is now a suggestion shown under the answer box, not a limit.
+- **Uploaded exams keep the task**: each question from an uploaded exam keeps its full task and any text it asks you to work on, such as an answer you're asked to correct.
+- **Better Word reading**: text in tables keeps its paragraphs and lists, line breaks and list numbers are kept, and empty fill-in fields are recognized. This helps both material and uploaded exams.
+
 ## 1.14.0 - 2026-10-22
 
 ### New

@@ -53,7 +53,7 @@ public sealed class AnswerCheckService(
         if (answer.Length == 0)
             throw new ArgumentException("Type your answer first.");
         if (answer.Length > AttemptService.MaxWrittenAnswerLength)
-            throw new ArgumentException($"Keep your answer under {AttemptService.MaxWrittenAnswerLength} characters.");
+            throw new ArgumentException($"An answer can be at most {AttemptService.MaxWrittenAnswerLength:N0} characters.");
 
         var connection = await settings.GetConnectionAsync(userId, AiTask.Generation, choice, ct);
         var client = AiClientFactory.Create(connection);

@@ -43,8 +43,8 @@ instructions such as "focus on dates and names". Exams in a programming topic al
 questions work with code (40% by default); the rest are theory.
 
 - **Multiple choice** questions say clearly whether there's one right answer or several
-- **Written** answers are short (a few sentences, not an essay). The AI scores them from 0 to
-  100% and explains what was right and what was missing
+- **Written** answers are usually short, about 20 sentences, but can be as long as the question
+  needs. The AI scores them from 0 to 100% and explains what was right and what was missing
 - Reveal each answer right away or wait until the end. Every answer comes with a thorough
   explanation and a link to the part of the material it came from
 - Still unsure? **Ask the AI a follow-up** about a revealed answer ("why isn't B right?"), up to
@@ -63,9 +63,10 @@ questions work with code (40% by default); the rest are theory.
 
 Have a real exam paper, like last year's exam? **Upload an exam** turns it into an exam to practice
 with. It takes the same files as material, and scanned PDFs too. Recall copies out the questions in
-the paper's own words and tells multiple choice from written. Answers the paper gives (marked
-options, model answers, an answer key) are kept. Recall works out the rest from your material and
-writes an explanation for every question.
+the paper's own words and tells multiple choice from written. Each question keeps its full task
+and any text it asks you to work on, such as an answer you're asked to correct. Answers the paper
+gives (marked options, model answers, an answer key) are kept. Recall works out the rest from your
+material and writes an explanation for every question.
 
 When your material doesn't cover a question, it waits on the exam page until you choose: Recall
 searches the web (you see the cost first), the AI answers from its own knowledge, or you leave the

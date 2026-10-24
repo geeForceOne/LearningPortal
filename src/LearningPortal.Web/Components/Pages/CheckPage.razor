@@ -36,8 +36,8 @@ else
         <textarea id="check-answer" class="textarea" maxlength="@AttemptService.MaxWrittenAnswerLength" @bind="_answer" @bind:event="oninput"
                   disabled="@IsBusy" placeholder="Answer as you would in an exam: one sentence to a short paragraph."></textarea>
         <div class="answer-foot">
-            <span>Keep it short: at most 10 to 20 sentences.</span>
-            <span>@_answer.Length / @AttemptService.MaxWrittenAnswerLength characters</span>
+            <span>Aim for about @AttemptService.SuggestedWrittenAnswerSentences sentences. Longer is fine when the question needs it.</span>
+            <span class="@(_answer.Length > AttemptService.SuggestedWrittenAnswerLength ? "over" : "")">@Format.AnswerLength(_answer.Length)</span>
         </div>
     </div>
     @if (_settings is { AdvancedModels: true })

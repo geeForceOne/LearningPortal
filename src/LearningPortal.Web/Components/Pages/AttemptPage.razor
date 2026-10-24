@@ -389,18 +389,18 @@ else
                 // and sentences aren't counted since every "." in code would count as one.
                 var codeQuestion = HasCode(q.Prompt);
                 <div class="answer-box">
-                    <label for="written-answer" class="kind-hint" style="margin-bottom:4px">Your answer, in a few sentences@(codeQuestion ? " or a few lines of code" : "")</label>
+                    <label for="written-answer" class="kind-hint" style="margin-bottom:4px">Your answer</label>
                     <textarea id="written-answer" class="textarea @(codeQuestion ? "code-answer" : "")" maxlength="@AttemptService.MaxWrittenAnswerLength"
                               @bind="_written" @bind:event="oninput" disabled="@IsBusy"
                               placeholder="Write it in your own words. Short is fine: the grader looks for the key ideas, not length."></textarea>
                     <div class="answer-foot">
-                        <span>Keep it short: at most about 20 sentences.</span>
-                        <span class="@(!codeQuestion && sentences > 20 ? "over" : "")">
+                        <span>Aim for about @AttemptService.SuggestedWrittenAnswerSentences sentences@(codeQuestion ? " or a few lines of code" : ""). Longer is fine when the question needs it.</span>
+                        <span class="@(_written.Length > AttemptService.SuggestedWrittenAnswerLength || (!codeQuestion && sentences > AttemptService.SuggestedWrittenAnswerSentences) ? "over" : "")">
                             @if (!codeQuestion)
                             {
                                 @($"{Format.Plural(sentences, "sentence", "sentences")}, ")
                             }
-                            @_written.Length / @AttemptService.MaxWrittenAnswerLength characters
+                            @Format.AnswerLength(_written.Length)
                         </span>
                     </div>
                 </div>

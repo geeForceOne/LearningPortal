@@ -16,8 +16,12 @@ public sealed class AttemptService(
     IDbContextFactory<AppDbContext> dbFactory,
     SettingsService settings)
 {
-    // Written answers are short-form: roughly 10-20 sentences at most.
-    public const int MaxWrittenAnswerLength = 2_500;
+    // Written answers are usually short, about 20 sentences, but that's only a suggestion: a
+    // question from an uploaded paper can need far more. The maximum only stops an accidental
+    // paste of a whole document, which would be graded at the user's cost.
+    public const int SuggestedWrittenAnswerLength = 2_500;
+    public const int SuggestedWrittenAnswerSentences = 20;
+    public const int MaxWrittenAnswerLength = 25_000;
 
     // Longer gaps between answers are treated as the user having stepped away.
     private const int MaxSecondsPerAnswer = 15 * 60;
@@ -129,7 +133,7 @@ public sealed class AttemptService(
         if (trimmed.Length == 0)
             throw new ArgumentException("Write an answer first.");
         if (trimmed.Length > MaxWrittenAnswerLength)
-            throw new ArgumentException($"Keep the answer under {MaxWrittenAnswerLength} characters (about 20 sentences).");
+            throw new ArgumentException($"An answer can be at most {MaxWrittenAnswerLength:N0} characters.");
 
         await using (var db = await dbFactory.CreateDbContextAsync(ct))
         {

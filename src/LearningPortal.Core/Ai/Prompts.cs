@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using LearningPortal.Core.Models;
+using LearningPortal.Core.Text;
 
 namespace LearningPortal.Core.Ai;
 
@@ -247,7 +248,7 @@ public static class Prompts
         """);
 
     public static string GradingSystem(string language) => $"""
-        You grade a student's short written answer to an exam question.
+        You grade a student's written answer to an exam question.
 
         - Score from 0 to 100 for how completely and correctly the answer covers the reference
           answer. Judge meaning, not wording: a correct answer in different words gets full credit.
@@ -511,12 +512,21 @@ public static class Prompts
         }
         """);
 
-    public const string PaperSystem = """
+    public const string PaperSystem = $"""
         You copy the questions out of an exam paper a student uploaded, so they can practice with it.
 
         - Copy every question the paper asks, in its order and in its own words and language. Don't
-          translate, shorten or improve them. Leave out question numbers, points or marks, and the
-          paper's instructions, cover page and headers.
+          translate, shorten or improve them. Leave out question numbers, points or marks, the cover
+          page, headers and administrative instructions (time allowed, name fields, how to hand in).
+        - Keep everything a question needs to be answered. When the paper's instructions say what
+          every answer must do (for example "for each text, mark what is wrong and give the legal
+          basis"), put that task into each question's prompt. When a question asks the student to
+          work on a given text, case, code sample or data, copy all of it into the prompt, however
+          long it is.
+        - {DocumentTextExtractor.BlankField}, or an empty box or line on the page, marks a blank the
+          student fills in. Labels next to such blanks (for example "Missing information:") are the
+          parts of one answer, not separate questions: list them in the prompt as what the answer
+          should cover.
         - type: "multiple_choice" when the paper gives options to pick from, otherwise "written".
           For multiple choice, copy the options without their letters or numbers.
         - A question in several independent parts (a, b, c) becomes one question per part. Repeat
@@ -630,7 +640,9 @@ public static class Prompts
         - Multiple choice: in correct_options, list the numbers of the correct options (the first
           option is 0). Several may be correct. Leave reference_answer empty.
         - Written: put a model answer in reference_answer covering everything a full-credit answer
-          needs, in 1 to 20 sentences or a few lines of code. Leave correct_options empty.
+          needs. Most questions take up to about 20 sentences or a few lines of code; when the
+          question asks for more (a structured correction of a long text, say), write as much as it
+          needs. Leave correct_options empty.
         - Some questions come with the paper's own answer (given_answer, or options marked as
           correct). Take that answer as correct: explain it, don't contradict it.
         - Explanation: explain thoroughly why the correct answer is right and, for multiple choice,
@@ -748,8 +760,9 @@ public static class Prompts
         correct answer, then judge theirs.
 
         {CheckBasisRules(basis)}
-        - reference_answer: a model answer covering everything a full-credit answer needs, in 1 to
-          20 sentences or a few lines of code.
+        - reference_answer: a model answer covering everything a full-credit answer needs. Most
+          questions take up to about 20 sentences or a few lines of code; when the question asks for
+          more, write as much as it needs.
         - explanation: teach the underlying idea thoroughly, so the student understands why the
           answer is right, not just what it is.
         - score: 0 to 100 for how completely and correctly the student's answer covers the reference

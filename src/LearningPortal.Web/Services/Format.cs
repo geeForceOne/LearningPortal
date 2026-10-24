@@ -159,5 +159,9 @@ public static class Format
 
     public static string Plural(int count, string one, string many) => $"{count} {(count == 1 ? one : many)}";
 
+    // "1,840 characters (about 2,500 suggested)": the suggestion is a guide, not a limit.
+    public static string AnswerLength(int length) =>
+        string.Create(CultureInfo.InvariantCulture, $"{length:N0} characters (about {AttemptService.SuggestedWrittenAnswerLength:N0} suggested)");
+
     public static string VerdictClass(double score) => VerdictRules.FromScore((int)Math.Round(score)).ToString().ToLowerInvariant();
 }
