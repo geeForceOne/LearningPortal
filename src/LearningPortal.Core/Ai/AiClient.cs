@@ -125,18 +125,24 @@ public sealed record AiModelInfo(string Id, string Name, string Description, dec
     public int? LongPromptTokens { get; init; }
     public decimal LongPromptFactor { get; init; } = 1m;
 
+    // The multiple for output on such a call, when it differs from the one for the prompt.
+    public decimal? LongPromptOutputFactor { get; init; }
+
     // tokens is the input of all calls together, so the prompt length is judged per call.
     public decimal InputCost(int tokens, int calls = 1) =>
         tokens * InputPrice * FactorFor(tokens / Math.Max(calls, 1)) / 1_000_000m;
 
     // What a finished call cost, from the tokens the provider reported.
-    public decimal Cost(AiUsage usage) =>
-        (usage.InputTokens * InputPrice
-         + usage.CacheWriteTokens * InputPrice * CacheWriteFactor
-         + usage.CacheReadTokens * CachedInputPrice
-         + usage.OutputTokens * OutputPrice)
-        * FactorFor(usage.InputTokens + usage.CacheWriteTokens + usage.CacheReadTokens) / 1_000_000m
-        + usage.WebSearches * WebSearchPrice;
+    public decimal Cost(AiUsage usage)
+    {
+        var factor = FactorFor(usage.InputTokens + usage.CacheWriteTokens + usage.CacheReadTokens);
+        var outputFactor = factor == 1m ? 1m : LongPromptOutputFactor ?? factor;
+        return ((usage.InputTokens * InputPrice
+                 + usage.CacheWriteTokens * InputPrice * CacheWriteFactor
+                 + usage.CacheReadTokens * CachedInputPrice) * factor
+                + usage.OutputTokens * OutputPrice * outputFactor) / 1_000_000m
+            + usage.WebSearches * WebSearchPrice;
+    }
 
     private decimal FactorFor(long promptTokens) => promptTokens > LongPromptTokens ? LongPromptFactor : 1m;
 }
@@ -149,7 +155,7 @@ public static class AiModels
 
     // Neither provider's API reports prices, so these are copied from their pricing pages.
     // Update the list and this date together.
-    public const string PricesAsOf = "October 2026";
+    public const string PricesAsOf = "November 2026";
     public const string ClaudePricingUrl = "https://platform.claude.com/docs/en/about-claude/pricing";
     public const string OpenAiPricingUrl = "https://developers.openai.com/api/docs/pricing";
 
@@ -192,9 +198,15 @@ public static class AiModels
 
     public static readonly IReadOnlyList<AiModelInfo> OpenAi =
     [
-        new("gpt-6-astra", "GPT-6 Astra", "OpenAI's most capable model, at a premium price.", 10m, 50m, 1m),
-        new("gpt-6.1-sol", "GPT-6.1 Sol", "Newest Sol: near-Astra quality at a much lower price. A good everyday choice.", 2m, 10m, 0.10m),
-        new("gpt-6-sol", "GPT-6 Sol", "Previous Sol, same price as GPT-6.1 Sol. Kept for anyone who picked it.", 2m, 10m, 0.20m),
-        new("gpt-6-luna", "GPT-6 Luna", "Cheapest and fastest. Fine for easy recall questions; weaker on hard ones.", 0.10m, 0.50m, 0.01m),
+        new("gpt-6-astra", "GPT-6 Astra", "OpenAI's most capable model, at a premium price.", 10m, 50m, 1m)
+            { LongPromptTokens = 272_000, LongPromptFactor = 2m, LongPromptOutputFactor = 1.5m },
+        new("gpt-6.1-sol", "GPT-6.1 Sol", "Newest Sol: near-Astra quality at a much lower price. A good everyday choice.", 2m, 10m, 0.10m)
+            { LongPromptTokens = 272_000, LongPromptFactor = 2m, LongPromptOutputFactor = 1.5m },
+        new("gpt-6-sol", "GPT-6 Sol", "Previous Sol, same price as GPT-6.1 Sol. Kept for anyone who picked it.", 2m, 10m, 0.20m)
+            { LongPromptTokens = 272_000, LongPromptFactor = 2m, LongPromptOutputFactor = 1.5m },
+        new("gpt-6.1-terra", "GPT-6.1 Terra", "Fast and efficient, at half the price of GPT-6.1 Sol. A cheaper choice for everyday questions.", 1m, 5m, 0.05m)
+            { LongPromptTokens = 272_000, LongPromptFactor = 2m, LongPromptOutputFactor = 1.5m },
+        new("gpt-6-luna", "GPT-6 Luna", "Cheapest and fastest. Fine for easy recall questions; weaker on hard ones.", 0.10m, 0.50m, 0.01m)
+            { LongPromptTokens = 272_000, LongPromptFactor = 2m, LongPromptOutputFactor = 1.5m },
     ];
 }

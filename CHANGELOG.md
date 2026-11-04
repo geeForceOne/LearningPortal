@@ -1,5 +1,16 @@
 # Release notes
 
+## 1.15.2 - 2026-11-04
+
+### New
+
+- **GPT-6.1 Terra**: a new OpenAI model to pick, at half the price of GPT-6.1 Sol.
+
+### Improved
+
+- **Homepage widget**: admins no longer count in "active this week" and "active now", so these numbers can drop after the update. They still count as accounts.
+- Minor fixes and updates.
+
 ## 1.15.1 - 2026-10-24
 
 ### Improved
