@@ -9,6 +9,10 @@
 ### Improved
 
 - **Homepage widget**: admins no longer count in "active this week" and "active now", so these numbers can drop after the update. They still count as accounts.
+
+### Fixed
+
+- **Cost estimates**: very long OpenAI prompts (over 272,000 tokens) are now priced at OpenAI's higher rate, in cost hints and shared-key balances.
 - Minor fixes and updates.
 
 ## 1.15.1 - 2026-10-24
