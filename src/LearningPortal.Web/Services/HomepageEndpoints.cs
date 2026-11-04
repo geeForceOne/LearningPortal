@@ -14,7 +14,7 @@ public static class HomepageEndpoints
             // A bare 401 for Homepage, not the app's "not found" page that status code pages would render.
             if (http.Features.Get<IStatusCodePagesFeature>() is { } pages)
                 pages.Enabled = false;
-            var result = await stats.GetStatsAsync(http.Request.Headers["X-API-Key"].ToString(), ct);
+            var result = await stats.GetStatsAsync(http.Request.Headers["X-API-Key"].ToString(), Roles.Admin, ct);
             return result is null
                 ? Results.Unauthorized()
                 : Results.Ok(new { accounts = result.Accounts, activeThisWeek = result.ActiveThisWeek, activeNow = result.ActiveNow });

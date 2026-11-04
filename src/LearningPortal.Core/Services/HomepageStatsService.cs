@@ -49,8 +49,10 @@ public sealed class HomepageStatsService(IDbContextFactory<AppDbContext> dbFacto
         await db.SaveChangesAsync(ct);
     }
 
-    // The stats, or null when the token doesn't match (or none was created).
-    public async Task<HomepageStats?> GetStatsAsync(string? token, CancellationToken ct = default)
+    // The stats, or null when the token doesn't match (or none was created). Accounts holds everyone;
+    // the two active counts leave out members of adminRole, so they show people using the app and
+    // not the admins looking after it.
+    public async Task<HomepageStats?> GetStatsAsync(string? token, string adminRole, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(token))
             return null;
@@ -64,10 +66,15 @@ public sealed class HomepageStatsService(IDbContextFactory<AppDbContext> dbFacto
         var now = DateTime.UtcNow;
         var weekFrom = now - ActiveWeekWindow;
         var nowFrom = now - ActiveNowWindow;
+        var adminIds = from userRole in db.UserRoles
+                       join role in db.Roles on userRole.RoleId equals role.Id
+                       where role.Name == adminRole
+                       select userRole.UserId;
+        var nonAdmins = db.Users.Where(u => !adminIds.Contains(u.Id));
         return new HomepageStats(
             await db.Users.CountAsync(ct),
-            await db.Users.CountAsync(u => u.LastActiveAt >= weekFrom, ct),
-            await db.Users.CountAsync(u => u.LastActiveAt >= nowFrom, ct));
+            await nonAdmins.CountAsync(u => u.LastActiveAt >= weekFrom, ct),
+            await nonAdmins.CountAsync(u => u.LastActiveAt >= nowFrom, ct));
     }
 
     private static string Hash(string token) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token)));

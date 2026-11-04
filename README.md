@@ -228,7 +228,7 @@ they close it.
 
 Recall can show a few numbers on a [Homepage](https://gethomepage.dev) dashboard: the number of
 accounts, the people who used Recall in the last 7 days, and those using it right now (the last
-10 minutes). An admin creates a token under **Admin settings → Homepage widget**. It's shown once,
+10 minutes). Admins count as accounts but not as active. An admin creates a token under **Admin settings → Homepage widget**. It's shown once,
 there's one for the whole installation, and it can be replaced or turned off there at any time.
 
 ```powershell
