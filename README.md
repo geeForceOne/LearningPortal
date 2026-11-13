@@ -227,8 +227,8 @@ they close it.
 ## Homepage widget
 
 Recall can show a few numbers on a [Homepage](https://gethomepage.dev) dashboard: the number of
-accounts, the people who used Recall in the last 7 days, and those using it right now (the last
-10 minutes). Admins count as accounts but not as active. An admin creates a token under **Admin settings → Homepage widget**. It's shown once,
+accounts, the people who used Recall in the last 7 days and in the last 24 hours, and those using it
+right now (the last 10 minutes). Admins count as accounts but not as active. An admin creates a token under **Admin settings → Homepage widget**. It's shown once,
 there's one for the whole installation, and it can be replaced or turned off there at any time.
 
 ```powershell
@@ -238,7 +238,7 @@ Invoke-RestMethod http://localhost:8080/api/homepage/stats -Headers @{ 'X-API-Ke
 returns
 
 ```json
-{ "accounts": 12, "activeThisWeek": 7, "activeNow": 2 }
+{ "accounts": 12, "activeThisWeek": 7, "activeToday": 4, "activeNow": 2 }
 ```
 
 In Homepage's `services.yaml`, as a [customapi](https://gethomepage.dev/widgets/services/customapi/) widget:
@@ -258,6 +258,9 @@ In Homepage's `services.yaml`, as a [customapi](https://gethomepage.dev/widgets/
           format: number
         - field: activeThisWeek
           label: This week
+          format: number
+        - field: activeToday
+          label: Today
           format: number
         - field: activeNow
           label: Now

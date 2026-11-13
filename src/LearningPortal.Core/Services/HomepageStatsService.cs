@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace LearningPortal.Core.Services;
 
-public sealed record HomepageStats(int Accounts, int ActiveThisWeek, int ActiveNow);
+public sealed record HomepageStats(int Accounts, int ActiveThisWeek, int ActiveToday, int ActiveNow);
 
 // Instance-wide numbers for a gethomepage.dev "customapi" widget. Homepage polls without anyone
 // signed in, so the endpoint takes one token for the whole instance (created by an admin) instead
@@ -17,6 +17,9 @@ public sealed class HomepageStatsService(IDbContextFactory<AppDbContext> dbFacto
     // LastActiveAt is written at most every UserActivityService.ActiveResolution (5 minutes), so
     // "just now" has to be wider than that.
     public static readonly TimeSpan ActiveNowWindow = TimeSpan.FromMinutes(10);
+    // "Today" is the last 24 hours, like "this week" is the last 7 days: the server can't know which
+    // time zone the widget's viewers are in, so a since-midnight count would be off for most of them.
+    public static readonly TimeSpan ActiveTodayWindow = TimeSpan.FromHours(24);
     public static readonly TimeSpan ActiveWeekWindow = TimeSpan.FromDays(7);
 
     // When the current token was created, or null when there is none.
@@ -50,7 +53,7 @@ public sealed class HomepageStatsService(IDbContextFactory<AppDbContext> dbFacto
     }
 
     // The stats, or null when the token doesn't match (or none was created). Accounts holds everyone;
-    // the two active counts leave out members of adminRole, so they show people using the app and
+    // the active counts leave out members of adminRole, so they show people using the app and
     // not the admins looking after it.
     public async Task<HomepageStats?> GetStatsAsync(string? token, string adminRole, CancellationToken ct = default)
     {
@@ -65,6 +68,7 @@ public sealed class HomepageStatsService(IDbContextFactory<AppDbContext> dbFacto
 
         var now = DateTime.UtcNow;
         var weekFrom = now - ActiveWeekWindow;
+        var todayFrom = now - ActiveTodayWindow;
         var nowFrom = now - ActiveNowWindow;
         var adminIds = from userRole in db.UserRoles
                        join role in db.Roles on userRole.RoleId equals role.Id
@@ -74,6 +78,7 @@ public sealed class HomepageStatsService(IDbContextFactory<AppDbContext> dbFacto
         return new HomepageStats(
             await db.Users.CountAsync(ct),
             await nonAdmins.CountAsync(u => u.LastActiveAt >= weekFrom, ct),
+            await nonAdmins.CountAsync(u => u.LastActiveAt >= todayFrom, ct),
             await nonAdmins.CountAsync(u => u.LastActiveAt >= nowFrom, ct));
     }
 

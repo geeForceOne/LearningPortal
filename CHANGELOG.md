@@ -1,5 +1,15 @@
 # Release notes
 
+## 1.15.3 - 2026-11-13
+
+### Improved
+
+- **Homepage widget**: a new "active today" count (`activeToday`), the people who used Recall in the last 24 hours. Like the other active counts, it leaves out admins.
+
+### Fixed
+
+- Minor fixes and updates.
+
 ## 1.15.2 - 2026-11-04
 
 ### New

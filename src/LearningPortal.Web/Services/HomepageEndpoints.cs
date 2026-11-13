@@ -17,7 +17,7 @@ public static class HomepageEndpoints
             var result = await stats.GetStatsAsync(http.Request.Headers["X-API-Key"].ToString(), Roles.Admin, ct);
             return result is null
                 ? Results.Unauthorized()
-                : Results.Ok(new { accounts = result.Accounts, activeThisWeek = result.ActiveThisWeek, activeNow = result.ActiveNow });
+                : Results.Ok(new { accounts = result.Accounts, activeThisWeek = result.ActiveThisWeek, activeToday = result.ActiveToday, activeNow = result.ActiveNow });
         }).AllowAnonymous().DisableAntiforgery();
     }
 }
