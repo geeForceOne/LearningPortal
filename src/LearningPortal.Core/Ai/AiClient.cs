@@ -72,6 +72,17 @@ public sealed record AiRequest
 
 public sealed record AiPdf(string FileName, byte[] Content);
 
+// A request answered in plain text that streams in as the AI writes it (the topic chat). Context is
+// cached like AiRequest.Context.
+public sealed record AiTextRequest
+{
+    public required string System { get; init; }
+    public string? Context { get; init; }
+    public required string Prompt { get; init; }
+    public int MaxTokens { get; init; } = 6_000;
+    public string? CacheKey { get; init; }
+}
+
 // A request that lets the AI search the web and answers in plain text with the pages it used.
 // Both providers' web search tools are used without a response schema, so the answer comes back
 // as text; a second, ordinary call turns it into structured data where needed.
@@ -98,6 +109,10 @@ public interface IAiClient
     Task<string> CompleteJsonAsync(AiRequest request, CancellationToken ct);
 
     Task<WebResearch> ResearchAsync(WebResearchRequest request, CancellationToken ct);
+
+    // Yields the answer's text piece by piece as it arrives. Throws an AiException when the AI
+    // refuses or the answer is cut off, after the pieces so far.
+    IAsyncEnumerable<string> StreamTextAsync(AiTextRequest request, CancellationToken ct);
 }
 
 public static class AiClientFactory

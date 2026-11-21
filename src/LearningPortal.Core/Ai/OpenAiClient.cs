@@ -102,6 +102,126 @@ public sealed class OpenAiClient(string apiKey, string model, IAiMeter? meter = 
         return new WebResearch(text, citations, CountSearches(root));
     }
 
+    // Streams a plain-text answer over server-sent events: each "data:" line is a JSON event with a
+    // type. Text arrives in response.output_text.delta events; the last event (response.completed,
+    // .incomplete or .failed) carries the whole response with its usage.
+    public async IAsyncEnumerable<string> StreamTextAsync(AiTextRequest request, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+    {
+        var content = new JsonArray();
+        if (!string.IsNullOrWhiteSpace(request.Context))
+            content.Add(new JsonObject { ["type"] = "input_text", ["text"] = request.Context });
+        content.Add(new JsonObject { ["type"] = "input_text", ["text"] = request.Prompt });
+        var body = new JsonObject
+        {
+            ["model"] = model,
+            ["instructions"] = request.System,
+            ["input"] = new JsonArray { new JsonObject { ["role"] = "user", ["content"] = content } },
+            ["max_output_tokens"] = request.MaxTokens,
+            ["store"] = false,
+            ["stream"] = true,
+        };
+        if (request.CacheKey is not null)
+            body["prompt_cache_key"] = request.CacheKey;
+
+        using var message = new HttpRequestMessage(HttpMethod.Post, "https://api.openai.com/v1/responses")
+        {
+            Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json"),
+        };
+        message.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+
+        if (meter is not null)
+            await meter.CheckAsync(ct);
+
+        HttpResponseMessage response;
+        try
+        {
+            response = await Http.SendAsync(message, HttpCompletionOption.ResponseHeadersRead, ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
+        {
+            throw new AiException($"Couldn't reach the AI provider: {ex.Message}");
+        }
+
+        using (response)
+        {
+            if (!response.IsSuccessStatusCode)
+                throw new AiException(DescribeError(response.StatusCode, await response.Content.ReadAsStringAsync(ct)));
+
+            using var reader = new StreamReader(await response.Content.ReadAsStreamAsync(ct));
+            JsonNode? final = null;
+            string? failure = null;
+            var refused = false;
+            try
+            {
+                while (true)
+                {
+                    string? line;
+                    try
+                    {
+                        line = await reader.ReadLineAsync(ct);
+                    }
+                    catch (Exception ex) when (ex is IOException or HttpRequestException)
+                    {
+                        throw new AiException($"The connection to the AI provider broke off: {ex.Message}");
+                    }
+                    if (line is null)
+                        break;
+                    if (!line.StartsWith("data:", StringComparison.Ordinal))
+                        continue;
+                    var data = line[5..].Trim();
+                    if (data.Length == 0 || data == "[DONE]")
+                        continue;
+
+                    JsonNode? e;
+                    try
+                    {
+                        e = JsonNode.Parse(data);
+                    }
+                    catch (JsonException)
+                    {
+                        continue;
+                    }
+                    switch (e?["type"]?.GetValue<string>())
+                    {
+                        case "response.output_text.delta" when e["delta"]?.GetValue<string>() is { Length: > 0 } delta:
+                            yield return delta;
+                            break;
+                        case "response.refusal.delta":
+                            refused = true;
+                            break;
+                        case "response.completed" or "response.incomplete" or "response.failed":
+                            final = e["response"];
+                            break;
+                        case "error":
+                            failure = e["message"]?.GetValue<string>() ?? "no details given";
+                            break;
+                    }
+                }
+            }
+            finally
+            {
+                if (meter is not null && final is not null && ReadUsage(final) is { } usage)
+                    await meter.RecordAsync(usage);
+            }
+
+            if (failure is not null)
+                throw new AiException($"The AI request failed: {failure}");
+            if (refused)
+                throw new AiException("The AI declined to answer this. Try rewording your question.");
+            switch (final?["status"]?.GetValue<string>())
+            {
+                case "incomplete":
+                    throw new AiException(final["incomplete_details"]?["reason"]?.GetValue<string>() == "max_output_tokens"
+                        ? "The reply was cut off because it ran too long. Ask for a shorter answer."
+                        : "The AI didn't finish its reply. Try again.");
+                case "failed":
+                    throw new AiException($"The AI request failed: {final["error"]?["message"]?.GetValue<string>() ?? "no details given"}");
+                case null:
+                    throw new AiException("The AI's reply broke off. Try again.");
+            }
+        }
+    }
+
     private static int CountSearches(JsonNode root) =>
         (root["output"]?.AsArray() ?? []).Count(i =>
             i?["type"]?.GetValue<string>() == "web_search_call"
@@ -147,14 +267,26 @@ public sealed class OpenAiClient(string apiKey, string model, IAiMeter? meter = 
     {
         try
         {
-            if (JsonNode.Parse(responseText)?["usage"] is not { } usage)
+            return JsonNode.Parse(responseText) is { } root ? ReadUsage(root) : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static AiUsage? ReadUsage(JsonNode response)
+    {
+        try
+        {
+            if (response["usage"] is not { } usage)
                 return null;
             long Count(JsonNode? node) => node?.GetValue<long>() ?? 0;
             var cached = Count(usage["input_tokens_details"]?["cached_tokens"]);
             var written = Count(usage["input_tokens_details"]?["cache_write_tokens"]);
             return new AiUsage(
                 Math.Max(0, Count(usage["input_tokens"]) - cached - written), written, cached, Count(usage["output_tokens"]),
-                CountSearches(JsonNode.Parse(responseText)!));
+                CountSearches(response));
         }
         catch (Exception ex) when (ex is JsonException or InvalidOperationException or FormatException)
         {

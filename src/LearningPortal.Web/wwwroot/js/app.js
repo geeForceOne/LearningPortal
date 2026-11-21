@@ -2,6 +2,9 @@
 window.learningPortal = {
     scrollToTop: () => window.scrollTo({ top: 0, behavior: "instant" }),
 
+    // Brings the end of a growing list (the topic chat) into view.
+    scrollIntoView: (element) => element?.scrollIntoView({ block: "end", behavior: "smooth" }),
+
     // Per-browser preferences. Storage can be unavailable (private mode, blocked site data),
     // so failures fall back to the default instead of breaking the page.
     getPref: (key) => {

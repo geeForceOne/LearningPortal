@@ -91,7 +91,7 @@ After each question, or at the end, you see what was right, what you picked, and
 ## Go deeper
 
 Exams test what you know. The **Go deeper** section on each topic page helps you understand it:
-five tools, side by side, between the exams and the material.
+six tools, side by side, between the exams and the material.
 
 ![A topic with its exams, the Go deeper tools and the material](docs/images/recall-topic.jpg)
 
@@ -100,6 +100,18 @@ five tools, side by side, between the exams and the material.
 Practice exactly the questions you've answered wrong or only partly right in this topic, most
 missed first (10 by default, adjustable). No AI is involved, so it costs nothing. Keep a practice
 run as an exam if it's useful.
+
+### Ask Recall
+
+Ask anything about the topic and chat about it, like with a tutor who has read your material.
+Recall answers from your material and links the sections it used, so you can read up on them.
+On the material page, **Ask about this section** starts a chat about just that part. If your
+material doesn't cover a question, you choose whether Recall searches the web or the AI answers
+from its own knowledge; those answers are marked as possibly wrong. Each topic keeps its chats,
+named after their first question, and **Turn this into a question** adds an answer to an exam to
+practice it later.
+
+![Ask Recall: an answer from the material, with the sections it used](docs/images/recall-ask.jpg)
 
 ### Explain it back
 

@@ -111,30 +111,11 @@ public sealed class AnswerCheckService(
         if (check.IsPending || string.IsNullOrWhiteSpace(check.ReferenceAnswer))
             throw new InvalidOperationException("Finish checking the answer first.");
 
-        Exam exam;
-        if (examId is { } id)
-        {
-            exam = await db.Exams.Include(e => e.Questions)
-                .FirstOrDefaultAsync(e => e.Id == id && e.UserId == userId && e.TopicId == check.TopicId && !e.IsPractice, ct)
-                ?? throw new NotFoundException();
-        }
-        else
-        {
-            if (string.IsNullOrWhiteSpace(newExamName))
-                throw new ArgumentException("Give the new exam a name.");
-            exam = new Exam
-            {
-                UserId = userId, TopicId = check.TopicId, Name = newExamName.Trim().Length > 200 ? newExamName.Trim()[..200] : newExamName.Trim(),
-                Type = ExamType.Written, Difficulty = check.Difficulty, QuestionCount = 0,
-            };
-            db.Exams.Add(exam);
-        }
+        var exam = await ExamTargets.ResolveAsync(db, userId, check.TopicId, examId, newExamName, check.Difficulty, ct);
 
         Question question;
         if (check.SavedQuestionId is { } saved && await db.Questions.FirstOrDefaultAsync(q => q.Id == saved, ct) is { } existing)
         {
-            if (exam.Questions.Any(eq => eq.QuestionId == existing.Id))
-                throw new InvalidOperationException("This question is already in that exam.");
             question = existing;
         }
         else
@@ -160,11 +141,7 @@ public sealed class AnswerCheckService(
             db.Questions.Add(question);
         }
 
-        var order = exam.Questions.Count == 0 ? 0 : exam.Questions.Max(eq => eq.Order) + 1;
-        var count = exam.Questions.Count + 1;
-        exam.Questions.Add(new ExamQuestion { Exam = exam, Question = question, Order = order });
-        exam.QuestionCount = Math.Max(exam.QuestionCount, count);
-        exam.UpdatedAt = DateTime.UtcNow;
+        ExamTargets.Add(exam, question);
         await db.SaveChangesAsync(ct);
 
         check.SavedQuestionId = question.Id;

@@ -32,6 +32,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<GapService>();
         services.AddSingleton<PaperImportService>();
         services.AddSingleton<AnswerCheckService>();
+        services.AddSingleton<ChatService>();
         services.AddSingleton<AccountRequestService>();
         services.AddSingleton<HomepageStatsService>();
         services.AddSingleton<UserActivityService>();

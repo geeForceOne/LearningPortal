@@ -1,0 +1,496 @@
+@page "/topics/{TopicId:int}/ask"
+@page "/chats/{ChatId:int}"
+@inherits AppPage
+@inject ChatService Chats
+@inject TopicService Topics
+@inject SettingsService Settings
+@inject IJSRuntime JS
+
+@* "Ask Recall": a new chat (on /topics/{id}/ask, with ?section= for "Ask about this section") or an
+   existing one. Starting a chat moves to its own address on the same page instance, so the reply
+   streams in without losing the model picked. *@
+
+<PageTitle>@(_view?.Chat.Title ?? "Ask Recall") - @AppInfo.Name</PageTitle>
+
+@if (_topicName is null)
+{
+    <p class="page-loading">Loading...</p>
+}
+else
+{
+    <nav class="crumbs" aria-label="Breadcrumb">
+        <a href="">Topics</a><span class="sep">/</span>
+        <a href="topics/@_topicId">@_topicName</a>
+        @if (_view is not null)
+        {
+            <span class="sep">/</span><a href="topics/@_topicId/ask">Ask Recall</a>
+        }
+    </nav>
+
+    <div class="page-head">
+        <div>
+            <h1>@(_view?.Chat.Title ?? "Ask Recall")</h1>
+            @if (_view is null)
+            {
+                <p class="page-sub">
+                    Ask anything about this topic. Recall answers from your material and shows where it found the answer.
+                    When your material doesn't cover a question, you choose whether Recall searches the web or answers from the AI's own knowledge.
+                </p>
+            }
+            @if (SectionLabel is { } about)
+            {
+                <div class="facts">
+                    <span>About <a href="@SectionHref">@about</a></span>
+                    @if (_view is null)
+                    {
+                        <a href="topics/@_topicId/ask">Ask about the whole topic instead</a>
+                    }
+                </div>
+            }
+        </div>
+        @if (_view is not null)
+        {
+            <div class="actions">
+                <a class="btn btn-secondary btn-sm" href="topics/@_topicId/ask"><Icon Name="plus" Size="14" /> New chat</a>
+                <button type="button" class="btn btn-ghost btn-sm" disabled="@IsBusy" @onclick="RenameAsync"><Icon Name="edit" Size="14" /> Rename</button>
+                <button type="button" class="btn btn-ghost btn-sm" disabled="@IsBusy" @onclick="DeleteAsync"><Icon Name="trash" Size="14" /> Delete</button>
+            </div>
+        }
+    </div>
+
+    @if (_view is not null)
+    {
+        <div class="chat">
+            @foreach (var m in _view.Chat.Messages)
+            {
+                if (m.FromUser)
+                {
+                    <div class="chat-question" @key="m.Id">
+                        <span class="chat-who">You asked</span>
+                        <div class="reading">@m.Text</div>
+                    </div>
+                }
+                else
+                {
+                    <div class="chat-reply" @key="m.Id">
+                        <span class="chat-who">Recall</span>
+                        <RichText Class="reading" Text="@m.Text" />
+                        <div class="chat-meta">
+                            @foreach (var id in m.SectionIdList)
+                            {
+                                if (_view.Sources.GetValueOrDefault(id) is { } source)
+                                {
+                                    <a class="source-link" href="materials/@source.MaterialId#section-@source.SectionId"><Icon Name="file" Size="14" /> @source.Label</a>
+                                }
+                            }
+                            <AnswerOrigin Source="m.AnswerSource" />
+                            @if (m.Model is { } by)
+                            {
+                                <span class="source-link">Answered by @AiModels.DisplayName(by)</span>
+                            }
+                            @if (m.SavedQuestionId is not null)
+                            {
+                                <span class="tag">Saved as a question</span>
+                            }
+                            @if (_saveFor != m.Id)
+                            {
+                                <button type="button" class="link-button small" disabled="@IsBusy" @onclick="() => OpenSave(m.Id)">
+                                    @(m.SavedQuestionId is null ? "Turn this into a question" : "Add to another exam")
+                                </button>
+                            }
+                        </div>
+                        <AnswerOrigin WebSources="m.WebSources" ShowSources="true" />
+                        @if (_saveFor == m.Id)
+                        {
+                            <div class="panel chat-save">
+                                <h2>@(m.SavedQuestionId is null ? "Turn this into a question" : "Add to another exam")</h2>
+                                <p class="muted small" style="margin-top:0">
+                                    @if (m.SavedQuestionId is null)
+                                    {
+                                        <text>Recall writes a written exam question with a model answer from this reply, to practice it later. It's one short AI call.</text>
+                                    }
+                                    else
+                                    {
+                                        <text>The question Recall wrote from this reply goes into one more exam.</text>
+                                    }
+                                </p>
+                                <div class="save-check">
+                                    <label class="field">
+                                        <span>Exam</span>
+                                        <select class="input" @bind="_target" disabled="@_saving">
+                                            @foreach (var e in _exams)
+                                            {
+                                                <option value="@e.Id">@e.Name</option>
+                                            }
+                                            <option value="0">New exam...</option>
+                                        </select>
+                                    </label>
+                                    @if (_target == 0)
+                                    {
+                                        <label class="field">
+                                            <span>New exam's name</span>
+                                            <input class="input" @bind="_newName" @bind:event="oninput" maxlength="200" disabled="@_saving" />
+                                        </label>
+                                    }
+                                    <button type="button" class="btn btn-secondary" disabled="@(_saving || (_target == 0 && string.IsNullOrWhiteSpace(_newName)))" @onclick="() => SaveAsync(m.Id)">
+                                        <Icon Name="plus" Size="16" /> @(_saving ? "Saving..." : "Save")
+                                    </button>
+                                    <button type="button" class="btn btn-ghost" disabled="@_saving" @onclick="() => _saveFor = null">Cancel</button>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            }
+
+            @if (_view.Unanswered is { } open)
+            {
+                if (IsBusy)
+                {
+                    <div class="chat-reply is-streaming">
+                        <span class="chat-who">Recall</span>
+                        @if (_streamText.Length > 0)
+                        {
+                            <RichText Class="reading" Text="@_streamText" />
+                        }
+                        <BusyBar Message="@BusyMessage" OnCancel="CancelBusy" />
+                    </div>
+                }
+                else if (open.NotCovered)
+                {
+                    <section class="panel pending-panel">
+                        <h2>@(SectionLabel is null ? "Your material doesn't cover this question" : "This section doesn't cover this question")</h2>
+                        <p class="muted">
+                            @if (SectionLabel is not null)
+                            {
+                                <text>Recall can look through all of this topic's material instead. It can also search the web, or the AI can answer from its own knowledge.</text>
+                            }
+                            else
+                            {
+                                <text>Recall can search the web, or the AI can answer from its own knowledge.</text>
+                            }
+                            Those answers don't come from your material, so they're marked as possibly wrong.
+                        </p>
+                        <div class="actions">
+                            @if (SectionLabel is not null)
+                            {
+                                <button type="button" class="btn btn-primary btn-sm" @onclick="() => ReplyAsync(ChatReplyMode.AllMaterial)"><Icon Name="book" Size="14" /> Look in all your material</button>
+                            }
+                            <button type="button" class="btn @(SectionLabel is null ? "btn-primary" : "btn-secondary") btn-sm" @onclick="() => ReplyAsync(ChatReplyMode.Web)"><Icon Name="search" Size="14" /> Search the web</button>
+                            <button type="button" class="btn btn-secondary btn-sm" @onclick="() => ReplyAsync(ChatReplyMode.General)">Answer without searching</button>
+                        </div>
+                        @if (_research is { } research)
+                        {
+                            <p class="muted small" style="margin:10px 0 0">@Format.ResearchHint(research.Searches, research.Cost, research.Model, _settings)</p>
+                        }
+                    </section>
+                }
+                else
+                {
+                    <div class="notice notice-warn chat-retry">
+                        <span>Recall hasn't answered this question yet.</span>
+                        <button type="button" class="btn btn-secondary btn-sm" @onclick="() => ReplyAsync(ChatReplyMode.Material)"><Icon Name="redo" Size="14" /> Get the answer</button>
+                    </div>
+                }
+            }
+            <div @ref="_end"></div>
+        </div>
+    }
+
+    @if (_error is not null)
+    {
+        <div class="notice notice-error" style="margin-top:16px">@_error</div>
+    }
+
+    @if (_noMaterial)
+    {
+        <div class="empty" style="margin-top:16px">
+            <p>This topic has no material yet. Add some on the <a href="topics/@_topicId">topic page</a>, then ask about it.</p>
+        </div>
+    }
+    else if (ChatFull)
+    {
+        <p class="muted" style="margin-top:20px">This chat is full. <a href="topics/@_topicId/ask">Start a new chat</a> to ask more.</p>
+    }
+    else
+    {
+        <div class="answer-box chat-compose">
+            <label for="chat-question" class="kind-hint" style="margin-bottom:4px">@(_view is null ? "Your question" : "Ask a follow-up")</label>
+            <textarea id="chat-question" class="textarea" rows="3" maxlength="@ChatMessage.MaxQuestionLength" @bind="_question" @bind:event="oninput"
+                      disabled="@(IsBusy || _view?.Unanswered is not null)"
+                      placeholder="@(_view is null ? "e.g. What are the main ideas of this topic?" : "e.g. Can you give me an example?")"></textarea>
+        </div>
+        @if (_settings is { AdvancedModels: true })
+        {
+            <div style="margin-top:12px">
+                <AiModelSelect Label="Answer with" @bind-Value="_answerWith" Available="_settings.HasKey" AllowedModels="_settings.AllowedModels" Inline="true" />
+            </div>
+        }
+        <div class="exam-actions" style="margin-top:14px">
+            <button type="button" class="btn btn-primary" disabled="@(IsBusy || _view?.Unanswered is not null || string.IsNullOrWhiteSpace(_question))" @onclick="AskAsync">
+                <Icon Name="right" Size="16" /> Ask
+            </button>
+            @if (Format.CostHint(_questionTokens, AiModels.Find(_answerWith)) is { } cost)
+            {
+                <span class="muted small">Each question sends @cost.</span>
+            }
+        </div>
+    }
+
+    @if (_view is null && _chats is { Count: > 0 })
+    {
+        <section class="section" style="margin-top:36px">
+            <div class="section-head"><h2>Your chats<span class="count">@_chats.Count</span></h2></div>
+            <ul class="rows">
+                @foreach (var c in _chats)
+                {
+                    <li class="row" @key="c.Id">
+                        <div class="row-main">
+                            <a class="row-title" href="chats/@c.Id">@c.Title</a>
+                            <div class="row-meta">
+                                <span>@Format.Date(c.UpdatedAt)</span>
+                                <span>@Format.Plural(c.Questions, "question", "questions")</span>
+                                @if (c.SectionLabel is { } label)
+                                {
+                                    <span>About @label</span>
+                                }
+                            </div>
+                        </div>
+                    </li>
+                }
+            </ul>
+        </section>
+    }
+}
+
+@code {
+    [Parameter] public int? TopicId { get; set; }
+    [Parameter] public int? ChatId { get; set; }
+    // "Ask about this section": the section a new chat is about.
+    [SupplyParameterFromQuery(Name = "section")] public int? Section { get; set; }
+    [CascadingParameter] private AppUi Ui { get; set; } = default!;
+
+    private int _topicId;
+    private string? _topicName;
+    private ChatView? _view;
+    private ChatSource? _section;
+    private IReadOnlyList<ChatSummary>? _chats;
+    private IReadOnlyList<ExamSummary> _exams = [];
+    private SettingsView? _settings;
+    private AiChoice _answerWith = default!;
+    private (int Searches, decimal? Cost, AiModelInfo? Model)? _research;
+    private bool _noMaterial;
+    private int _questionTokens;
+    private string _question = "";
+    private string? _error;
+    private ElementReference _end;
+
+    // Set when a question was just asked, so the reply starts once the chat is loaded.
+    private bool _replyNext;
+
+    // The reply as it streams in, and when the page last showed it.
+    private string _streamText = "";
+    private DateTime _shownAt;
+
+    // "Turn this into a question": the reply whose save panel is open.
+    private int? _saveFor;
+    private int _target;
+    private string _newName = "";
+    private bool _saving;
+
+    // Passed on only in advanced mode; in simple mode the one model does everything.
+    private AiChoice? Choice => _settings?.AdvancedModels == true ? _answerWith : null;
+
+    private string? SectionLabel => _view is not null ? _view.SectionLabel : _section?.Label;
+
+    private string? SectionHref =>
+        (_view is not null ? _view.Chat.SectionId : _section?.SectionId) is { } id
+        && (_view?.Sources.GetValueOrDefault(id) ?? _section) is { } s
+            ? $"materials/{s.MaterialId}#section-{s.SectionId}" : null;
+
+    private bool ChatFull => _view is not null && _view.Chat.Messages.Count >= TopicChat.MaxMessages;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var userId = await UserIdAsync();
+        _error = null;
+        _saveFor = null;
+        try
+        {
+            // Both addresses share this page, and a route value the new address lacks keeps its old
+            // value, so the address decides which one this is.
+            if (new Uri(Nav.Uri).AbsolutePath.Contains("/chats/", StringComparison.OrdinalIgnoreCase) && ChatId is { } chatId)
+            {
+                _view = await Chats.GetAsync(userId, chatId, PageToken);
+                _topicId = _view.Chat.TopicId;
+                _topicName = _view.TopicName;
+                _section = null;
+            }
+            else
+            {
+                _view = null;
+                _topicId = TopicId!.Value;
+                var topic = await Topics.GetAsync(userId, _topicId, PageToken);
+                _topicName = topic.Summary.Name;
+                _noMaterial = topic.Materials.Count == 0;
+                _section = Section is { } sid ? await Chats.SectionAsync(userId, _topicId, sid, PageToken) : null;
+                _chats = await Chats.ListAsync(userId, _topicId, PageToken);
+            }
+        }
+        catch (NotFoundException)
+        {
+            Nav.NavigateTo("not-found");
+            return;
+        }
+
+        if (_settings is null)
+        {
+            _settings = await Settings.GetAsync(userId, PageToken);
+            _answerWith = _settings.Default(AiTask.Generation);
+        }
+        _research = _view?.Unanswered is { NotCovered: true } ? await Chats.ResearchCostAsync(userId, Choice, PageToken) : null;
+        _questionTokens = await Chats.QuestionTokensAsync(userId, _topicId, _view is not null ? _view.Chat.SectionId : _section?.SectionId, PageToken);
+
+        if (_replyNext && _view?.Unanswered is { NotCovered: false })
+        {
+            _replyNext = false;
+            _ = InvokeAsync(() => ReplyAsync(ChatReplyMode.Material));
+        }
+    }
+
+    private async Task AskAsync()
+    {
+        _error = null;
+        var userId = await UserIdAsync();
+        try
+        {
+            if (_view is null)
+            {
+                var id = await Chats.StartAsync(userId, _topicId, _section?.SectionId, _question, PageToken);
+                _question = "";
+                _replyNext = true;
+                Nav.NavigateTo($"chats/{id}");
+                return;
+            }
+            await Chats.AskAsync(userId, _view.Chat.Id, _question, PageToken);
+            _question = "";
+            _view = await Chats.GetAsync(userId, _view.Chat.Id, PageToken);
+            await ReplyAsync(ChatReplyMode.Material);
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or NotFoundException)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task ReplyAsync(ChatReplyMode mode)
+    {
+        if (_view is null || IsBusy)
+            return;
+        _error = null;
+        _streamText = "";
+        var userId = await UserIdAsync();
+        var chatId = _view.Chat.Id;
+        var initial = mode switch
+        {
+            ChatReplyMode.Web => "Recall is searching the web...",
+            ChatReplyMode.General => "Recall is answering...",
+            _ => "Recall is looking through your material...",
+        };
+        var scrolled = false;
+        await RunBusyAsync(initial, (progress, ct) => Chats.ReplyAsync(userId, chatId, mode, Choice, text =>
+        {
+            _streamText = text;
+            // Showing every piece would flood the connection; a few times a second reads as live.
+            if (DateTime.UtcNow - _shownAt < TimeSpan.FromMilliseconds(120))
+                return;
+            _shownAt = DateTime.UtcNow;
+            _ = InvokeAsync(async () =>
+            {
+                StateHasChanged();
+                if (!scrolled)
+                {
+                    scrolled = true;
+                    await ScrollToEndAsync();
+                }
+            });
+        }, progress, ct), message => _error = message);
+
+        _streamText = "";
+        _view = await Chats.GetAsync(userId, chatId, PageToken);
+        _research = _view.Unanswered is { NotCovered: true } ? await Chats.ResearchCostAsync(userId, Choice, PageToken) : null;
+        StateHasChanged();
+        await ScrollToEndAsync();
+    }
+
+    private async Task ScrollToEndAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("learningPortal.scrollIntoView", _end);
+        }
+        catch (Exception ex) when (ex is JSException or JSDisconnectedException or TaskCanceledException)
+        {
+        }
+    }
+
+    private async Task OpenSave(int messageId)
+    {
+        _error = null;
+        if (_exams.Count == 0)
+            _exams = (await Topics.GetAsync(await UserIdAsync(), _topicId, PageToken)).Exams;
+        _target = _exams.FirstOrDefault()?.Id ?? 0;
+        _newName = $"{_topicName}: from my chats";
+        _saveFor = messageId;
+    }
+
+    private async Task SaveAsync(int messageId)
+    {
+        _error = null;
+        _saving = true;
+        try
+        {
+            await Chats.SaveToExamAsync(await UserIdAsync(), messageId, _target == 0 ? null : _target, _newName, Choice, PageToken);
+            var name = _target == 0 ? _newName.Trim() : _exams.First(e => e.Id == _target).Name;
+            if (_target == 0)
+                _exams = [];
+            Ui.Toast.Success($"Saved to \"{name}\".");
+            _saveFor = null;
+            _view = await Chats.GetAsync(await UserIdAsync(), _view!.Chat.Id, PageToken);
+        }
+        catch (Exception ex) when (ex is AiException or ArgumentException or InvalidOperationException or NotFoundException)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task RenameAsync()
+    {
+        if (_view is null)
+            return;
+        var title = await Ui.Prompt.AskAsync("Rename chat", "Name", _view.Chat.Title);
+        if (string.IsNullOrWhiteSpace(title))
+            return;
+        try
+        {
+            await Chats.RenameAsync(await UserIdAsync(), _view.Chat.Id, title, PageToken);
+            _view = await Chats.GetAsync(await UserIdAsync(), _view.Chat.Id, PageToken);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotFoundException)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (_view is null || !await Ui.Confirm.AskAsync("Delete this chat?", "Its questions and replies are removed. Questions you saved to an exam stay there.", "Delete", danger: true))
+            return;
+        await Chats.DeleteAsync(await UserIdAsync(), _view.Chat.Id, PageToken);
+        Nav.NavigateTo($"topics/{_topicId}/ask");
+    }
+}

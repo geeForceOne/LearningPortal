@@ -1015,6 +1015,40 @@ a.tool-card:hover, a.tool-card:focus-visible { border-color: var(--pencil); }
 .follow-up-form { display: grid; gap: 8px; }
 .follow-up-form .actions { align-items: center; }
 
+/* Ask Recall: the student's questions as quiet cards, Recall's replies as plain reading text with
+   their sources underneath. */
+.chat { display: grid; gap: 18px; margin-bottom: 24px; }
+.chat-who {
+    display: block;
+    margin-bottom: 6px;
+    color: var(--pencil);
+    font-size: var(--t-xs);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+.chat-question {
+    padding: 12px 16px;
+    border-radius: var(--r-md);
+    border: 1px solid var(--rule);
+    background: var(--sheet);
+}
+.chat-question .reading { white-space: pre-wrap; }
+.chat-reply { border-left: 3px solid var(--rule-strong); padding-left: 16px; }
+.chat-reply.is-streaming .busy { margin-top: 10px; }
+.chat-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin-top: 10px; }
+.chat-save { margin-top: 14px; }
+.chat-retry { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.chat-compose { margin-top: 8px; }
+
+/* A material section's name with "Ask about this section" beside it. */
+.section-title { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; margin-bottom: 12px; }
+.section-title h2 { margin: 0; }
+@media (max-width: 600px) {
+    /* On phones the button always sits under the heading, lined up with the text. */
+    .section-title { flex-direction: column; align-items: flex-start; }
+    .section-title .btn { margin-left: -10px; }
+}
+
 .notice {
     padding: 12px 14px;
     border-radius: var(--r-md);

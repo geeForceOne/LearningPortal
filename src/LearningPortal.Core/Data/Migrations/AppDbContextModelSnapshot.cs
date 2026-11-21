@@ -15,7 +15,7 @@ namespace LearningPortal.Core.Data.Migrations
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder.HasAnnotation("ProductVersion", "10.0.13");
+            modelBuilder.HasAnnotation("ProductVersion", "10.0.15");
 
             modelBuilder.Entity("LearningPortal.Core.Models.AccountRequest", b =>
                 {
@@ -294,6 +294,56 @@ namespace LearningPortal.Core.Data.Migrations
                     b.HasIndex("AttemptId", "Position");
 
                     b.ToTable("AttemptAnswers");
+                });
+
+            modelBuilder.Entity("LearningPortal.Core.Models.ChatMessage", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("AnswerSource")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("ChatId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("FromUser")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Model")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("NotCovered")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Order")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("SavedQuestionId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SectionIds")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("WebSourcesJson")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SavedQuestionId");
+
+                    b.HasIndex("ChatId", "Order");
+
+                    b.ToTable("ChatMessages");
                 });
 
             modelBuilder.Entity("LearningPortal.Core.Models.EmailSettings", b =>
@@ -823,6 +873,44 @@ namespace LearningPortal.Core.Data.Migrations
                     b.ToTable("Topics");
                 });
 
+            modelBuilder.Entity("LearningPortal.Core.Models.TopicChat", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("SectionId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("TopicId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SectionId");
+
+                    b.HasIndex("TopicId");
+
+                    b.HasIndex("UserId", "TopicId");
+
+                    b.ToTable("TopicChats");
+                });
+
             modelBuilder.Entity("LearningPortal.Core.Models.UserSettings", b =>
                 {
                     b.Property<string>("UserId")
@@ -1059,6 +1147,22 @@ namespace LearningPortal.Core.Data.Migrations
                     b.Navigation("Question");
                 });
 
+            modelBuilder.Entity("LearningPortal.Core.Models.ChatMessage", b =>
+                {
+                    b.HasOne("LearningPortal.Core.Models.TopicChat", "Chat")
+                        .WithMany("Messages")
+                        .HasForeignKey("ChatId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("LearningPortal.Core.Models.Question", null)
+                        .WithMany()
+                        .HasForeignKey("SavedQuestionId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Chat");
+                });
+
             modelBuilder.Entity("LearningPortal.Core.Models.Exam", b =>
                 {
                     b.HasOne("LearningPortal.Core.Models.Topic", "Topic")
@@ -1183,6 +1287,22 @@ namespace LearningPortal.Core.Data.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("LearningPortal.Core.Models.TopicChat", b =>
+                {
+                    b.HasOne("LearningPortal.Core.Models.MaterialSection", null)
+                        .WithMany()
+                        .HasForeignKey("SectionId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("LearningPortal.Core.Models.Topic", "Topic")
+                        .WithMany()
+                        .HasForeignKey("TopicId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Topic");
+                });
+
             modelBuilder.Entity("LearningPortal.Core.Models.UserSettings", b =>
                 {
                     b.HasOne("LearningPortal.Core.Models.AppUser", null)
@@ -1277,6 +1397,11 @@ namespace LearningPortal.Core.Data.Migrations
                     b.Navigation("Materials");
 
                     b.Navigation("Questions");
+                });
+
+            modelBuilder.Entity("LearningPortal.Core.Models.TopicChat", b =>
+                {
+                    b.Navigation("Messages");
                 });
 #pragma warning restore 612, 618
         }

@@ -20,6 +20,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
     public DbSet<FollowUp> FollowUps => Set<FollowUp>();
     public DbSet<ExplainSession> ExplainSessions => Set<ExplainSession>();
     public DbSet<AnswerCheck> AnswerChecks => Set<AnswerCheck>();
+    public DbSet<TopicChat> TopicChats => Set<TopicChat>();
+    public DbSet<ChatMessage> ChatMessages => Set<ChatMessage>();
     public DbSet<SiteSettings> SiteSettings => Set<SiteSettings>();
     public DbSet<AccountRequest> AccountRequests => Set<AccountRequest>();
     public DbSet<SharedKeyGrant> SharedKeyGrants => Set<SharedKeyGrant>();
@@ -140,6 +142,22 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
             e.HasOne<Material>().WithMany().HasForeignKey(x => x.SourceMaterialId).OnDelete(DeleteBehavior.SetNull);
             e.HasOne<Question>().WithMany().HasForeignKey(x => x.SavedQuestionId).OnDelete(DeleteBehavior.SetNull);
             e.Property(x => x.Question).HasMaxLength(AnswerCheck.MaxQuestionLength);
+            e.Property(x => x.Model).HasMaxLength(200);
+        });
+
+        b.Entity<TopicChat>(e =>
+        {
+            e.HasIndex(x => new { x.UserId, x.TopicId });
+            e.HasOne(x => x.Topic).WithMany().HasForeignKey(x => x.TopicId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne<MaterialSection>().WithMany().HasForeignKey(x => x.SectionId).OnDelete(DeleteBehavior.SetNull);
+            e.Property(x => x.Title).HasMaxLength(TopicChat.MaxTitleLength);
+        });
+
+        b.Entity<ChatMessage>(e =>
+        {
+            e.HasIndex(x => new { x.ChatId, x.Order });
+            e.HasOne(x => x.Chat).WithMany(x => x.Messages).HasForeignKey(x => x.ChatId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne<Question>().WithMany().HasForeignKey(x => x.SavedQuestionId).OnDelete(DeleteBehavior.SetNull);
             e.Property(x => x.Model).HasMaxLength(200);
         });
 

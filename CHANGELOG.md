@@ -1,5 +1,11 @@
 # Release notes
 
+## 1.16.0 - 2026-11-21
+
+### New
+
+- **Ask Recall**: chat with Recall about a topic, from the topic page or with **Ask about this section** on the material page. Answers come from your material and link the sections they used. When your material doesn't cover a question, you choose whether Recall searches the web or answers from the AI's own knowledge. A topic keeps all its chats, and **Turn this into a question** adds an answer to an exam.
+
 ## 1.15.3 - 2026-11-13
 
 ### Improved

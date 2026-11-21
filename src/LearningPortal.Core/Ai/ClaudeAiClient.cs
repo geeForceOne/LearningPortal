@@ -121,27 +121,9 @@ public sealed class ClaudeAiClient(string apiKey, string model, IAiMeter? meter 
         {
             response = await client.Beta.Messages.Create(parameters, cancellationToken: ct);
         }
-        catch (AnthropicUnauthorizedException)
-        {
-            throw new AiException(meter is null
-                ? "The AI provider rejected your API key. Check it in Settings."
-                : "The AI provider rejected the key from your admin. Let your admin know, or switch to your own keys in Settings.");
-        }
-        catch (AnthropicRateLimitException)
-        {
-            throw new AiException($"The AI provider is rate-limiting {(meter is null ? "your key" : "the key from your admin")}. Wait a minute and try again.");
-        }
-        catch (AnthropicNotFoundException)
-        {
-            throw new AiException($"The AI model \"{model}\" wasn't found. Check the model ID.");
-        }
-        catch (AnthropicApiException ex)
-        {
-            throw new AiException($"The AI request failed: {ex.Message}");
-        }
         catch (Exception ex) when (ex is not OperationCanceledException and not AiException)
         {
-            throw new AiException($"Couldn't reach the AI provider: {ex.Message}");
+            throw Translate(ex);
         }
 
         // input_tokens leaves out what was written to or read from the cache.
@@ -155,6 +137,94 @@ public sealed class ClaudeAiClient(string apiKey, string model, IAiMeter? meter 
 
         return response;
     }
+
+    // Streams a plain-text answer. Usage comes in two parts: the prompt's tokens with the start
+    // event, the output's (a running total) with each message delta. It's recorded once the stream
+    // ends, also when it ends early, so a metered key is charged for what was billed.
+    public async IAsyncEnumerable<string> StreamTextAsync(AiTextRequest request, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+    {
+        var client = new AnthropicClient(new ClientOptions { ApiKey = apiKey });
+        var content = new List<BetaContentBlockParam>();
+        if (!string.IsNullOrWhiteSpace(request.Context))
+            content.Add(new BetaTextBlockParam { Text = request.Context, CacheControl = new BetaCacheControlEphemeral() });
+        content.Add(new BetaTextBlockParam { Text = request.Prompt });
+
+        var parameters = new MessageCreateParams
+        {
+            Model = model,
+            MaxTokens = request.MaxTokens,
+            System = new List<BetaTextBlockParam> { new() { Text = request.System } },
+            Messages = [new BetaUserMessageParam { Content = content }],
+        };
+        if (SupportsFallbacks(model))
+            parameters = parameters with { Betas = [FallbackBeta], Fallbacks = new List<BetaFallbackParam> { new() { Model = "claude-opus-4-8" } } };
+
+        if (meter is not null)
+            await meter.CheckAsync(ct);
+
+        long input = 0, cacheWrite = 0, cacheRead = 0, output = 0;
+        string? stop = null;
+        var started = false;
+        var events = client.Beta.Messages.CreateStreaming(parameters, ct).GetAsyncEnumerator(ct);
+        try
+        {
+            while (true)
+            {
+                try
+                {
+                    if (!await events.MoveNextAsync())
+                        break;
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException and not AiException)
+                {
+                    throw Translate(ex);
+                }
+
+                var e = events.Current;
+                if (e.TryPickStart(out var start))
+                {
+                    started = true;
+                    input = start.Message.Usage.InputTokens;
+                    cacheWrite = start.Message.Usage.CacheCreationInputTokens ?? 0;
+                    cacheRead = start.Message.Usage.CacheReadInputTokens ?? 0;
+                    output = start.Message.Usage.OutputTokens;
+                }
+                else if (e.TryPickDelta(out var delta))
+                {
+                    output = delta.Usage.OutputTokens;
+                    stop = delta.Delta.StopReason?.ToString() ?? stop;
+                }
+                else if (e.TryPickContentBlockDelta(out var block) && block.Delta.TryPickText(out var text) && text.Text.Length > 0)
+                {
+                    yield return text.Text;
+                }
+            }
+        }
+        finally
+        {
+            await events.DisposeAsync();
+            if (meter is not null && started)
+                await meter.RecordAsync(new AiUsage(input, cacheWrite, cacheRead, output));
+        }
+
+        if (stop == "refusal")
+            throw new AiException("The AI declined to answer this. Try rewording your question.");
+        if (stop == "max_tokens")
+            throw new AiException("The reply was cut off because it ran too long. Ask for a shorter answer.");
+    }
+
+    // Turns an SDK or network failure into a message the user can act on.
+    private AiException Translate(Exception ex) => ex switch
+    {
+        AnthropicUnauthorizedException => new AiException(meter is null
+            ? "The AI provider rejected your API key. Check it in Settings."
+            : "The AI provider rejected the key from your admin. Let your admin know, or switch to your own keys in Settings."),
+        AnthropicRateLimitException => new AiException(
+            $"The AI provider is rate-limiting {(meter is null ? "your key" : "the key from your admin")}. Wait a minute and try again."),
+        AnthropicNotFoundException => new AiException($"The AI model \"{model}\" wasn't found. Check the model ID."),
+        AnthropicApiException api => new AiException($"The AI request failed: {api.Message}"),
+        _ => new AiException($"Couldn't reach the AI provider: {ex.Message}"),
+    };
 
     private static bool SupportsFallbacks(string model) =>
         model.StartsWith("claude-opus-5", StringComparison.Ordinal)

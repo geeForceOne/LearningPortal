@@ -461,6 +461,61 @@ public sealed class AnswerCheck
     public IReadOnlyList<WebSource> WebSources => WebSource.Parse(WebSourcesJson);
 }
 
+// "Ask Recall": a chat with the AI about a topic. Each chat answers from the sections of the topic's
+// material that fit each question; one started from a section stays with that section. Kept per
+// topic; not counted in statistics.
+public sealed class TopicChat
+{
+    public const int MaxTitleLength = 120;
+    public const int MaxMessages = 100;
+
+    public int Id { get; set; }
+    public string UserId { get; set; } = "";
+    public int TopicId { get; set; }
+    public string Title { get; set; } = "";
+    // Set when the chat was started from a section ("Ask about this section"): replies answer from
+    // it. Null for a chat about the whole topic, or when the section was removed.
+    public int? SectionId { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+
+    public Topic? Topic { get; set; }
+    public List<ChatMessage> Messages { get; set; } = [];
+}
+
+// One message in a topic chat: the student's question, or Recall's reply.
+public sealed class ChatMessage
+{
+    public const int MaxQuestionLength = 2_000;
+
+    public int Id { get; set; }
+    public int ChatId { get; set; }
+    public int Order { get; set; }
+    public bool FromUser { get; set; }
+    public string Text { get; set; } = "";
+    // The student's question only: the material doesn't cover it, and the student hasn't chosen
+    // how to go on (a web search, the AI's own knowledge, or, in a section chat, all the material).
+    public bool NotCovered { get; set; }
+    // Replies only: where the answer comes from, the sections it used (comma-separated ids) or the
+    // web pages it cites, and the model that wrote it.
+    public AnswerSource? AnswerSource { get; set; }
+    public string? SectionIds { get; set; }
+    public string? WebSourcesJson { get; set; }
+    public string? Model { get; set; }
+    // Replies only: the bank question made from it by "Turn this into a question".
+    public int? SavedQuestionId { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    public TopicChat? Chat { get; set; }
+
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+    public IReadOnlyList<WebSource> WebSources => WebSource.Parse(WebSourcesJson);
+
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+    public IReadOnlyList<int> SectionIdList =>
+        string.IsNullOrWhiteSpace(SectionIds) ? [] : SectionIds.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(int.Parse).ToList();
+}
+
 // App-wide switches the admin sets. A single row (Id 1); no row means everything is off.
 public sealed class SiteSettings
 {
