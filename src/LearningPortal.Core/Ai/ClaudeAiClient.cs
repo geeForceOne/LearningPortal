@@ -48,13 +48,13 @@ public sealed class ClaudeAiClient(string apiKey, string model, IAiMeter? meter 
 
         var response = await SendAsync(client, parameters, ct);
 
-        var stop = response.StopReason?.ToString();
+        var text = string.Concat(response.Content.Select(b => b.TryPickText(out var t) ? t.Text : ""));
+        var stop = StopName(response.StopReason);
         if (stop == "refusal")
             throw new AiException("The AI declined to answer this request. Try rewording the material or question.");
         if (stop == "max_tokens")
-            throw new AiException("The AI's answer was cut off because it ran too long. Try fewer questions at a time.");
+            throw new AiCutOffException("The AI's answer was cut off because it ran too long. Try fewer questions at a time.", text);
 
-        var text = string.Concat(response.Content.Select(b => b.TryPickText(out var t) ? t.Text : ""));
         if (string.IsNullOrWhiteSpace(text))
             throw new AiException("The AI returned an empty answer. Try again.");
 
@@ -80,11 +80,11 @@ public sealed class ClaudeAiClient(string apiKey, string model, IAiMeter? meter 
 
         var response = await SendAsync(client, parameters, ct);
 
-        var stop = response.StopReason?.ToString();
+        var stop = StopName(response.StopReason);
         if (stop == "refusal")
             throw new AiException("The AI declined to answer this request. Try rewording the question.");
         if (stop == "max_tokens")
-            throw new AiException("The AI's answer was cut off because it ran too long. Try fewer questions at a time.");
+            throw new AiCutOffException("The AI's answer was cut off because it ran too long. Try fewer questions at a time.");
         if (stop == "pause_turn")
             throw new AiException("The web search took too long. Try again.");
 
@@ -192,7 +192,7 @@ public sealed class ClaudeAiClient(string apiKey, string model, IAiMeter? meter 
                 else if (e.TryPickDelta(out var delta))
                 {
                     output = delta.Usage.OutputTokens;
-                    stop = delta.Delta.StopReason?.ToString() ?? stop;
+                    stop = StopName(delta.Delta.StopReason) ?? stop;
                 }
                 else if (e.TryPickContentBlockDelta(out var block) && block.Delta.TryPickText(out var text) && text.Text.Length > 0)
                 {
@@ -210,8 +210,12 @@ public sealed class ClaudeAiClient(string apiKey, string model, IAiMeter? meter 
         if (stop == "refusal")
             throw new AiException("The AI declined to answer this. Try rewording your question.");
         if (stop == "max_tokens")
-            throw new AiException("The reply was cut off because it ran too long. Ask for a shorter answer.");
+            throw new AiCutOffException("The reply was cut off because it ran too long. Ask for a shorter answer.");
     }
+
+    // The SDK's stop reason prints as its JSON value, quotes included ("\"max_tokens\""), so a
+    // plain ToString() never equals "max_tokens" and cut-off or refused answers slipped through.
+    private static string? StopName(object? reason) => reason?.ToString()?.Trim('"');
 
     // Turns an SDK or network failure into a message the user can act on.
     private AiException Translate(Exception ex) => ex switch

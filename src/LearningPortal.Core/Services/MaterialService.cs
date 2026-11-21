@@ -4,6 +4,7 @@ using LearningPortal.Core.Data;
 using LearningPortal.Core.Models;
 using LearningPortal.Core.Text;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace LearningPortal.Core.Services;
 
@@ -17,7 +18,8 @@ public sealed record AddedMaterial(int Id, int TokenEstimate);
 public sealed class MaterialService(
     IDbContextFactory<AppDbContext> dbFactory,
     SettingsService settings,
-    LearningPortalOptions options)
+    LearningPortalOptions options,
+    ILogger<MaterialService> logger)
 {
     public async Task<AddedMaterial> AddFileAsync(
         string userId, int topicId, string fileName, Stream content, long sizeBytes,
@@ -105,6 +107,10 @@ public sealed class MaterialService(
     // The "analysis" step: a short AI outline of the material, stored for reuse. Failure is
     // recorded on the material rather than thrown, so the upload itself still counts. choice is
     // the model picked on the upload screen (advanced mode); null uses the uploads default.
+    //
+    // Nothing paid for is thrown away: each call covers only the sections still missing, a
+    // cut-off answer keeps the sections it finished, and after a failure the finished sections'
+    // outline lines are saved, so "Try again" picks up where the last run stopped.
     public async Task AnalyzeAsync(string userId, int materialId, AiChoice? choice, IProgress<string>? progress, CancellationToken ct)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
@@ -113,43 +119,108 @@ public sealed class MaterialService(
             .Include(m => m.Topic)
             .FirstOrDefaultAsync(m => m.Id == materialId && m.UserId == userId, ct) ?? throw new NotFoundException();
 
+        var sections = material.Sections.OrderBy(s => s.Index).ToList();
+        var saved = OutlineText.Parse(material.Outline);
+        var lines = new Dictionary<int, string>();
+        var preamble = new List<string>();
+        var loose = new List<string>();
+        var done = new HashSet<int>();
+
+        // A failed run saved the lines of the sections it finished; those that also have their
+        // concepts are kept. A finished analysis ("Analyze it again") starts over.
+        if (material.AnalysisStatus == AnalysisStatus.Failed)
+        {
+            foreach (var s in sections)
+                if (saved.Lines.TryGetValue(s.Index, out var line) && s.ConceptsJson is not null)
+                {
+                    lines[s.Index] = line;
+                    done.Add(s.Index);
+                }
+            if (done.Count > 0)
+                preamble.AddRange(saved.Preamble);
+        }
+
         try
         {
             var connection = await settings.GetConnectionAsync(userId, AiTask.Analysis, choice, ct);
             var client = AiClientFactory.Create(connection);
-            var sections = material.Sections.OrderBy(s => s.Index).ToList();
-            var batches = BatchByTokens(sections, options.TopicTokenBudget);
-            var outlines = new List<string>();
 
-            for (var i = 0; i < batches.Count; i++)
+            while (sections.Where(s => !done.Contains(s.Index)).ToList() is { Count: > 0 } pending)
             {
-                progress?.Report(batches.Count == 1
+                var batch = BatchByTokens(pending, options.TopicTokenBudget, OutlineSectionsPerCall)[0];
+                progress?.Report(batch.Count == sections.Count
                     ? $"Analyzing {material.Title}..."
-                    : $"Analyzing {material.Title} (part {i + 1} of {batches.Count})...");
+                    : $"Analyzing {material.Title} ({done.Count} of {sections.Count} sections done)...");
 
-                var json = await client.CompleteJsonAsync(new AiRequest
+                var request = new AiRequest
                 {
                     System = Prompts.OutlineSystem(material.Topic!.Language),
-                    Prompt = Prompts.OutlinePrompt(material.Title, batches[i]),
+                    Prompt = Prompts.OutlinePrompt(material.Title, batch),
                     SchemaName = "material_outline",
                     Schema = Prompts.OutlineSchema,
-                    MaxTokens = 12_000,
-                }, ct);
+                    MaxTokens = OutlineMaxTokens,
+                };
+                string json;
+                var cut = false;
+                try
+                {
+                    json = await client.CompleteJsonAsync(request, ct);
+                }
+                catch (AiCutOffException ex) when (SalvageOutline(ex.Partial) is { } salvaged)
+                {
+                    json = salvaged;
+                    cut = true;
+                }
 
                 using var doc = JsonDocument.Parse(json);
-                outlines.Add(doc.RootElement.GetProperty("outline").GetString() ?? "");
-                ReadConcepts(doc.RootElement, batches[i]);
+                var root = doc.RootElement;
+                // A whole answer must have its outline; a cut-off one may have stopped before it.
+                var outlineText = cut
+                    ? root.TryGetProperty("outline", out var o) ? o.GetString() : null
+                    : root.GetProperty("outline").GetString();
+                var answer = OutlineText.Parse(outlineText);
+                var withConcepts = ReadConcepts(root, batch);
+                // A whole answer finishes its sections, also those it gave no concepts; a cut-off
+                // one only those whose concepts it got through.
+                var finished = cut ? withConcepts : batch.Select(s => s.Index).ToHashSet();
+                if (finished.Count == 0)
+                    throw new AiCutOffException("The AI's answer was cut off before it finished a section.");
+                if (cut)
+                    logger.LogInformation("Outline of material {MaterialId} was cut off; kept {Kept} of {Sent} sections", material.Id, finished.Count, batch.Count);
+
+                foreach (var index in finished)
+                    if (answer.Lines.TryGetValue(index, out var line))
+                        lines[index] = line;
+                if (!cut && answer.Lines.Count == 0 && !string.IsNullOrWhiteSpace(outlineText))
+                    loose.Add(outlineText.Trim());
+                if (preamble.Count == 0)
+                    preamble.AddRange(answer.Preamble);
+                done.UnionWith(finished);
             }
 
-            material.Outline = string.Join("\n", outlines).Trim();
+            material.Outline = OutlineText.Compose(preamble, lines, loose);
             material.OutlineModel = connection.Model;
             material.AnalysisStatus = AnalysisStatus.Done;
             material.AnalysisError = null;
         }
-        catch (Exception ex) when (ex is AiException or JsonException or KeyNotFoundException)
+        catch (Exception ex) when (ex is AiException or JsonException or KeyNotFoundException or InvalidOperationException)
         {
+            if (ex is not AiException || ex is AiCutOffException)
+                logger.LogWarning(ex, "Outline of material {MaterialId} ({Sections} sections, {Tokens} tokens) failed with {Done} sections done", material.Id, sections.Count, material.TokenEstimate, done.Count);
+            // Keep what this run finished for "Try again", and the earlier lines of the rest.
+            if (done.Count > 0)
+            {
+                foreach (var (index, line) in saved.Lines)
+                    lines.TryAdd(index, line);
+                material.Outline = OutlineText.Compose(preamble.Count > 0 ? preamble : saved.Preamble, lines, []);
+            }
             material.AnalysisStatus = AnalysisStatus.Failed;
-            material.AnalysisError = ex is AiException ? ex.Message : "The AI's outline couldn't be read.";
+            material.AnalysisError = ex switch
+            {
+                AiCutOffException => "The AI's outline was cut off because it ran too long. Try again: the sections it finished are kept.",
+                AiException => ex.Message,
+                _ => "The AI's outline couldn't be read.",
+            };
         }
 
         await db.SaveChangesAsync(CancellationToken.None);
@@ -159,11 +230,13 @@ public sealed class MaterialService(
     }
 
     // The concepts to explain, per section (see Prompts.OutlinePrompt). A section the AI left out
-    // keeps what it had, so Explain it back falls back to the outline line for it.
-    private static void ReadConcepts(JsonElement root, IReadOnlyList<MaterialSection> sections)
+    // keeps what it had, so Explain it back falls back to the outline line for it. Returns the
+    // sections it found concepts for.
+    private static HashSet<int> ReadConcepts(JsonElement root, IReadOnlyList<MaterialSection> sections)
     {
+        var found = new HashSet<int>();
         if (!root.TryGetProperty("concepts", out var lists) || lists.ValueKind != JsonValueKind.Array)
-            return;
+            return found;
         foreach (var item in lists.EnumerateArray())
         {
             if (!item.TryGetProperty("section_index", out var index) || !index.TryGetInt32(out var sectionIndex)
@@ -182,10 +255,56 @@ public sealed class MaterialService(
                 .Take(MaxConceptsPerSection)
                 .ToList();
             section.ConceptsJson = JsonSerializer.Serialize(cleaned);
+            found.Add(sectionIndex);
         }
+        return found;
+    }
+
+    // Turns a cut-off outline answer into valid JSON holding only what was complete: everything
+    // up to the last section entry in "concepts" that was closed. The schema puts "outline"
+    // first, so it's whole by then. Null when no section entry was finished.
+    internal static string? SalvageOutline(string? partial)
+    {
+        if (string.IsNullOrEmpty(partial))
+            return null;
+        var stack = new Stack<char>();
+        var inString = false;
+        var escaped = false;
+        var cut = -1;
+        for (var i = 0; i < partial.Length; i++)
+        {
+            var c = partial[i];
+            if (inString)
+            {
+                if (escaped) escaped = false;
+                else if (c == '\\') escaped = true;
+                else if (c == '"') inString = false;
+                continue;
+            }
+            switch (c)
+            {
+                case '"': inString = true; break;
+                case '{' or '[': stack.Push(c); break;
+                case '}' or ']':
+                    if (stack.Count == 0)
+                        return null;
+                    var open = stack.Pop();
+                    // A section entry: an object closed straight inside the root's "concepts" array.
+                    if (open == '{' && c == '}' && stack.Count == 2 && stack.Peek() == '[')
+                        cut = i + 1;
+                    break;
+            }
+        }
+        return cut < 0 ? null : partial[..cut] + "]}";
     }
 
     private const int MaxConceptsPerSection = 8;
+
+    // The outline answer grows with the section count (an outline line plus up to 6 concepts with
+    // a task each), not with the text's size: 34 sections of a dense legal text ran past 12,000
+    // output tokens. Capping the sections per call keeps each answer well inside the limit.
+    private const int OutlineSectionsPerCall = 20;
+    private const int OutlineMaxTokens = 20_000;
 
     private static string Clip(string? text, int max) =>
         text is null ? "" : text.Trim() is var t && t.Length <= max ? t : text.Trim()[..max];
@@ -288,14 +407,14 @@ public sealed class MaterialService(
             TryDeleteFile(options, path);
     }
 
-    internal static List<List<MaterialSection>> BatchByTokens(IReadOnlyList<MaterialSection> sections, int budget)
+    internal static List<List<MaterialSection>> BatchByTokens(IReadOnlyList<MaterialSection> sections, int budget, int maxSections = int.MaxValue)
     {
         var batches = new List<List<MaterialSection>>();
         var current = new List<MaterialSection>();
         var tokens = 0;
         foreach (var s in sections)
         {
-            if (current.Count > 0 && tokens + s.TokenEstimate > budget)
+            if (current.Count > 0 && (tokens + s.TokenEstimate > budget || current.Count >= maxSections))
             {
                 batches.Add(current);
                 current = [];

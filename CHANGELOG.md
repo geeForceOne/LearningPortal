@@ -1,5 +1,12 @@
 # Release notes
 
+## 1.16.1 - 2026-11-21
+
+### Fixed
+
+- **Long uploads**: large files with many sections no longer fail with "The AI's outline couldn't be read". Recall outlines them in smaller parts, and an AI answer that runs too long is now reported as cut off instead of as unreadable.
+- **Try again**: when an outline fails partway, the sections already done are kept, and **Try again** only redoes the rest, so you don't pay twice for the same part.
+
 ## 1.16.0 - 2026-11-21
 
 ### New

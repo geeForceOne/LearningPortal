@@ -6,6 +6,13 @@ namespace LearningPortal.Core.Ai;
 // A user-facing failure: the message is shown as-is, so it says what went wrong and what to do.
 public class AiException(string message) : Exception(message);
 
+// The answer hit its output limit and stopped partway, so callers can say what to do about it.
+// Partial is the text the AI wrote before it stopped (billed all the same), when there is any.
+public sealed class AiCutOffException(string message, string? partial = null) : AiException(message)
+{
+    public string? Partial { get; } = partial;
+}
+
 public sealed class AiNotConfiguredException()
     : AiException("AI isn't set up yet. Add your AI provider and API key in Settings.");
 

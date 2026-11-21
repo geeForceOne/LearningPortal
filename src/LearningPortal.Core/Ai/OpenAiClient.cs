@@ -211,9 +211,9 @@ public sealed class OpenAiClient(string apiKey, string model, IAiMeter? meter = 
             switch (final?["status"]?.GetValue<string>())
             {
                 case "incomplete":
-                    throw new AiException(final["incomplete_details"]?["reason"]?.GetValue<string>() == "max_output_tokens"
-                        ? "The reply was cut off because it ran too long. Ask for a shorter answer."
-                        : "The AI didn't finish its reply. Try again.");
+                    if (final["incomplete_details"]?["reason"]?.GetValue<string>() == "max_output_tokens")
+                        throw new AiCutOffException("The reply was cut off because it ran too long. Ask for a shorter answer.");
+                    throw new AiException("The AI didn't finish its reply. Try again.");
                 case "failed":
                     throw new AiException($"The AI request failed: {final["error"]?["message"]?.GetValue<string>() ?? "no details given"}");
                 case null:
@@ -322,14 +322,6 @@ public sealed class OpenAiClient(string apiKey, string model, IAiMeter? meter = 
     {
         var root = JsonNode.Parse(responseText)!;
 
-        if (root["status"]?.GetValue<string>() == "incomplete")
-        {
-            var reason = root["incomplete_details"]?["reason"]?.GetValue<string>();
-            throw new AiException(reason == "max_output_tokens"
-                ? "The AI's answer was cut off because it ran too long. Try fewer questions at a time."
-                : $"The AI didn't finish its answer ({reason ?? "unknown reason"}). Try again.");
-        }
-
         var sb = new StringBuilder();
         foreach (var item in root["output"]?.AsArray() ?? [])
         {
@@ -347,6 +339,15 @@ public sealed class OpenAiClient(string apiKey, string model, IAiMeter? meter = 
                         throw new AiException("The AI declined to answer this request. Try rewording the material or question.");
                 }
             }
+        }
+
+        // Checked after reading the text, so a cut-off answer hands over what it got to.
+        if (root["status"]?.GetValue<string>() == "incomplete")
+        {
+            var reason = root["incomplete_details"]?["reason"]?.GetValue<string>();
+            if (reason == "max_output_tokens")
+                throw new AiCutOffException("The AI's answer was cut off because it ran too long. Try fewer questions at a time.", sb.ToString());
+            throw new AiException($"The AI didn't finish its answer ({reason ?? "unknown reason"}). Try again.");
         }
 
         if (sb.Length == 0)
