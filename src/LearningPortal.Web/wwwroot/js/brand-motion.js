@@ -8,7 +8,8 @@
 //   pulse   - the center swells while a wave of light passes out to the other dots.
 // The header and sign-in logos play one motion when hovered or focused; a mark with
 // data-motion="once" (the sign-in page) plays one shortly after it appears, and one with
-// data-motion="loop" (the busy indicator) keeps playing for as long as it's on the page. Nothing
+// data-motion="loop" (the busy indicator) keeps playing for as long as it's shown: a loop that
+// isn't rendered (the closed reconnect dialog) rests until brandMotion.startLoops() is called. Nothing
 // moves when the user asks for reduced motion. Only attributes of existing elements change, and
 // every one of them is put back when a play ends.
 (() => {
@@ -250,7 +251,8 @@
     function frame(now) {
         frameRequested = false;
         for (const [svg, s] of marks) {
-            if (!svg.isConnected || reduced.matches) { rest(svg, s); continue; }
+            // A hidden loop (no layout boxes, e.g. inside a closed dialog) would animate unseen forever.
+            if (!svg.isConnected || reduced.matches || (s.loop && svg.getClientRects().length === 0)) { rest(svg, s); continue; }
             s.t0 ??= now;
             const dur = MOTIONS[s.motion].dur;
             let elapsed = now - s.t0;
@@ -296,4 +298,6 @@
     new MutationObserver(startLoops).observe(document.documentElement, { childList: true, subtree: true });
     reduced.addEventListener?.("change", () => { if (!reduced.matches) startLoops(); else requestFrame(); });
     startLoops();
+    // For loops that become visible without a DOM change (the reconnect dialog opening).
+    window.brandMotion = { startLoops };
 })();

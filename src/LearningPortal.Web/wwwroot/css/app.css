@@ -1172,6 +1172,61 @@ a.tool-card:hover, a.tool-card:focus-visible { border-color: var(--pencil); }
 
 @keyframes fade-in { from { opacity: 0; } }
 
+/* Reconnect dialog (Components/Layout/ReconnectModal.razor). Blazor sets the state classes on
+   the dialog; each state shows only its own lines and buttons. */
+.components-reconnect-first-attempt-visible,
+.components-reconnect-repeated-attempt-visible,
+.components-reconnect-failed-visible,
+.components-pause-visible,
+.components-resume-failed-visible,
+.components-rejoining-animation {
+    display: none;
+}
+
+#components-reconnect-modal.components-reconnect-show .components-reconnect-first-attempt-visible,
+#components-reconnect-modal.components-reconnect-show .components-rejoining-animation,
+#components-reconnect-modal.components-reconnect-paused .components-pause-visible,
+#components-reconnect-modal.components-reconnect-resume-failed .components-resume-failed-visible,
+#components-reconnect-modal.components-reconnect-retrying,
+#components-reconnect-modal.components-reconnect-retrying .components-reconnect-repeated-attempt-visible,
+#components-reconnect-modal.components-reconnect-retrying .components-rejoining-animation,
+#components-reconnect-modal.components-reconnect-failed,
+#components-reconnect-modal.components-reconnect-failed .components-reconnect-failed-visible {
+    display: block;
+}
+/* Blazor keeps "show" on while it retries and after it gives up, so the first line would sit
+   above the retry or failure line; once it has given up, the busy logo would mislead too. */
+#components-reconnect-modal.components-reconnect-retrying .components-reconnect-first-attempt-visible,
+#components-reconnect-modal.components-reconnect-failed .components-reconnect-first-attempt-visible,
+#components-reconnect-modal.components-reconnect-failed .components-rejoining-animation {
+    display: none;
+}
+
+#components-reconnect-modal {
+    width: min(22rem, calc(100vw - 32px));
+    margin: 20vh auto;
+    padding: 28px 24px;
+    background: var(--sheet);
+    color: var(--ink);
+    border: 1px solid var(--rule);
+    border-radius: var(--r-lg);
+    box-shadow: var(--lift);
+    /* showModal() focuses the dialog itself; its buttons still show their own focus ring. */
+    outline: none;
+}
+#components-reconnect-modal[open] { animation: fade-in 200ms ease-out; }
+#components-reconnect-modal::backdrop { background: var(--overlay); }
+
+.components-reconnect-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    text-align: center;
+}
+#components-reconnect-modal p { margin: 0; color: var(--ink-soft); }
+#components-reconnect-modal .components-rejoining-animation { line-height: 0; }
+
 .toast-stack {
     position: fixed;
     z-index: 60;

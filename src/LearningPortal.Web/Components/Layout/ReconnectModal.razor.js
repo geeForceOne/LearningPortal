@@ -1,4 +1,6 @@
-// Set up event handlers
+// Drives the reconnect dialog (ReconnectModal.razor): Blazor raises
+// components-reconnect-state-changed on it, and this opens/closes it and wires its buttons.
+// From the .NET 10 Blazor Web App template; the only addition starts the logo's busy loop.
 const reconnectModal = document.getElementById("components-reconnect-modal");
 reconnectModal.addEventListener("components-reconnect-state-changed", handleReconnectStateChanged);
 
@@ -11,6 +13,8 @@ resumeButton.addEventListener("click", resume);
 function handleReconnectStateChanged(event) {
     if (event.detail.state === "show") {
         reconnectModal.showModal();
+        // The logo's loop rests while the dialog is closed (brand-motion.js); start it again.
+        window.brandMotion?.startLoops();
     } else if (event.detail.state === "hide") {
         reconnectModal.close();
     } else if (event.detail.state === "failed") {
