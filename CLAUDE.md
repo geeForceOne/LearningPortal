@@ -1,121 +1,63 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+LearningPortal ("Recall") is a multi-user, Docker-hosted Blazor Server app that turns a user's own study
+material into AI-written training exams. Users create topics, add material (PDF, Word, PowerPoint, LaTeX,
+Markdown, pasted text), and generate exams that the AI writes and grades. Each user brings their own
+Claude or OpenAI key (an admin can share one).
 
-## What this is
-
-LearningPortal is a multi-user, Docker-hosted web app that turns a user's own study material into training exams using AI.
-
-- **Topics.** A user creates topics. Each topic holds any number of content materials: uploaded PDF, Word, PowerPoint, LaTeX, or Markdown files, or text pasted in directly.
-- **AI.** Content material is sent to an AI provider (Claude or ChatGPT) for analysis. Each user configures their provider and API key in Settings. In the UI it's called **"AI"**, with no vendor-specific wording outside Settings. Texts about what the app is doing say **"Recall"** ("Recall is writing questions", "Recall asks"); "AI" stays where it matters that a machine produced something that can be wrong ("Written by the AI"), and in provider, cost and settings wording.
-- **Exams.** A user creates any number of exams per topic and can amend them later. An exam definition has a user-chosen name, a question count, a type (multiple choice, written, or a mix), and a difficulty (easy, medium, or hard). The AI generates the questions and answers.
-- **Written answers.** The user types an answer and the AI judges whether it qualifies as correct. Answers are usually short, about 20 sentences (2,500 characters), not essays, but that is a suggestion the UI shows, not a limit: a question from an uploaded paper can need far more. The only hard cap is 25,000 characters, against an accidental paste of a whole document. Generated questions are written to fit about 20 sentences; model answers for uploaded papers and checks are as long as the question needs.
-- **"I don't know".** Instead of guessing, the user can answer "I don't know" (multiple choice and written). It scores 0% and counts as incorrect (so the question shows up in weak-question practice), costs no AI call, and is shown as "You didn't know".
-- **Revealing answers.** After answering a question, the user can reveal the answer right away or wait until the end of the exam. Every answer comes with a thorough explanation, because the point is to learn from it.
-- **Repeat and statistics.** Every exam attempt's result is stored. Exams can be repeated any number of times, and a statistics page shows progress over time.
-- **Question bank.** Generated questions and answers, with their explanations, are stored locally and reused across exams, so they aren't regenerated every time.
-- **Language.** The UI is English-only, in American English spelling ("practice", "analyze", "color"; also in comments and docs), but a topic can be in any language. The questions, answers, explanations, and AI grading for a topic must use that topic's language.
-- **Responsive.** The app is designed mainly for PC use but must work well on tablets and phones.
-
-### Product decisions
-
-- **Accounts.** There is no open sign-up. The first user to register becomes the admin, and after that the admin creates accounts. The admin can also let people request an account from the sign-in page (off by default, needs email): name required, a short optional message; the admin approves (the usual invite is sent) or declines (a short email). Each user's data is private, with no sharing between users.
-- **AI key.** Each user configures their own API keys (Anthropic and/or OpenAI). Nobody gets a key by default.
-- **Shared key.** An admin can save one key per provider under Admin settings (`SharedKeyService`) and grant it to selected non-admin users on the Users page; admins always use their own keys. A grant has an optional expiry date (the last day it works) and an optional USD balance, one-time or per calendar month (UTC, no carry-over); neither means unlimited. One balance covers both providers. One list of allowed models applies to everyone on the shared key, and custom model IDs are never allowed on it (no price). Spend is an estimate: each call's reported tokens (cache writes and reads included) priced from `AiModels`, recorded through `IAiMeter`. The key is checked before every AI call; a running call finishes, so a balance can dip slightly below zero, and a background job stops with what it wrote. A user with a grant picks "Key from your admin" or "My own keys" in Settings ("API keys in use"; the fields for their own keys are hidden while they're on the admin's key): never mixed, and no automatic fallback when the shared key runs out or expires. A new grant is used right away only by someone with no keys of their own. The user sees balance, reset date and expiry in Settings and a banner when it's low, used up, expiring or expired; the admin sees spend per user (this month and total) on the Users page and can raise the balance, reset what's used, or take the key back. No emails and no per-call log.
-- **Model choice.** Settings has a Simple mode (one model for everything) and an Advanced mode with two defaults: one for outlining uploads, one for questions and grading. In Advanced mode the upload and generation screens show a model picker preset to that default; it lists only providers with a saved key and also takes a one-off custom model ID, which never changes the default. API keys and models are saved separately in Settings. Grading and replacing a question use the questions default (or the exam page's picker). Each question and outline stores the model that wrote it.
-- **Exam material.** When a topic has more than one material, an exam can leave some out (a collapsed "Material" list, all selected by default, stored per exam as the excluded ones so later uploads are included). The AI writes only from the selected material, and only its bank questions are reused. The UI says "material", not "documents".
-- **Multiple choice.** The AI decides per question whether it has one correct answer or several. The UI clearly shows which kind it is ("choose one" vs. "choose all that apply").
-- **Written grading.** The AI returns a score from 0 to 100% plus feedback on what was right and what was missing. The UI labels a score of 80% or more as *correct*, 1–79% as *partially correct*, and 0% as *incorrect*.
-- **Programming topics.** A topic can be marked as a programming topic (at creation or later). Its exams have a code share (default 40%): that many questions work with code, the rest are theory. Other topics get theory questions only. Each question is tagged code or theory. Changing the flag only affects newly generated questions and never regenerates on its own; changing an exam's share is a settings change that swaps just enough questions to match.
-- **Question bank reuse.** Each exam has a reuse percentage (default 0%, i.e. off; the slider starts at 20% when turned on): up to that share of its questions comes from the topic's bank (matching type, difficulty and code/theory, least-used first), and the AI writes the rest. New questions must not repeat what the bank already asks. When a topic's bank is large compared to its material, the UI says new questions will increasingly overlap.
-- **Flagging a question.** On a revealed answer or on the exam page, the user can flag a question as bad (ambiguous, wrong, off-topic) and take the flag off again; there are no reasons to pick. A flagged question stays in the exams that hold it, marked "Flagged", until the user edits, replaces or removes it. It isn't reused from the bank, doesn't appear in weak-question or section practice, and doesn't count in the concept map or readiness.
-- **Exam date and readiness.** A topic can have an optional exam date (set in the topic dialog); the topic page, the topics list and the concept map then show how many days are left. Readiness (0-100%, no AI) is shown on the topic page and the concept map for every topic with material, with or without a date: each section counts by its size and the average score on its questions, and a section with nothing answered counts as 0%. No reminders are sent.
-- **Weak-question practice.** Each topic has one hidden "Weak questions" practice exam, rebuilt from the questions most often answered wrong or partly right each time it's started (10 by default, adjustable, no AI). It isn't listed or edited like an exam; "Save as exam" keeps a run's questions as a normal exam.
-- **Follow-up questions.** After an answer is revealed (during an attempt or on the results), the user can ask the AI up to 10 follow-ups about it. The AI sees only the question, the answer given, the explanation and the source section; replies are saved with the attempt.
-- **Question writing runs in the background.** Filling, regenerating and replacing questions run on the server (`QuestionWriter`), so they carry on when the user leaves the page or closes the browser. The exam page follows the job live and shows its outcome when the user comes back; the topic page marks exams being written.
-- **Concept map.** A topic's sections as tiles, sized by text and colored by how well their questions go (no AI). Picking a section practices it through the topic's practice exam. Sections are named by `SectionNames`: a heading that tells the section apart, otherwise the subject from the material's outline (material without headings gets "Title (part N)" headings), otherwise "Part N". The same names are used on the material page, in Explain it back, practice names and question source labels. Source labels are stored on the question, so renaming or re-analyzing material rebuilds them.
-- **Homepage widget.** `GET /api/homepage/stats` returns instance-wide counts (accounts, active this week, active today, active now; "today" is the last 24 hours) for a gethomepage.dev customapi widget. Admins count as accounts but not as active. It takes one token for the whole instance in an `X-API-Key` header; any admin creates, replaces or revokes it under Admin settings, and only its SHA-256 hash is stored.
-- **Explain it back.** The user picks a concept (single ideas, grouped by section, or "Surprise me", which favors weak sections) and explains it in their own words; the AI asks one or two questions like a curious beginner, then scores it (0-100) with feedback. Only that section's text goes to the AI. The AI lists each section's concepts when it outlines the material: a short name plus a one-sentence task saying what to explain, with context but not the answer (stored per section; an empty list hides a section with nothing to explain). The task is shown with the concept and sent to the AI with it. Material outlined before 1.11.0 falls back to splitting its outline line (no task; the session shows what the section covers instead), and the page offers to analyze it again, with a model picker in Advanced mode. Sessions are kept per topic and don't count in statistics.
-- **Gap finder.** The AI compares the topic's outlines with what the subject usually covers and lists gaps; it can write a study note per gap, added as material marked "Written by the AI". Both come from general knowledge, so the UI states clearly that they can be wrong.
-- **Uploading an exam.** A user can upload an exam paper (the same file types as material) as an exam of its own (`PaperImportService`, run in the background by `QuestionWriter`). Recall copies out its questions in the paper's words, telling multiple choice from written, with whatever each question needs (task-defining instructions, a given text to work on) and without admin text; in Word papers, unfilled fill-in fields reach the AI as `[answer field]`; answers the paper gives (marked options, model answers, an answer key) are kept, the rest are answered from the topic's material, and explanations are written in the topic's language. The paper isn't material: it's deleted once read. A scanned PDF (no text layer) is read by the AI from the page images, after showing that it costs more. Questions the material doesn't answer wait on the exam page until the user picks "Search the web" (cost shown), "Answer without searching" (the AI's own knowledge), or leaves them out. An uploaded exam keeps its paper's questions: only its name is edited, single questions can be edited, replaced or removed, and it's never filled up or regenerated. Its questions go into the bank like any other.
-- **Check an answer.** On a topic, the user types a question and their answer; Recall finds the section that answers it (all material when it's small, else a short call over the outlines picks sections) and scores the answer 0-100 with the usual labels and feedback. When the material doesn't cover it, the check waits for the same choice as an uploaded exam: web search or the AI's own knowledge. Checks are kept per topic, don't count in statistics, and "Save to an exam" (an existing one or a new one) turns one into a written bank question.
-- **Ask Recall.** A topic has chats with the AI (`ChatService`), many per topic, each named after its first question (renamable), started on the topic ("Ask Recall") or from a section on the material page ("Ask about this section", which pins the chat to that section). Each question is answered from the material: all of it when small (cached), else sections picked like Check an answer, plus the last few messages; replies stream in and link the sections they used (a hidden first line from the AI names them, or says the material doesn't cover the question). When it doesn't, the question waits for the student's choice: "Search the web" (cost shown), "Answer without searching", or, in a section chat, "Look in all your material". "Turn this into a question" has the AI write a written bank question from a reply and adds it to an exam. Chats don't count in statistics; follow-ups on answers stay separate.
-- **Answers not from the material.** Every question stores where its answer comes from (`AnswerSource`: material, paper, web, the AI's own knowledge). Web and own-knowledge answers are labeled "may be wrong"; web answers list their pages, and their notes take the place of the source section when the answer is graded or asked about. A web search is never run without the user choosing it, and its fee ($10 per 1,000 searches on both providers) counts toward shared-key spend.
-- **Printing an exam.** `/exams/{id}/print` shows the exam as a sheet and uses the browser's print dialog (print or "Save as PDF"; no PDF library). The answer key is optional and starts on a new page. Options keep their stored order, the sheet is always ink on white, and answers on paper aren't entered back.
-- **Repeating an exam.** A repeat uses the same questions, with the question order and the multiple-choice options shuffled.
-- **Amending an exam.** The user can:
-  - edit its settings (name, count, type, difficulty) and regenerate
-  - remove a question, or have the AI replace one
-  - manually edit a question, its answer, or its explanation
-  - add their own questions
-- **Attempts.** There is no timer, but each attempt's duration is recorded. Every answer is saved as soon as it's given, so the user can leave and resume an unfinished attempt later. A fixed row under the answer buttons has "Previous question" on the left, "Finish early" in the middle and "Next question" on the right; Next goes to the following question whether or not this one is answered, so a question can be skipped. The last question lists the unanswered ones and offers "Go to question N", or "See results" when all are answered. Saving an answer moves on to the next unanswered question.
-- **What's new.** After an update, each user sees a banner ("Recall was updated to X.Y.Z", linking to the release notes) until they close it. Users are never told about the version they first saw; local "dev" builds show nothing.
-- **Statistics.** The page shows:
-  - score over time for each exam
-  - a per-topic overview (average score, attempt count, last practiced)
-  - weak questions (the ones most often answered wrong)
-  - a breakdown by question type and difficulty
+**Before changing or adding a feature, read its entry in `docs/product-decisions.md`.** It holds the agreed
+behavior for every feature (accounts, shared key, exams, grading, bank reuse, chats, uploads, printing...)
+that the code alone doesn't explain. Update the entry when a decision changes.
 
 ## Commands
 
 ```
-dotnet build LearningPortal.slnx              # build everything
-dotnet run --project src/LearningPortal.Web   # run the app locally
+dotnet build LearningPortal.slnx              # build everything (.slnx, there is no .sln)
+dotnet run --project src/LearningPortal.Web   # run locally
 docker compose up --build                     # build and run the container
 ```
 
-This repo uses the newer `.slnx` XML solution format; there is no `.sln` file.
-
-## Workflow
-
-When the user gives feedback or requests changes in a back-and-forth (bug reports, tweaks, "also do X"), don't implement each one immediately as it comes in. Acknowledge it, queue it, and keep gathering — only start making changes once the user explicitly says "go" (or an equally unambiguous confirmation). This lets them batch up a full list of feedback before any code gets touched. Purely informational questions (no code change requested) can still be answered right away.
-
-## Git workflow
-
-Never run `git commit` or `git push` unless the user explicitly asks for it in that turn. Finish the change and leave it uncommitted in the working tree; tell the user it's ready and wait for an explicit go-ahead before committing (and again before pushing — a commit approval does not imply a push approval, and approval from an earlier turn does not carry forward to later changes).
-
-When the user does ask you to commit:
-- Write clean, specific commit messages describing *why*, not just what changed.
-
 ## Architecture
 
-Uses the latest .NET (currently .NET 10, `net10.0`) with Blazor Server. It is split so that all business logic can be reused by a future Android or iOS app. This version is web-only, so don't build mobile clients or public APIs until asked (the Homepage stats endpoint is the one exception, asked for).
-
-- **`src/LearningPortal.Core`** (class library, no dependency on the web UI) holds the domain models, persistence, AI access, document text extraction, exam generation and grading, and statistics.
-  - Every long-running method takes an `IProgress<string>?` (for status/log messages) and a `CancellationToken`. There is no `Console.*` or other I/O baked into Core, so the same methods can drive a UI progress display and cancellation.
-- **`src/LearningPortal.Web`** (Blazor Server) holds the UI, authentication, and hosting. It is packaged for Docker via `Dockerfile` and `docker-compose.yml`.
-  - Uses interactive server render mode with prerendering off, so JS interop and browser storage are available immediately.
-
-### Hosting and data
-- The database is **SQLite**, accessed through EF Core.
-- Everything persistent (the SQLite database, uploaded content files, and Data Protection keys) lives in a Docker **volume**, never in the image or container filesystem. Paths are configured through environment variables.
-
-### Authentication
-- **Phase 1:** email and password login with ASP.NET Core Identity, stored in the same SQLite database. New accounts use their email as the Identity UserName (kept in sync when the email changes); accounts created before that keep their own username, which still works as a login. Each account has an optional display name shown in the UI.
-- **Later phase:** add SSO with Google, Apple, and Facebook on top of Identity as external logins. Keep the auth code structured so these can be added without reworking it.
-- Each user's data (topics, content, exams, attempts, settings) is isolated to that user. Every query in Core is scoped by the user's ID.
-
-### Document text extraction
-- PDF files use **PdfPig**. Word (`.docx`) and PowerPoint (`.pptx`) files use **DocumentFormat.OpenXml**; a presentation becomes one section per slide, with its speaker notes. Old binary `.doc`/`.ppt` files aren't supported: the upload asks for "Save as" .docx/.pptx or PDF.
-- LaTeX and Markdown files, and pasted text, are stored and sent as plain text.
-
-### Secrets
-- A user's AI API key is stored encrypted with ASP.NET Core Data Protection. A stored value that can no longer be decrypted is treated as "not set", and Settings tells the user it can't be read and needs to be entered again. The key must never silently disappear or be sent to the browser.
+- .NET 10 (`net10.0`), Blazor Server, interactive server render mode, prerendering off.
+- `src/LearningPortal.Core`: all business logic (models, EF Core + SQLite, AI access, text extraction,
+  generation, grading, statistics), no dependency on the web UI so a future mobile app can reuse it.
+  Long-running methods take `IProgress<string>?` and a `CancellationToken`; no `Console.*` or other I/O.
+- `src/LearningPortal.Web`: UI, ASP.NET Core Identity auth, hosting, Docker packaging.
+- No mobile clients or public APIs until asked (the Homepage stats endpoint is the one exception).
+- Every Core query is scoped by the user's ID; users never see each other's data.
+- Persistent data (SQLite, uploads, Data Protection keys) lives in a Docker volume, paths from env vars.
+- API keys are encrypted with Data Protection, never sent to the browser. A key that can't be decrypted
+  counts as "not set" and Settings asks for it again; it must never silently disappear.
+- Auth: email/password now; Google/Apple/Facebook SSO later as external logins, so keep auth code open
+  for that. New accounts use their email as the Identity UserName.
 
 ## Conventions
 
-- **Verify external APIs, don't work from memory.** Before coding against the Claude or OpenAI API, an SSO provider, or a document-parsing library, check its current official docs or spec. Model IDs and SDK shapes change.
-- **AI-written text.** Show questions, options, answers, explanations and grading feedback through the `RichText` component (safe Markdown with code blocks and syntax coloring), never as raw text or unescaped HTML.
-- **Shared dialogs.** Use reusable `ConfirmDialog`, `PromptDialog`, and `Toast` components in `Components/Shared/`, which are awaited from code, instead of writing one-off modals per page. Clicking outside a dialog never closes it (a stray click shouldn't throw away what was typed); Cancel, or Escape where offered, does.
-- **Hand-written CSS design system** in `wwwroot/css/app.css`. It is dark-first, with a light theme; each user picks Dark (default), Light, or System in Settings, rendered as `<html data-theme>`. It uses no component library. It must be responsive at desktop, tablet, and phone widths.
-- **Gotcha:** don't name a component parameter `Assets`, because it collides with `ComponentBase.Assets` in .NET 10.
-
-### Sending content to the AI
-- **On ingest.** Extract each material's text once, store it, and record an estimated token count. Have the AI produce a short outline (sections and key concepts) for each material. This outline is the "analysis" step and is stored for reuse.
-- **Topic fits the budget.** If the topic's total material is under a configurable threshold (default roughly 100–150k tokens; check current model context limits in the docs), send all of it for exam generation. Use prompt caching so follow-up calls on the same topic (replacing a question, generating more) reuse it cheaply.
-- **Topic exceeds the budget.** Split the material into sections, by headings where possible or by size otherwise, and spread questions across them. Each call sends the outlines plus only the sections being covered. Prefer the sections the question bank covers least, so questions spread across the whole topic over time.
-- **Source tracking.** Every question stores its source material and section. Grading a written answer sends only the question, the reference answer, and that source section, never the whole topic. The UI can show where a question came from.
-- **Guardrails** (users pay with their own keys):
-  - a per-file upload size limit (default 50 MB)
-  - the token count shown on each topic
-  - a confirmation before an unusually large generation
+- **Verify external APIs, don't work from memory.** Check current official docs before coding against the
+  Claude or OpenAI API, an SSO provider, or a parsing library (PdfPig, DocumentFormat.OpenXml).
+- **Wording.** UI is English-only, American spelling ("practice", "analyze", "color"), also in comments and
+  docs. Say "AI", never a vendor name outside Settings. Say "Recall" for what the app does ("Recall is
+  writing questions"); keep "AI" where a machine may be wrong ("Written by the AI") and for provider, cost
+  and settings. Say "material", not "documents".
+- **Topic language.** Questions, answers, explanations and grading use the topic's language, not English.
+- **AI-written text** goes through the `RichText` component, never raw text or unescaped HTML.
+- **Dialogs:** use the awaited `ConfirmDialog`, `PromptDialog` and `Toast` in `Components/Shared/`. Clicking
+  outside a dialog never closes it.
+- **CSS:** hand-written design system in `wwwroot/css/app.css`, dark-first with a light theme
+  (`<html data-theme>`), no component library. Works at desktop, tablet and phone widths. Pages span the
+  full page width (`--page-max`); never cap content in a narrow column.
+- **Cost:** AI actions that can cost noticeably show tokens and cost for the selected model, using the
+  shared helpers (`Format.NotableCost`, `Format.LargeGeneration`, `IsLargeGeneration`); cent-level actions
+  show nothing. Shared-key spend is recorded through `IAiMeter`.
+- **Sending material to the AI:** extract text once and store it with a token estimate; outline each
+  material once. Under the topic budget send all material with prompt caching; above it send outlines plus
+  the sections being covered, preferring sections the bank covers least. Grading sends only the question,
+  reference answer and source section. Guardrails: 50 MB per-file upload limit, token count shown on each
+  topic, a confirmation before an unusually large generation.
+- **Text extraction:** PdfPig for PDF, DocumentFormat.OpenXml for .docx/.pptx (one section per slide, with
+  speaker notes). Old .doc/.ppt aren't supported. LaTeX, Markdown and pasted text are stored as plain text.
+- **No secrets in git:** keys, SQLite databases, Data Protection keys, uploads, .env files and local
+  settings stay in the ignored `./data` folder or the volume. Check staged files before every commit.
+- **Gotcha:** don't name a component parameter `Assets` (collides with `ComponentBase.Assets` in .NET 10).
+- Commit messages say *why*, not just what.
